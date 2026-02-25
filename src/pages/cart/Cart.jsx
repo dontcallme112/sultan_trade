@@ -131,21 +131,21 @@ const Cart = () => {
             <div className="summary-details">
               <div className="summary-row">
                 <span>Товары ({cartItems.length})</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>₸ {subtotal.toFixed(2)}</span>
               </div>
               <div className="summary-row">
                 <span>Доставка</span>
-                <span>${shipping.toFixed(2)}</span>
+                <span>  {shipping.toFixed(2)}</span>
               </div>
               <div className="summary-row">
                 <span>Налог (10%)</span>
-                <span>${tax.toFixed(2)}</span>
+                <span>₸ {tax.toFixed(2)}</span>
               </div>
             </div>
 
             <div className="summary-total">
               <span>Итого</span>
-              <span className="total-price">${total.toFixed(2)}</span>
+              <span className="total-price">₸ {total.toFixed(2)}</span>
             </div>
 
             <button className="checkout-btn">

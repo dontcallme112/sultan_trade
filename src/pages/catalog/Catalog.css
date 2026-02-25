@@ -275,7 +275,7 @@
     z-index: var(--z-modal);
     transform: translateX(-100%);
     transition: transform var(--transition-base);
-    max-width: 400px;
+    max-width: 600px;
     border-radius: 0;
     overflow-y: auto;
   }
