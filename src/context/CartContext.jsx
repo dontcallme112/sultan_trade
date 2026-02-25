@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { applyMarkup } from '../utils/priceUtils.js';
 
 const CartContext = createContext();
 
@@ -64,10 +65,12 @@ export const CartProvider = ({ children }) => {
 
   const getCartTotal = () => {
     return cartItems.reduce((total, item) => {
-      const price = item.discount 
+      const basePrice = item.discount 
         ? item.price * (1 - item.discount / 100)
         : item.price;
-      return total + price * item.quantity;
+      // Применяем 10% наценку через утилиту
+      const priceWithMarkup = applyMarkup(basePrice);
+      return total + priceWithMarkup * item.quantity;
     }, 0);
   };
 

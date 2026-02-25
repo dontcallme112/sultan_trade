@@ -161,8 +161,8 @@
 }
 
 .price-inputs {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   gap: var(--space-md);
 }
 

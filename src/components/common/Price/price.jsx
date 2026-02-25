@@ -10,7 +10,9 @@ const Price = ({
 }) => {
   const formatPrice = (price) => {
     if (price === 1) return 'Цена по запросу';
-    return parseInt(price).toLocaleString('ru-RU');
+    // Добавляем 10% наценку и округляем до целых
+    const priceWithMarkup = Math.round(price * 1.10); // +10% и округление
+    return priceWithMarkup.toLocaleString('ru-RU');
   };
 
   const sizeClass = `price-${size}`;

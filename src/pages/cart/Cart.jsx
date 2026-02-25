@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import Price from '../../components/common/Price/price.jsx';
+import Price from '../../components/common/Price/Price';
 import './Cart.css';
 
 const Cart = () => {
@@ -14,9 +14,7 @@ const Cart = () => {
   } = useCart();
 
   const subtotal = getCartTotal();
-  const shipping = cartItems.length > 0 ? 10 : 0;
-  const tax = subtotal * 0.1; // 10% налог
-  const total = subtotal + shipping + tax;
+  const total = subtotal;
 
   if (cartItems.length === 0) {
     return (
@@ -105,7 +103,7 @@ const Cart = () => {
                     size="medium"
                     showCurrency={true}
                   />
-                  <div className="price-unit">{item.price} ₸ за шт.</div>
+                  <div className="price-unit">{Math.round(item.price * 1.10).toLocaleString('ru-RU')} ₸ за шт.</div>
                 </div>
 
                 <button 
@@ -131,21 +129,13 @@ const Cart = () => {
             <div className="summary-details">
               <div className="summary-row">
                 <span>Товары ({cartItems.length})</span>
-                <span>₸ {subtotal.toFixed(2)}</span>
-              </div>
-              <div className="summary-row">
-                <span>Доставка</span>
-                <span>  {shipping.toFixed(2)}</span>
-              </div>
-              <div className="summary-row">
-                <span>Налог (10%)</span>
-                <span>₸ {tax.toFixed(2)}</span>
+                <span>{Math.round(subtotal).toLocaleString('ru-RU')} ₸</span>
               </div>
             </div>
 
             <div className="summary-total">
               <span>Итого</span>
-              <span className="total-price">₸ {total.toFixed(2)}</span>
+              <span className="total-price">{Math.round(total).toLocaleString('ru-RU')} ₸</span>
             </div>
 
             <button className="checkout-btn">
