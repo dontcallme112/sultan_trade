@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import Price from '../../components/common/Price/Price';
+import Price from '../../components/common/Price/price.jsx';
 import './Cart.css';
 
 const Cart = () => {
