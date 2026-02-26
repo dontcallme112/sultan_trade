@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
-import Price from '../../common/Price/price.jsx';
+import Price from '../../common/Price/Price.jsx';
 import './ProductCard.css';
 
 const ProductCard = ({ product }) => {
