@@ -1,14 +1,9 @@
 import axios from 'axios';
 
-export const api = axios.create({
-  baseURL: '/api/proxy/api',
-});
+// API al-style.kz configuration
+const API_BASE_URL = 'https://api.al-style.kz/api';
+const ACCESS_TOKEN = import.meta.env.VITE_ALSTYLE_ACCESS_TOKEN || '';
 
-// если токен у тебя в переменной
-api.interceptors.request.use((config) => {
-  config.headers.Authorization = `Bearer ${import.meta.env.VITE_API_TOKEN}`;
-  return config;
-});
 // Создаем instance axios с базовой конфигурацией
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

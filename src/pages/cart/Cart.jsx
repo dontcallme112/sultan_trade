@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useCart } from '../../context/CartContext';
+import { useCart } from '../../context/CartContext.jsx';
+import { formatNumber } from '../../utils/priceUtils.js';
 import Price from '../../components/common/Price/price.jsx';
 import './Cart.css';
 
@@ -103,7 +104,7 @@ const Cart = () => {
                     size="medium"
                     showCurrency={true}
                   />
-                  <div className="price-unit">{Math.round(item.price * 1.10).toLocaleString('ru-RU')} ₸ за шт.</div>
+                  <div className="price-unit">{formatNumber(Math.round(item.price * 1.10))} ₸ за шт.</div>
                 </div>
 
                 <button 
@@ -129,22 +130,22 @@ const Cart = () => {
             <div className="summary-details">
               <div className="summary-row">
                 <span>Товары ({cartItems.length})</span>
-                <span>{Math.round(subtotal).toLocaleString('ru-RU')} ₸</span>
+                <span>{formatNumber(subtotal)} ₸</span>
               </div>
             </div>
 
             <div className="summary-total">
               <span>Итого</span>
-              <span className="total-price">{Math.round(total).toLocaleString('ru-RU')} ₸</span>
+              <span className="total-price">{formatNumber(total)} ₸</span>
             </div>
 
-            <button className="checkout-btn">
+            <Link to="/checkout" className="checkout-btn">
               Оформить заказ
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="5" y1="12" x2="19" y2="12"/>
                 <polyline points="12 5 19 12 12 19"/>
               </svg>
-            </button>
+            </Link>
 
             <Link to="/catalog" className="continue-shopping">
               ← Продолжить покупки
