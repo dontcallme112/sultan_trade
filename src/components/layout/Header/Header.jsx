@@ -1,117 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
 import './Header.css';
 
 const Header = () => {
-  const [scrolled, setScrolled] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const { cartItems } = useCart();
-  const navigate = useNavigate();
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      setScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/catalog?search=${searchQuery}`);
-      setSearchOpen(false);
-      setSearchQuery('');
-    }
-  };
-
-  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <header className={`header ${scrolled ? 'scrolled' : ''}`}>
-      <div className="header-container">
-        <Link to="/" className="logo">
-          <span className="logo-icon">◆</span>
-          <span className="logo-text">LUXE</span>
-        </Link>
-
-        <nav className="nav">
-          <Link to="/catalog" className="nav-link">
-            Каталог
-          </Link>
-          <Link to="/catalog?category=new" className="nav-link">
-            Новинки
-          </Link>
-          <Link to="/catalog?sale=true" className="nav-link">
-            Sale
-          </Link>
-        </nav>
-
-        <div className="header-actions">
-          <button 
-            className="icon-button"
-            onClick={() => setSearchOpen(!searchOpen)}
-            aria-label="Поиск"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="m21 21-4.35-4.35"/>
-            </svg>
-          </button>
-
-          <button className="icon-button" aria-label="Избранное">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-          </button>
-
-          <Link to="/cart" className="icon-button cart-button">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <path d="M16 10a4 4 0 0 1-8 0"/>
-            </svg>
-            {cartItemCount > 0 && (
-              <span className="cart-badge">{cartItemCount}</span>
-            )}
+      <div className="header-bg"></div>
+      
+      <div className="container">
+        <div className="header-content">
+          {/* Logo */}
+          <Link to="/" className="logo">
+            <div className="logo-icon">⚡</div>
+            <span className="logo-text">LUXE</span>
+            <div className="logo-glow"></div>
           </Link>
 
-          <button className="icon-button" aria-label="Профиль">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+          {/* Navigation */}
+          <nav className={`nav ${mobileMenu ? 'active' : ''}`}>
+            <Link to="/" className="nav-link">
+              <span>Главная</span>
+              <div className="nav-link-glow"></div>
+            </Link>
+            <Link to="/catalog" className="nav-link">
+              <span>Каталог</span>
+              <div className="nav-link-glow"></div>
+            </Link>
+            <Link to="/catalog" className="nav-link">
+              <span>Новинки</span>
+              <div className="nav-link-glow"></div>
+            </Link>
+            <Link to="/catalog" className="nav-link">
+              <span>Sale</span>
+              <div className="nav-link-glow"></div>
+            </Link>
+          </nav>
 
-      {/* Search Overlay */}
-      <div className={`search-overlay ${searchOpen ? 'active' : ''}`}>
-        <div className="search-container">
-          <form onSubmit={handleSearch} className="search-form">
-            <input
-              type="text"
-              placeholder="Поиск товаров..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-              autoFocus
-            />
-            <button type="submit" className="search-submit">
+          {/* Actions */}
+          <div className="header-actions">
+            <button className="icon-btn">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/>
                 <path d="m21 21-4.35-4.35"/>
               </svg>
             </button>
-          </form>
-          <button 
-            className="search-close"
-            onClick={() => setSearchOpen(false)}
-          >
-            ✕
-          </button>
+
+            <Link to="/cart" className="icon-btn cart-btn">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="9" cy="21" r="1"/>
+                <circle cx="20" cy="21" r="1"/>
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+              </svg>
+              {cartCount > 0 && (
+                <span className="cart-badge">{cartCount}</span>
+              )}
+            </Link>
+
+            <button className="mobile-menu-btn" onClick={() => setMobileMenu(!mobileMenu)}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

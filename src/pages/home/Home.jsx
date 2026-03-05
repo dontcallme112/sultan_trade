@@ -17,15 +17,15 @@ const Home = () => {
         
         <div className="container hero-content">
           <div className="hero-text animate-fadeInUp">
-            <span className="hero-badge">Новая коллекция 2026</span>
+            <span className="hero-badge">🔥 Новинки 2026</span>
             <h1 className="hero-title">
-              Роскошь в каждой
+              Премиум электроника
               <br />
-              <span className="text-gradient">детали</span>
+              <span className="text-gradient">для вас</span>
             </h1>
             <p className="hero-description">
-              Откройте для себя эксклюзивную коллекцию премиум товаров,
-              созданных для тех, кто ценит качество и стиль
+              Смартфоны, ноутбуки, наушники от мировых брендов.
+              Официальная гарантия, быстрая доставка по Казахстану
             </p>
             <div className="hero-actions">
               <Link to="/catalog" className="btn-primary">
@@ -35,8 +35,8 @@ const Home = () => {
                   <polyline points="12 5 19 12 12 19"/>
                 </svg>
               </Link>
-              <Link to="/catalog?sale=true" className="btn-secondary">
-                Скидки до 50%
+              <Link to="/catalog" className="btn-secondary">
+                Хиты продаж
               </Link>
             </div>
           </div>
@@ -44,17 +44,17 @@ const Home = () => {
           <div className="hero-stats animate-fadeInUp stagger-2">
             <div className="stat-item">
               <div className="stat-number">10K+</div>
-              <div className="stat-label">Довольных клиентов</div>
+              <div className="stat-label">Товаров в наличии</div>
             </div>
             <div className="stat-divider"></div>
             <div className="stat-item">
-              <div className="stat-number">500+</div>
-              <div className="stat-label">Премиум товаров</div>
+              <div className="stat-number">100+</div>
+              <div className="stat-label">Брендов</div>
             </div>
             <div className="stat-divider"></div>
             <div className="stat-item">
               <div className="stat-number">4.9</div>
-              <div className="stat-label">Средний рейтинг</div>
+              <div className="stat-label">Рейтинг магазина</div>
             </div>
           </div>
         </div>
@@ -64,9 +64,9 @@ const Home = () => {
       <section className="categories">
         <div className="container">
           <div className="section-header">
-            <h2 className="section-title">Категории</h2>
+            <h2 className="section-title">Категории товаров</h2>
             <Link to="/catalog" className="section-link">
-              Все категории
+              Весь каталог
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
@@ -74,16 +74,21 @@ const Home = () => {
           </div>
 
           <div className="categories-grid">
-            {['electronics', 'jewelery', "men's clothing", "women's clothing"].map((category, index) => (
+            {[
+              { name: 'Смартфоны', icon: '📱', slug: 'smartphones' },
+              { name: 'Ноутбуки', icon: '💻', slug: 'laptops' },
+              { name: 'Наушники', icon: '🎧', slug: 'headphones' },
+              { name: 'Аксессуары', icon: '🔌', slug: 'accessories' }
+            ].map((category, index) => (
               <Link 
-                to={`/catalog?category=${category}`} 
-                key={category}
+                to={`/catalog`} 
+                key={category.slug}
                 className={`category-card animate-fadeInScale stagger-${index + 1}`}
               >
                 <div className="category-icon">
-                  {getCategoryIcon(category)}
+                  {category.icon}
                 </div>
-                <h3 className="category-name">{formatCategoryName(category)}</h3>
+                <h3 className="category-name">{category.name}</h3>
                 <span className="category-arrow">→</span>
               </Link>
             ))}
@@ -96,8 +101,8 @@ const Home = () => {
         <div className="container">
           <div className="section-header">
             <div>
-              <h2 className="section-title">Популярные товары</h2>
-              <p className="section-subtitle">Самое лучшее из нашей коллекции</p>
+              <h2 className="section-title">Хиты продаж</h2>
+              <p className="section-subtitle">Самые популярные товары месяца</p>
             </div>
             <Link to="/catalog" className="section-link">
               Смотреть все
@@ -144,7 +149,7 @@ const Home = () => {
                 </svg>
               </div>
               <h3 className="feature-title">Быстрая доставка</h3>
-              <p className="feature-description">Доставим ваш заказ в течение 1-2 дней</p>
+              <p className="feature-description">1-2 дня по Алматы и Астане</p>
             </div>
 
             <div className="feature-item animate-fadeInUp stagger-2">
@@ -154,8 +159,8 @@ const Home = () => {
                   <polyline points="12 6 12 12 16 14"/>
                 </svg>
               </div>
-              <h3 className="feature-title">Гарантия качества</h3>
-              <p className="feature-description">100% оригинальные товары премиум качества</p>
+              <h3 className="feature-title">Официальная гарантия</h3>
+              <p className="feature-description">12 месяцев на всю технику</p>
             </div>
 
             <div className="feature-item animate-fadeInUp stagger-3">
@@ -164,8 +169,8 @@ const Home = () => {
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
               </div>
-              <h3 className="feature-title">Безопасность</h3>
-              <p className="feature-description">Защищенные платежи и конфиденциальность данных</p>
+              <h3 className="feature-title">100% оригинал</h3>
+              <p className="feature-description">Только оригинальная техника от производителей</p>
             </div>
 
             <div className="feature-item animate-fadeInUp stagger-4">
@@ -175,34 +180,13 @@ const Home = () => {
                 </svg>
               </div>
               <h3 className="feature-title">Поддержка 24/7</h3>
-              <p className="feature-description">Наша команда всегда готова помочь вам</p>
+              <p className="feature-description">Консультация по выбору техники</p>
             </div>
           </div>
         </div>
       </section>
     </div>
   );
-};
-
-// Helper functions
-const getCategoryIcon = (category) => {
-  const icons = {
-    'electronics': '⚡',
-    'jewelery': '💎',
-    "men's clothing": '👔',
-    "women's clothing": '👗',
-  };
-  return icons[category] || '📦';
-};
-
-const formatCategoryName = (category) => {
-  const names = {
-    'electronics': 'Электроника',
-    'jewelery': 'Украшения',
-    "men's clothing": 'Мужская одежда',
-    "women's clothing": 'Женская одежда',
-  };
-  return names[category] || category;
 };
 
 export default Home;

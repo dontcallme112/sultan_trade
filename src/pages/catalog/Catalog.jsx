@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useProducts } from '../../hooks/useProducts.js';
-import { productUtils } from '../../api/services/product.js';
 import ProductCard from '../../components/features/ProductCard/ProductCard.jsx';
 import './Catalog.css';
 
@@ -19,19 +18,6 @@ const Catalog = () => {
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  useEffect(() => {
-    if (!loading && allProducts.length > 0) {
-      let result = [...allProducts];
-
-      // Применяем фильтры
-      result = productUtils.filterProducts(result, filters);
-
-      // Применяем сортировку
-      result = productUtils.sortProducts(result, sortBy);
-
-      setFilteredProducts(result);
-    }
-  }, [allProducts, filters, sortBy, loading]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { productsAPI, productUtils } from '../api/services/product.js';
+import { productsAPI } from '../api/services/product.js';
 
 export const useProduct = (productArticle) => {
   const [product, setProduct] = useState(null);
