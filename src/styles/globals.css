@@ -1,158 +1,181 @@
 /* ============================================
-   LUXE - Премиум дизайн для магазина электроники
-   Современный, яркий, вайбовый стиль
+   LUXE E-Commerce - Elegant Premium Design
+   Минималистичный, элегантный, премиум стиль
    ============================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Цвета - Cyber Luxury Theme */
-  --primary: #0ff; /* Неоновый cyan */
-  --secondary: #f0f; /* Неоновый magenta */
-  --accent: #ff0; /* Неоновый yellow */
-  --gold: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  /* Цвета - Elegant Premium */
+  --gold-dark: #8B6914;
+  --gold: #B8860B;
+  --gold-light: #DAA520;
+  --gold-pale: #F4E4C1;
+  
+  /* Нейтральные */
+  --white: #FFFFFF;
+  --gray-50: #FAFAFA;
+  --gray-100: #F5F5F5;
+  --gray-200: #E5E5E5;
+  --gray-300: #D4D4D4;
+  --gray-400: #A3A3A3;
+  --gray-500: #737373;
+  --gray-600: #525252;
+  --gray-700: #404040;
+  --gray-800: #262626;
+  --gray-900: #171717;
+  --black: #0A0A0A;
+  
+  /* Семантические */
+  --primary: var(--gold);
+  --primary-dark: var(--gold-dark);
+  --primary-light: var(--gold-light);
   
   /* Фон */
-  --bg-dark: #0a0a0f;
-  --bg-darker: #050508;
-  --bg-card: rgba(15, 15, 25, 0.7);
-  --bg-glass: rgba(255, 255, 255, 0.05);
+  --bg-primary: var(--white);
+  --bg-secondary: var(--gray-50);
+  --bg-tertiary: var(--gray-100);
   
   /* Текст */
-  --text-primary: #ffffff;
-  --text-secondary: #b0b0b0;
-  --text-muted: #707070;
+  --text-primary: var(--black);
+  --text-secondary: var(--gray-600);
+  --text-muted: var(--gray-400);
+  --text-inverse: var(--white);
   
-  /* Градиенты */
-  --gradient-cyber: linear-gradient(135deg, #0ff 0%, #f0f 50%, #ff0 100%);
-  --gradient-gold: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF6B00 100%);
-  --gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --gradient-blue: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+  /* Границы */
+  --border-light: var(--gray-200);
+  --border-medium: var(--gray-300);
+  --border-dark: var(--gray-400);
   
   /* Тени */
-  --shadow-sm: 0 2px 10px rgba(0, 255, 255, 0.1);
-  --shadow-md: 0 4px 20px rgba(0, 255, 255, 0.2);
-  --shadow-lg: 0 10px 40px rgba(0, 255, 255, 0.3);
-  --shadow-neon: 0 0 20px rgba(0, 255, 255, 0.5);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   
   /* Шрифты */
-  --font-display: 'Orbitron', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   
   /* Spacing */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --space-2xl: 3rem;
-  --space-3xl: 4rem;
+  --space-1: 0.25rem;    /* 4px */
+  --space-2: 0.5rem;     /* 8px */
+  --space-3: 0.75rem;    /* 12px */
+  --space-4: 1rem;       /* 16px */
+  --space-5: 1.25rem;    /* 20px */
+  --space-6: 1.5rem;     /* 24px */
+  --space-8: 2rem;       /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+  --space-20: 5rem;      /* 80px */
   
   /* Border radius */
-  --radius-sm: 0.5rem;
-  --radius-md: 1rem;
-  --radius-lg: 1.5rem;
-  --radius-xl: 2rem;
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.5rem;   /* 24px */
   --radius-full: 9999px;
   
   /* Transitions */
-  --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Z-index */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
 }
 
 /* ============================================
    RESET & BASE
    ============================================ */
 
-* {
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
 html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
-  overflow-x: hidden;
 }
 
 body {
   font-family: var(--font-body);
-  background: var(--bg-dark);
-  color: var(--text-primary);
+  font-weight: 400;
   line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
   overflow-x: hidden;
-  position: relative;
-}
-
-/* Анимированный градиентный фон */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 50% 20%, rgba(255, 255, 0, 0.1) 0%, transparent 50%);
-  z-index: -1;
-  animation: gradientMove 20s ease infinite;
-}
-
-@keyframes gradientMove {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.1); }
-}
-
-/* Particle эффект */
-.particles {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  pointer-events: none;
 }
 
 /* ============================================
-   ТИПОГРАФИЯ
+   TYPOGRAPHY
    ============================================ */
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
 }
 
 h1 {
   font-size: clamp(2.5rem, 5vw, 4rem);
-  background: var(--gradient-cyber);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: shimmer 3s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 h2 {
   font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 600;
 }
 
 h3 {
   font-size: clamp(1.5rem, 3vw, 2rem);
 }
 
-p {
+h4 {
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+}
+
+h5 {
   font-size: 1.125rem;
+}
+
+h6 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+p {
+  margin-bottom: var(--space-4);
   color: var(--text-secondary);
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+a:hover {
+  color: var(--primary-dark);
 }
 
 /* ============================================
@@ -160,98 +183,89 @@ p {
    ============================================ */
 
 .btn {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem 2rem;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1;
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  overflow: hidden;
-  transition: var(--transition-base);
+  transition: all var(--transition-base);
   text-decoration: none;
-}
-
-.btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  transition: left 0.5s;
-}
-
-.btn:hover::before {
-  left: 100%;
+  white-space: nowrap;
 }
 
 .btn-primary {
-  background: var(--gradient-cyber);
-  color: var(--bg-dark);
-  box-shadow: var(--shadow-neon);
+  background-color: var(--primary);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
+  background-color: var(--primary-dark);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary {
-  background: var(--bg-glass);
+  background-color: transparent;
   color: var(--text-primary);
-  border: 2px solid var(--primary);
-  backdrop-filter: blur(10px);
+  border: 1.5px solid var(--border-dark);
 }
 
 .btn-secondary:hover {
-  background: rgba(0, 255, 255, 0.1);
-  transform: translateY(-2px);
+  background-color: var(--bg-secondary);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.875rem;
+}
+
+.btn-lg {
+  padding: var(--space-4) var(--space-8);
+  font-size: 1rem;
 }
 
 /* ============================================
-   CARDS - Glassmorphism
+   CARDS
    ============================================ */
 
 .card {
-  position: relative;
-  background: var(--bg-glass);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-xl);
-  padding: var(--space-xl);
-  transition: var(--transition-base);
-  overflow: hidden;
-}
-
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, rgba(0,255,255,0.1) 0%, rgba(255,0,255,0.1) 100%);
-  opacity: 0;
-  transition: var(--transition-base);
+  padding: var(--space-6);
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
 }
 
 .card:hover {
-  transform: translateY(-10px) scale(1.02);
-  border-color: var(--primary);
+  border-color: var(--border-medium);
   box-shadow: var(--shadow-lg);
-}
-
-.card:hover::before {
-  opacity: 1;
+  transform: translateY(-4px);
 }
 
 /* ============================================
@@ -259,48 +273,18 @@ p {
    ============================================ */
 
 .product-card {
-  position: relative;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  transition: var(--transition-base);
+  transition: all var(--transition-base);
   cursor: pointer;
 }
 
-.product-card::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    var(--primary) 90deg,
-    transparent 180deg
-  );
-  opacity: 0;
-  transition: var(--transition-slow);
-  animation: rotate 4s linear infinite;
-}
-
-@keyframes rotate {
-  100% { transform: rotate(360deg); }
-}
-
-.product-card:hover::before {
-  opacity: 0.1;
-}
-
 .product-card:hover {
-  transform: translateY(-15px) scale(1.05);
-  border-color: var(--primary);
-  box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.5),
-    0 0 40px rgba(0, 255, 255, 0.3);
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-8px);
 }
 
 .product-image {
@@ -308,34 +292,38 @@ p {
   width: 100%;
   aspect-ratio: 1;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(0,255,255,0.05) 0%, rgba(255,0,255,0.05) 100%);
+  background-color: var(--bg-secondary);
 }
 
 .product-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: var(--transition-slow);
-  filter: brightness(0.9);
+  transition: transform var(--transition-slow);
 }
 
 .product-card:hover .product-image img {
-  transform: scale(1.1);
-  filter: brightness(1.1);
+  transform: scale(1.05);
 }
 
 .product-info {
-  padding: var(--space-lg);
-  position: relative;
-  z-index: 1;
+  padding: var(--space-5);
+}
+
+.product-category {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
 }
 
 .product-title {
   font-family: var(--font-display);
   font-size: 1.125rem;
-  font-weight: 700;
-  margin-bottom: var(--space-sm);
+  font-weight: 600;
   color: var(--text-primary);
+  margin-bottom: var(--space-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -345,21 +333,114 @@ p {
 .product-price {
   font-family: var(--font-display);
   font-size: 1.5rem;
-  font-weight: 800;
-  background: var(--gradient-gold);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.product-badge {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--primary);
+  color: var(--text-inverse);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-md);
 }
 
 /* ============================================
-   CONTAINER
+   FORMS
+   ============================================ */
+
+.input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.1);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   CONTAINER & LAYOUT
    ============================================ */
 
 .container {
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 var(--space-xl);
+  padding: 0 var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 0 var(--space-8);
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding: 0 var(--space-10);
+  }
+}
+
+.section {
+  padding: var(--space-16) 0;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding: var(--space-20) 0;
+  }
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* ============================================
@@ -377,21 +458,10 @@ p {
   }
 }
 
-@keyframes slideInRight {
+@keyframes fadeInScale {
   from {
     opacity: 0;
-    transform: translateX(50px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
@@ -399,53 +469,41 @@ p {
   }
 }
 
-.animate-fadeIn {
+.animate-fade-in {
   animation: fadeIn 0.6s ease-out;
 }
 
-.animate-slideInRight {
-  animation: slideInRight 0.6s ease-out;
+.animate-fade-in-scale {
+  animation: fadeInScale 0.6s ease-out;
 }
 
-.animate-scaleIn {
-  animation: scaleIn 0.6s ease-out;
-}
-
-/* ============================================
-   GLOW EFFECTS
-   ============================================ */
-
-.glow-cyan {
-  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
-}
-
-.glow-magenta {
-  text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
-}
-
-.glow-yellow {
-  text-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
-}
+/* Stagger animations */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
 
 /* ============================================
    SCROLLBAR
    ============================================ */
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-darker);
+  background-color: var(--bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--primary) 0%, var(--secondary) 100%);
+  background-color: var(--gray-300);
   border-radius: var(--radius-full);
+  border: 3px solid var(--bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, var(--secondary) 0%, var(--accent) 100%);
+  background-color: var(--primary);
 }
 
 /* ============================================
@@ -453,11 +511,31 @@ p {
    ============================================ */
 
 ::selection {
-  background: var(--primary);
-  color: var(--bg-dark);
+  background-color: var(--gold-pale);
+  color: var(--text-primary);
 }
 
 ::-moz-selection {
-  background: var(--primary);
-  color: var(--bg-dark);
+  background-color: var(--gold-pale);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   FOCUS VISIBLE
+   ============================================ */
+
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   PRINT
+   ============================================ */
+
+@media print {
+  body {
+    background-color: white;
+    color: black;
+  }
 }

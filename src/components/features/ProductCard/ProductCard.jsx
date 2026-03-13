@@ -1,91 +1,101 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
-import Price from '../../common/Price/price.jsx';
 import './ProductCard.css';
 
-const ProductCard = ({ product }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+export default function ProductCard({ product, onClick }) {
+  const navigate = useNavigate();
   const { addToCart } = useCart();
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
-  const handleAddToCart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    addToCart(product);
+  const handleClick = (e) => {
+    // Если клик не на кнопку "В корзину"
+    if (!e.target.closest('.add-to-cart-btn')) {
+      if (onClick) {
+        onClick(product);
+      } else {
+        navigate(`/product/${product.article || product.id}`);
+      }
+    }
   };
 
-  const handleQuickView = (e) => {
-    e.preventDefault();
+  const handleAddToCart = (e) => {
     e.stopPropagation();
-    // Логика для Quick View модалки
+    
+    // Добавляем в корзину через CartContext
+    addToCart({
+      id: product.id || product.article,
+      article: product.article,
+      name: product.name || product.title,
+      price: product.priceWithMarkup || product.price,
+      image: product.image || product.images?.[0],
+    });
+
+    // Анимация добавления
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('ru-RU').format(price);
   };
 
   return (
-    <Link 
-      to={`/product/${product.id}`}
-      className="product-card"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <article className="product-card" onClick={handleClick}>
+      {/* Бейдж "Новинка" */}
+      {product.isNew && (
+        <div className="product-badge new-badge">Новинка</div>
+      )}
+
+      {/* Бейдж "В наличии" */}
+      {product.stock > 0 && (
+        <div className="product-badge stock-badge">В наличии</div>
+      )}
+
+      {/* Изображение */}
       <div className="product-image-wrapper">
         {!imageLoaded && (
-          <div className="image-skeleton skeleton"></div>
+          <div className="image-skeleton">
+            <div className="skeleton-shimmer"></div>
+          </div>
         )}
-        <img
-          src={product.image}
-          alt={product.title}
+        <img 
+          src={product.image || product.images?.[0] || '/placeholder.png'}
+          alt={product.name || product.title}
           className={`product-image ${imageLoaded ? 'loaded' : ''}`}
           onLoad={() => setImageLoaded(true)}
           loading="lazy"
         />
-        
-        {product.discount && (
-          <div className="product-badge discount">
-            -{product.discount}%
-          </div>
-        )}
-        
-        {product.isNew && (
-          <div className="product-badge new">
-            New
-          </div>
-        )}
-
-        <div className={`product-actions ${isHovered ? 'visible' : ''}`}>
-          <button 
-            className="action-button"
-            onClick={handleQuickView}
-            aria-label="Быстрый просмотр"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
-          
-          <button 
-            className="action-button"
-            aria-label="Добавить в избранное"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-          </button>
-        </div>
       </div>
 
+      {/* Информация */}
       <div className="product-info">
-        <div className="product-category">{product.category}</div>
-        <h3 className="product-title">{product.title}</h3>
-        
-        {product.rating && (
+        {/* Бренд */}
+        {product.brand && (
+          <p className="product-brand">{product.brand}</p>
+        )}
+
+        {/* Название */}
+        <h3 className="product-title">
+          {product.name || product.title}
+        </h3>
+
+        {/* Описание */}
+        {product.description && (
+          <p className="product-description">
+            {product.description}
+          </p>
+        )}
+
+        {/* Рейтинг */}
+        {product.rating?.average > 0 && (
           <div className="product-rating">
             <div className="stars">
               {[...Array(5)].map((_, i) => (
                 <span 
                   key={i} 
-                  className={`star ${i < Math.floor(product.rating.rate) ? 'filled' : ''}`}
+                  className={i < Math.round(product.rating.average) ? 'star filled' : 'star'}
                 >
                   ★
                 </span>
@@ -95,27 +105,44 @@ const ProductCard = ({ product }) => {
           </div>
         )}
 
+        {/* Цена и кнопка */}
         <div className="product-footer">
-          <Price 
-            value={product.price}
-            size="small"
-            showCurrency={true}
-          />
+          <div className="product-price-block">
+            <p className="product-price">
+              {formatPrice(product.priceWithMarkup || product.price)} ₸
+            </p>
+            {product.price1 && product.price !== product.priceWithMarkup && (
+              <p className="product-price-old">
+                {formatPrice(product.price)} ₸
+              </p>
+            )}
+          </div>
 
           <button 
-            className="add-to-cart-btn"
+            className={`add-to-cart-btn ${addedToCart ? 'added' : ''}`}
             onClick={handleAddToCart}
+            disabled={product.stock === 0}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-              <line x1="3" y1="6" x2="21" y2="6"/>
-              <path d="M16 10a4 4 0 0 1-8 0"/>
-            </svg>
+            {addedToCart ? (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Добавлено
+              </>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="21" r="1"/>
+                  <circle cx="20" cy="21" r="1"/>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                В корзину
+              </>
+            )}
           </button>
         </div>
       </div>
-    </Link>
+    </article>
   );
-};
-
-export default ProductCard;
+}

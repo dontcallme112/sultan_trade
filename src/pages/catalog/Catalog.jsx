@@ -1,201 +1,196 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useProducts } from '../../hooks/useProducts.js';
-import ProductCard from '../../components/features/ProductCard/ProductCard.jsx';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useProducts } from '../../hooks/useProducts';
+import ProductCard from '../../components/features/ProductCard/ProductCard';
 import './Catalog.css';
 
-const Catalog = () => {
+export default function Catalog() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { products: allProducts, loading } = useProducts();
   
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [sortBy, setSortBy] = useState('default');
   const [filters, setFilters] = useState({
-    category: searchParams.get('category') || '',
-    minPrice: '',
-    maxPrice: '',
-    minRating: '',
+    category: searchParams.get('category') || null,
+    brand: searchParams.get('brand') || null,
+    search: searchParams.get('search') || '',
+    limit: 12,
+    offset: 0
   });
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const [allProducts, setAllProducts] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+  const { products, loading, error } = useProducts(filters);
+
+  // Загрузка товаров
+  useEffect(() => {
+    if (products && products.length > 0) {
+      if (filters.offset === 0) {
+        // Первая загрузка - заменяем товары
+        setAllProducts(products);
+      } else {
+        // Подгрузка - добавляем товары
+        setAllProducts(prev => [...prev, ...products]);
+      }
+      
+      // Проверяем есть ли еще товары
+      setHasMore(products.length === filters.limit);
+    }
+  }, [products]);
+
+  // Загрузить еще товары
+  const loadMore = () => {
+    setFilters(prev => ({
+      ...prev,
+      offset: prev.offset + prev.limit
+    }));
   };
 
-  const handleSortChange = (value) => {
-    setSortBy(value);
-  };
-
-  const clearFilters = () => {
+  // Сброс фильтров
+  const resetFilters = () => {
     setFilters({
-      category: '',
-      minPrice: '',
-      maxPrice: '',
-      minRating: '',
+      category: null,
+      brand: null,
+      search: '',
+      limit: 12,
+      offset: 0
     });
     setSearchParams({});
   };
 
-  const categories = ['electronics', 'jewelery', "men's clothing", "women's clothing"];
+  // Переход на страницу товара
+  const handleProductClick = (product) => {
+    navigate(`/product/${product.article || product.id}`);
+  };
 
   return (
-    <div className="catalog">
+    <div className="catalog-page">
       <div className="container">
+        {/* Header */}
         <div className="catalog-header">
           <div>
-            <h1 className="catalog-title">Каталог</h1>
+            <h1 className="catalog-title">Каталог товаров</h1>
             <p className="catalog-subtitle">
-              {filteredProducts.length} {filteredProducts.length === 1 ? 'товар' : 'товаров'}
+              {allProducts.length > 0 
+                ? `Найдено товаров: ${allProducts.length}` 
+                : 'Просмотрите нашу коллекцию премиум электроники'}
             </p>
           </div>
 
-          <div className="catalog-controls">
-            <button 
-              className="filter-toggle"
-              onClick={() => setFiltersOpen(!filtersOpen)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-              </svg>
-              Фильтры
+          {(filters.category || filters.brand || filters.search) && (
+            <button className="btn btn-secondary" onClick={resetFilters}>
+              Сбросить фильтры
             </button>
-
-            <select 
-              className="sort-select"
-              value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-            >
-              <option value="default">По умолчанию</option>
-              <option value="price-asc">Цена: по возрастанию</option>
-              <option value="price-desc">Цена: по убыванию</option>
-              <option value="rating">По рейтингу</option>
-              <option value="name">По названию</option>
-            </select>
-          </div>
+          )}
         </div>
 
-        <div className="catalog-content">
-          {/* Sidebar Filters */}
-          <aside className={`filters-sidebar ${filtersOpen ? 'open' : ''}`}>
-            <div className="filters-header">
-              <h3>Фильтры</h3>
-              <button 
-                className="clear-filters"
-                onClick={clearFilters}
-              >
-                Сбросить
-              </button>
-            </div>
+        {/* Активные фильтры */}
+        {(filters.category || filters.brand || filters.search) && (
+          <div className="active-filters">
+            {filters.category && (
+              <span className="filter-tag">
+                Категория: {filters.category}
+                <button onClick={() => setFilters(prev => ({ ...prev, category: null }))}>×</button>
+              </span>
+            )}
+            {filters.brand && (
+              <span className="filter-tag">
+                Бренд: {filters.brand}
+                <button onClick={() => setFilters(prev => ({ ...prev, brand: null }))}>×</button>
+              </span>
+            )}
+            {filters.search && (
+              <span className="filter-tag">
+                Поиск: {filters.search}
+                <button onClick={() => setFilters(prev => ({ ...prev, search: '' }))}>×</button>
+              </span>
+            )}
+          </div>
+        )}
 
-            <div className="filter-group">
-              <label className="filter-label">Категория</label>
-              <div className="filter-options">
-                {categories.map(category => (
-                  <button
-                    key={category}
-                    className={`filter-chip ${filters.category === category ? 'active' : ''}`}
-                    onClick={() => handleFilterChange('category', 
-                      filters.category === category ? '' : category
-                    )}
-                  >
-                    {formatCategoryName(category)}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* Loading состояние для первой загрузки */}
+        {loading && allProducts.length === 0 && (
+          <div className="catalog-loading">
+            <div className="loader"></div>
+            <p>Загружаем товары...</p>
+          </div>
+        )}
 
-            <div className="filter-group">
-              <label className="filter-label">Цена</label>
-              <div className="price-inputs">
-                <input
-                  type="number"
-                  placeholder="От"
-                  value={filters.minPrice}
-                  onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                  className="price-input"
-                />
-                <span>—</span>
-                <input
-                  type="number"
-                  placeholder="До"
-                  value={filters.maxPrice}
-                  onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                  className="price-input"
-                />
-              </div>
-            </div>
-
-            <div className="filter-group">
-              <label className="filter-label">Минимальный рейтинг</label>
-              <div className="rating-filter">
-                {[5, 4, 3, 2, 1].map(rating => (
-                  <button
-                    key={rating}
-                    className={`rating-option ${filters.minRating === rating.toString() ? 'active' : ''}`}
-                    onClick={() => handleFilterChange('minRating', 
-                      filters.minRating === rating.toString() ? '' : rating.toString()
-                    )}
-                  >
-                    {'★'.repeat(rating)}
-                    {'☆'.repeat(5 - rating)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button 
-              className="mobile-close"
-              onClick={() => setFiltersOpen(false)}
-            >
-              Применить
+        {/* Error состояние */}
+        {error && (
+          <div className="catalog-error">
+            <div className="error-icon">⚠️</div>
+            <h3>Произошла ошибка</h3>
+            <p>{error}</p>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              Попробовать снова
             </button>
-          </aside>
+          </div>
+        )}
 
-          {/* Products Grid */}
-          <div className="catalog-grid">
-            {loading ? (
-              [...Array(12)].map((_, i) => (
-                <div key={i} className="product-skeleton">
-                  <div className="skeleton" style={{ paddingTop: '125%' }}></div>
-                  <div style={{ padding: 'var(--space-lg)' }}>
-                    <div className="skeleton" style={{ height: '12px', width: '40%', marginBottom: '8px' }}></div>
-                    <div className="skeleton" style={{ height: '20px', width: '80%', marginBottom: '8px' }}></div>
-                    <div className="skeleton" style={{ height: '24px', width: '30%' }}></div>
-                  </div>
-                </div>
-              ))
-            ) : filteredProducts.length > 0 ? (
-              filteredProducts.map((product, index) => (
-                <div key={product.id} className={`animate-fadeInScale stagger-${(index % 3) + 1}`}>
-                  <ProductCard product={product} />
-                </div>
-              ))
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">🔍</div>
-                <h3>Ничего не найдено</h3>
-                <p>Попробуйте изменить параметры поиска или фильтры</p>
-                <button className="btn-primary" onClick={clearFilters}>
-                  Сбросить фильтры
+        {/* Товары */}
+        {!loading && !error && allProducts.length === 0 && (
+          <div className="catalog-empty">
+            <div className="empty-icon">
+              <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <h2>Товары не найдены</h2>
+            <p>Попробуйте изменить параметры поиска или фильтры</p>
+            <button className="btn btn-primary" onClick={resetFilters}>
+              Сбросить фильтры
+            </button>
+          </div>
+        )}
+
+        {/* Сетка товаров */}
+        {allProducts.length > 0 && (
+          <>
+            <div className="products-grid">
+              {allProducts.map((product, index) => (
+                <ProductCard 
+                  key={product.id || product.article || index} 
+                  product={product}
+                  onClick={() => handleProductClick(product)}
+                />
+              ))}
+            </div>
+
+            {/* Кнопка "Загрузить еще" */}
+            {hasMore && (
+              <div className="load-more-container">
+                <button 
+                  className="btn btn-secondary btn-lg load-more-btn"
+                  onClick={loadMore}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <div className="btn-loader"></div>
+                      Загрузка...
+                    </>
+                  ) : (
+                    <>
+                      Загрузить еще
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </>
+                  )}
                 </button>
               </div>
             )}
-          </div>
-        </div>
+
+            {/* Конец списка */}
+            {!hasMore && allProducts.length > 0 && (
+              <div className="end-of-list">
+                <p>Вы просмотрели все товары</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
-};
-
-const formatCategoryName = (category) => {
-  const names = {
-    'electronics': 'Электроника',
-    'jewelery': 'Украшения',
-    "men's clothing": 'Мужская одежда',
-    "women's clothing": 'Женская одежда',
-  };
-  return names[category] || category;
-};
-
-export default Catalog;
+}
