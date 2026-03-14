@@ -38,11 +38,11 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// КЕШИРОВАНИЕ (увеличено для избежания 403)
+// КЕШИРОВАНИЕ
 // ============================================
 const cache = new Map();
-const CACHE_TTL = 30000; // 30 секунд (увеличено с 5!)
-const PRODUCT_CACHE_TTL = 60000; // 60 секунд для отдельных товаров
+const CACHE_TTL = 30000; // 30 секунд
+const PRODUCT_CACHE_TTL = 60000; // 60 секунд
 
 function getCacheKey(endpoint, params) {
   return `${endpoint}:${JSON.stringify(params)}`;
@@ -74,9 +74,9 @@ app.get('/health', (req, res) => {
 
 // GET /api/products
 app.get('/api/products', async (req, res) => {
+  const { category, brand, limit = 10, offset = 0 } = req.query;
+  
   try {
-    const { category, brand, limit = 10, offset = 0 } = req.query;
-    
     const params = {
       'access-token': ACCESS_TOKEN,
       limit,
@@ -111,12 +111,17 @@ app.get('/api/products', async (req, res) => {
       console.error('Статус:', error.response.status);
       console.error('Данные:', JSON.stringify(error.response.data, null, 2));
       
-      // Если 403 - возможно rate limit, попробуем вернуть из кеша даже старый
+      // Если 403 - возвращаем из кеша
       if (error.response.status === 403) {
-        const cacheKey = getCacheKey('products', { limit, offset, category, brand });
+        const params = { 'access-token': ACCESS_TOKEN, limit, offset };
+        if (category && category !== 'null') params.category = category;
+        if (brand && brand !== 'null') params.brand = brand;
+        
+        const cacheKey = getCacheKey('products', params);
         const staleCache = cache.get(cacheKey);
+        
         if (staleCache) {
-          console.log('⚠️ Возвращаем старые данные из-за rate limit');
+          console.log('⚠️ Rate limit! Возвращаем старые данные из кеша');
           return res.json(staleCache.data);
         }
       }
@@ -135,32 +140,37 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// GET /api/product/:article - получить ОДИН товар
+// GET /api/product/:article - ПРАВИЛЬНЫЙ ENDPOINT!
 app.get('/api/product/:article', async (req, res) => {
+  const { article } = req.params;
+  
   try {
-    const { article } = req.params;
-    
     console.log('🔍 Запрос товара:', article);
     
-    // Проверяем кеш (ДОЛГИЙ TTL для товаров)
+    // Проверяем кеш
     const cacheKey = getCacheKey('product', { article });
     const cached = getFromCache(cacheKey, PRODUCT_CACHE_TTL);
     if (cached) {
       return res.json(cached);
     }
     
+    // ПРАВИЛЬНЫЙ ENDPOINT: element-info (не elements!)
     const params = {
       'access-token': ACCESS_TOKEN,
       article: article,
       additional_fields: 'description,brand,images,url,warranty,weight'
     };
     
-    console.log('📡 Запрос к Al-Style API...');
+    console.log('📡 Запрос к Al-Style API (element-info)...');
     
-    const response = await axios.get(`${API_BASE_URL}/elements`, { params });
+    // Используем element-info вместо elements
+    const response = await axios.get(`${API_BASE_URL}/element-info`, { params });
     
-    if (response.data && response.data.elements && response.data.elements.length > 0) {
-      const product = response.data.elements[0];
+    console.log('📦 Ответ API:', response.data);
+    
+    // element-info возвращает массив товаров напрямую
+    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+      const product = response.data[0];
       console.log('✅ Товар найден:', product.name);
       
       const result = {
@@ -185,9 +195,9 @@ app.get('/api/product/:article', async (req, res) => {
       console.error('Статус:', error.response.status);
       console.error('Данные:', JSON.stringify(error.response.data, null, 2));
       
-      // Если 403 - пытаемся вернуть из кеша даже если он старый
+      // Если 403 - пытаемся вернуть из кеша
       if (error.response.status === 403) {
-        const cacheKey = getCacheKey('product', { article: req.params.article });
+        const cacheKey = getCacheKey('product', { article });
         const staleCache = cache.get(cacheKey);
         
         if (staleCache) {
@@ -217,7 +227,7 @@ app.get('/api/product/:article', async (req, res) => {
 app.get('/api/categories', async (req, res) => {
   try {
     const cacheKey = 'categories';
-    const cached = getFromCache(cacheKey, 3600000); // 1 час для категорий
+    const cached = getFromCache(cacheKey, 3600000);
     if (cached) {
       return res.json(cached);
     }
@@ -231,7 +241,6 @@ app.get('/api/categories', async (req, res) => {
   } catch (error) {
     console.error('❌ Ошибка категорий:', error.message);
     
-    // Пытаемся вернуть из кеша даже старые данные
     const staleCache = cache.get('categories');
     if (staleCache) {
       console.log('⚠️ Возвращаем старые категории');
@@ -248,7 +257,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
 });
 
-// Очистка старого кеша каждые 10 минут
+// Очистка кеша
 setInterval(() => {
   const now = Date.now();
   let deleted = 0;
@@ -273,8 +282,8 @@ app.listen(PORT, () => {
   console.log('');
   console.log('📍 Endpoints:');
   console.log('  GET /health');
-  console.log('  GET /api/products');
-  console.log('  GET /api/product/:article');
+  console.log('  GET /api/products         → elements-pagination');
+  console.log('  GET /api/product/:article → element-info ✓');
   console.log('  GET /api/categories');
   console.log('');
 });

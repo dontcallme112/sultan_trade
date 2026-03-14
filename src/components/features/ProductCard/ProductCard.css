@@ -1,13 +1,13 @@
 /* ============================================
-   PRODUCT CARD - Elegant Premium Design
+   PRODUCT CARD - Dark Premium Design
    ============================================ */
 
 .product-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-light);
+  background-color: #1A1A1A; /* Темный фон */
+  border: 1px solid #333333;
   border-radius: var(--radius-xl);
   overflow: hidden;
   cursor: pointer;
@@ -16,8 +16,8 @@
 }
 
 .product-card:hover {
-  border-color: var(--primary-light);
-  box-shadow: var(--shadow-xl);
+  border-color: #B8860B; /* Золотая рамка при hover */
+  box-shadow: 0 8px 32px rgba(184, 134, 11, 0.3);
   transform: translateY(-8px);
 }
 
@@ -40,16 +40,16 @@
 
 .new-badge {
   right: var(--space-4);
-  background-color: var(--primary);
-  color: var(--text-inverse);
-  box-shadow: 0 2px 8px rgba(184, 134, 11, 0.3);
+  background-color: #B8860B;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(184, 134, 11, 0.5);
 }
 
 .stock-badge {
   left: var(--space-4);
-  background-color: rgba(255, 255, 255, 0.95);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
+  background-color: rgba(26, 26, 26, 0.95);
+  color: #10B981;
+  border: 1px solid #10B981;
 }
 
 /* ============================================
@@ -61,7 +61,7 @@
   width: 100%;
   aspect-ratio: 1;
   overflow: hidden;
-  background-color: var(--bg-secondary);
+  background-color: #0D0D0D;
 }
 
 .product-image {
@@ -89,9 +89,9 @@
   height: 100%;
   background: linear-gradient(
     90deg,
-    var(--gray-100) 0%,
-    var(--gray-200) 50%,
-    var(--gray-100) 100%
+    #1A1A1A 0%,
+    #2A2A2A 50%,
+    #1A1A1A 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -118,9 +118,9 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--text-muted);
+  color: #B8860B; /* Золотой бренд */
   margin: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .product-title {
@@ -128,7 +128,7 @@
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--text-primary);
+  color: #FFFFFF; /* Белый текст */
   margin: 0;
   
   /* Ограничение по строкам */
@@ -137,12 +137,12 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 3em; /* 2 строки */
+  min-height: 3em;
 }
 
 .product-description {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+  color: #A0A0A0; /* Серый текст */
   line-height: 1.5;
   margin: 0;
   
@@ -170,17 +170,17 @@
 }
 
 .star {
-  color: var(--gray-300);
+  color: #3A3A3A;
   font-size: 1rem;
 }
 
 .star.filled {
-  color: var(--primary);
+  color: #B8860B; /* Золотые звезды */
 }
 
 .rating-count {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: #6A6A6A;
 }
 
 /* ============================================
@@ -194,7 +194,7 @@
   gap: var(--space-3);
   margin-top: auto;
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid #333333;
 }
 
 .product-price-block {
@@ -207,14 +207,14 @@
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--primary);
+  color: #DAA520; /* Золотая цена */
   margin: 0;
   line-height: 1;
 }
 
 .product-price-old {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: #6A6A6A;
   text-decoration: line-through;
   margin: 0;
 }
@@ -232,8 +232,8 @@
   font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text-inverse);
-  background-color: var(--primary);
+  color: #0A0A0A; /* Черный текст */
+  background-color: #B8860B; /* Золотой фон */
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -243,9 +243,9 @@
 }
 
 .add-to-cart-btn:hover {
-  background-color: var(--primary-dark);
+  background-color: #DAA520; /* Светлее при hover */
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.3);
+  box-shadow: 0 4px 16px rgba(184, 134, 11, 0.6);
 }
 
 .add-to-cart-btn:active {
@@ -253,13 +253,14 @@
 }
 
 .add-to-cart-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
   transform: none;
 }
 
 .add-to-cart-btn.added {
-  background-color: #10B981;
+  background-color: #10B981; /* Зеленый при добавлении */
+  color: #FFFFFF;
 }
 
 .add-to-cart-btn svg {
@@ -307,6 +308,6 @@
 
 @media (hover: hover) {
   .product-card:hover .product-title {
-    color: var(--primary);
+    color: #DAA520; /* Золотой при hover */
   }
 }
