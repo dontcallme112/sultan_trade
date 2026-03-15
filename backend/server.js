@@ -10,14 +10,13 @@ const PORT = process.env.PORT || 3001;
 const API_BASE_URL = 'https://api.al-style.kz/api';
 const ACCESS_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
 
-
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('🚀 LUXE Backend Server');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`📡 Server: http://localhost:${PORT}`);
 console.log(`🔗 API: ${API_BASE_URL}`);
 console.log(`🔑 Token: ${ACCESS_TOKEN ? '✓ ' + ACCESS_TOKEN.substring(0, 10) + '...' : '✗ Missing'}`);
-console.log(`🌐 CORS: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+console.log(`🌐 CORS: Multiple origins enabled`);
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
 if (!ACCESS_TOKEN) {
@@ -25,20 +24,32 @@ if (!ACCESS_TOKEN) {
   process.exit(1);
 }
 
-// Middleware
+// ============================================
+// CORS - ПРАВИЛЬНАЯ НАСТРОЙКА!
+// ============================================
+const allowedOrigins = [
+  'http://localhost:5173',           // Локальная разработка
+  'http://localhost:3000',           // Альтернативный локальный порт
+  'https://sultantrade.vercel.app',  // Production Vercel
+  process.env.FRONTEND_URL           // Из переменных окружения
+].filter(Boolean); // Убирает undefined
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://sultantrade.vercel.app"
-  ],
-  methods: ["GET","POST","PUT","DELETE"],
+  origin: function(origin, callback) {
+    // Разрешаем запросы без origin (например, Postman, curl)
+    if (!origin) return callback(null, true);
+    
+    // Проверяем что origin в списке разрешенных
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
-// app.use(cors({
-//   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-//   credentials: true
-// }));
 app.use(express.json());
 
 // Логирование запросов
@@ -78,7 +89,8 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     token: !!ACCESS_TOKEN,
-    cacheSize: cache.size
+    cacheSize: cache.size,
+    cors: allowedOrigins
   });
 });
 
@@ -98,7 +110,6 @@ app.get('/api/products', async (req, res) => {
     if (category && category !== 'null') params.category = category;
     if (brand && brand !== 'null') params.brand = brand;
     
-    // Проверяем кеш
     const cacheKey = getCacheKey('products', params);
     const cached = getFromCache(cacheKey);
     if (cached) {
@@ -121,7 +132,6 @@ app.get('/api/products', async (req, res) => {
       console.error('Статус:', error.response.status);
       console.error('Данные:', JSON.stringify(error.response.data, null, 2));
       
-      // Если 403 - возвращаем из кеша
       if (error.response.status === 403) {
         const params = { 'access-token': ACCESS_TOKEN, limit, offset };
         if (category && category !== 'null') params.category = category;
@@ -150,21 +160,19 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// GET /api/product/:article - ПРАВИЛЬНЫЙ ENDPOINT!
+// GET /api/product/:article
 app.get('/api/product/:article', async (req, res) => {
   const { article } = req.params;
   
   try {
     console.log('🔍 Запрос товара:', article);
     
-    // Проверяем кеш
     const cacheKey = getCacheKey('product', { article });
     const cached = getFromCache(cacheKey, PRODUCT_CACHE_TTL);
     if (cached) {
       return res.json(cached);
     }
     
-    // ПРАВИЛЬНЫЙ ENDPOINT: element-info (не elements!)
     const params = {
       'access-token': ACCESS_TOKEN,
       article: article,
@@ -173,12 +181,10 @@ app.get('/api/product/:article', async (req, res) => {
     
     console.log('📡 Запрос к Al-Style API (element-info)...');
     
-    // Используем element-info вместо elements
     const response = await axios.get(`${API_BASE_URL}/element-info`, { params });
     
     console.log('📦 Ответ API:', response.data);
     
-    // element-info возвращает массив товаров напрямую
     if (response.data && Array.isArray(response.data) && response.data.length > 0) {
       const product = response.data[0];
       console.log('✅ Товар найден:', product.name);
@@ -205,7 +211,6 @@ app.get('/api/product/:article', async (req, res) => {
       console.error('Статус:', error.response.status);
       console.error('Данные:', JSON.stringify(error.response.data, null, 2));
       
-      // Если 403 - пытаемся вернуть из кеша
       if (error.response.status === 403) {
         const cacheKey = getCacheKey('product', { article });
         const staleCache = cache.get(cacheKey);
@@ -289,6 +294,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('✨ Backend готов!');
   console.log('⚡ Кеш: 30 сек (товары), 60 сек (один товар)');
+  console.log('🔒 CORS Origins:', allowedOrigins);
   console.log('');
   console.log('📍 Endpoints:');
   console.log('  GET /health');
