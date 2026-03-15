@@ -3,6 +3,9 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
+app.use(cors());
+
+
 dotenv.config();
 
 const app = express();
