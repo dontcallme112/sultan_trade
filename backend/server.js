@@ -3,15 +3,14 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
-app.use(cors());
-
-
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const API_BASE_URL = 'https://api.al-style.kz/api';
 const ACCESS_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
+
+app.use(cors());
 
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('🚀 LUXE Backend Server');
