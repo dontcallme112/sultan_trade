@@ -10,7 +10,6 @@ const PORT = process.env.PORT || 3001;
 const API_BASE_URL = 'https://api.al-style.kz/api';
 const ACCESS_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
 
-app.use(cors());
 
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('🚀 LUXE Backend Server');
@@ -27,10 +26,12 @@ if (!ACCESS_TOKEN) {
 }
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+app.use(cors());
+
+// app.use(cors({
+//   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+//   credentials: true
+// }));
 app.use(express.json());
 
 // Логирование запросов
