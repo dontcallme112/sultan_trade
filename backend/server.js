@@ -26,7 +26,14 @@ if (!ACCESS_TOKEN) {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://sultantrade.vercel.app"
+  ],
+  methods: ["GET","POST","PUT","DELETE"],
+  credentials: true
+}));
 
 // app.use(cors({
 //   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
