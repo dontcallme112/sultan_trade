@@ -1,525 +1,447 @@
-import express from 'express';
-import cors from 'cors';
-import axios from 'axios';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
+const NodeCache = require('node-cache');
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-const API_BASE_URL = 'https://api.al-style.kz/api';
-const ACCESS_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
+const PORT = process.env.PORT || 8080;
 
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log('🚀 LUXE Backend Server v2.1');
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log(`📡 Server: http://localhost:${PORT}`);
-console.log(`🔗 API: ${API_BASE_URL}`);
-console.log(`🔑 Token: ${ACCESS_TOKEN ? '✓ ' + ACCESS_TOKEN.substring(0, 10) + '...' : '✗ Missing'}`);
-console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+// Токен Al-Style API
+const ALSTYLE_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
 
-if (!ACCESS_TOKEN) {
-  console.error('❌ ОШИБКА: ALSTYLE_ACCESS_TOKEN не найден');
+if (!ALSTYLE_TOKEN) {
+  console.error('❌ ОШИБКА: ALSTYLE_ACCESS_TOKEN не найден в .env');
   process.exit(1);
 }
 
-// ============================================
-// CORS
-// ============================================
+console.log('🔑 Token:', '✓', ALSTYLE_TOKEN.substring(0, 10) + '...');
+
+// Инициализация кеша (30 сек для товаров, 60 сек для одного товара, 5 мин для фильтров)
+const cache = new NodeCache({ stdTTL: 30, checkperiod: 60 });
+
+// CORS настройка
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://sultantrade.vercel.app',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+const allowedPatterns = [
+  /^http:\/\/localhost(:\d+)?$/,
+  /^https:\/\/sultantrade\.vercel\.app$/,
+  /^https:\/\/sultantrade-.*\.vercel\.app$/
+];
+
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     
-    const allowedPatterns = [
-      /^http:\/\/localhost(:\d+)?$/,
-      /^https:\/\/sultantrade\.vercel\.app$/,
-      /^https:\/\/sultantrade-.*\.vercel\.app$/,
-    ];
-    
-    const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn(`⚠️ Blocked CORS from: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    
+    if (allowedPatterns.some(pattern => pattern.test(origin))) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
 
 app.use(express.json());
 
+// Al-Style API клиент
+const alStyleAPI = axios.create({
+  baseURL: 'https://api.al-style.kz/api',
+  timeout: 10000,
+  headers: {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  }
+});
+
+// Rate limiting для API
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 5000; // 5 секунд между запросами
+
+async function rateLimitedRequest(config) {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+  return alStyleAPI(config);
+}
+
+// Middleware для логирования
 app.use((req, res, next) => {
   console.log(`${new Date().toLocaleTimeString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// ============================================
-// КЕШИРОВАНИЕ
-// ============================================
-const cache = new Map();
-const CACHE_TTL = 30000;
-const PRODUCT_CACHE_TTL = 60000;
-
-function getCacheKey(endpoint, params) {
-  return `${endpoint}:${JSON.stringify(params)}`;
-}
-
-function getFromCache(key, customTTL = CACHE_TTL) {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < customTTL) {
-    console.log('📦 Из кеша');
-    return cached.data;
-  }
-  return null;
-}
-
-function setCache(key, data) {
-  cache.set(key, { data, timestamp: Date.now() });
-  console.log('💾 Сохранено в кеш');
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-// Фильтрация и сортировка на стороне сервера
-function filterAndSortProducts(products, filters) {
-  let filtered = [...products];
-  
-  // Фильтр по цене
-  if (filters.minPrice !== undefined) {
-    filtered = filtered.filter(p => {
-      const price = p.price2 || p.price1 || p.price || 0;
-      return price >= filters.minPrice;
-    });
-  }
-  
-  if (filters.maxPrice !== undefined) {
-    filtered = filtered.filter(p => {
-      const price = p.price2 || p.price1 || p.price || 0;
-      return price <= filters.maxPrice;
-    });
-  }
-  
-  // Фильтр по бренду
-  if (filters.brand) {
-    filtered = filtered.filter(p => p.brand === filters.brand);
-  }
-  
-  // Только новинки
-  if (filters.onlyNew) {
-    filtered = filtered.filter(p => p.isnew === 1);
-  }
-  
-  // Поиск
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter(p => {
-      const name = (p.name || '').toLowerCase();
-      const fullName = (p.full_name || '').toLowerCase();
-      const article = (p.article || '').toString();
-      
-      return name.includes(searchLower) ||
-             fullName.includes(searchLower) ||
-             article.includes(searchLower);
-    });
-  }
-  
-  // Сортировка
-  switch (filters.sortBy) {
-    case 'price_asc':
-      filtered.sort((a, b) => {
-        const priceA = a.price2 || a.price1 || a.price || 0;
-        const priceB = b.price2 || b.price1 || b.price || 0;
-        return priceA - priceB;
-      });
-      break;
-    
-    case 'price_desc':
-      filtered.sort((a, b) => {
-        const priceA = a.price2 || a.price1 || a.price || 0;
-        const priceB = b.price2 || b.price1 || b.price || 0;
-        return priceB - priceA;
-      });
-      break;
-    
-    case 'name_asc':
-      filtered.sort((a, b) => {
-        const nameA = (a.name || '').toLowerCase();
-        const nameB = (b.name || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-      break;
-    
-    case 'newest':
-      filtered.sort((a, b) => {
-        if (a.isnew && !b.isnew) return -1;
-        if (!a.isnew && b.isnew) return 1;
-        return 0;
-      });
-      break;
-  }
-  
-  return filtered;
-}
-
-// ============================================
-// HEALTH CHECK
-// ============================================
+// Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    token: !!ACCESS_TOKEN,
-    cacheSize: cache.size,
-    version: '2.1'
-  });
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 // ============================================
-// GET /api/products - С ФИЛЬТРАЦИЕЙ И ПОИСКОМ
+// PRODUCTS ENDPOINT с фильтрацией
 // ============================================
 app.get('/api/products', async (req, res) => {
   try {
     const { 
-      category, 
-      brand, 
       limit = 12, 
-      offset = 0,
-      minPrice,
-      maxPrice,
-      onlyNew,
-      search,
-      sortBy = 'default'
+      offset = 0, 
+      minPrice, 
+      maxPrice, 
+      brand, 
+      onlyNew, 
+      search, 
+      sortBy = 'default',
+      category
     } = req.query;
-    
-    // Параметры для Al-Style API - ВАЖНО: exclude_missing=true
-    const params = {
-      'access-token': ACCESS_TOKEN,
-      limit: 100,
-      offset: 0,
-      exclude_missing: 'true', // ← СКРЫВАЕТ ТОВАРЫ БЕЗ ОСТАТКА!
-      additional_fields: 'description,brand,images,url'
-    };
-    
-    if (category && category !== 'null') params.category = category;
-    if (brand && brand !== 'null') params.brand = brand;
-    
-    const cacheKey = getCacheKey('products_all', params);
-    let allProducts = getFromCache(cacheKey);
-    
-    if (!allProducts) {
+
+    // Проверяем кеш
+    const cacheKey = 'products';
+    let cachedData = cache.get(cacheKey);
+
+    if (!cachedData) {
       console.log('📦 Запрос товаров из API (только с остатком!)');
-      const response = await axios.get(`${API_BASE_URL}/elements-pagination`, { params });
-      allProducts = response.data?.elements || [];
-      setCache(cacheKey, allProducts);
+      
+      try {
+        const response = await rateLimitedRequest({
+          method: 'GET',
+          url: '/elements-pagination',
+          params: {
+            access_token: ALSTYLE_TOKEN,
+            exclude_missing: 'true', // ВАЖНО! Только товары в наличии
+            limit: 100,
+            offset: 0
+          }
+        });
+
+        cachedData = response.data;
+        cache.set(cacheKey, cachedData, 30);
+        console.log('💾 Сохранено в кеш');
+        console.log('📊 Получено товаров:', cachedData.elements?.length || 0);
+      } catch (error) {
+        if (error.response?.status === 403) {
+          console.log('⚠️  Rate limit, используем старый кеш');
+          cachedData = cache.get(cacheKey) || { elements: [] };
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      console.log('📦 Из кеша');
+      console.log('📊 Получено товаров:', cachedData.elements?.length || 0);
     }
-    
-    console.log(`📊 Получено товаров: ${allProducts.length}`);
-    
-    // Применяем фильтры на стороне сервера
-    const filters = {
-      brand: brand !== 'null' ? brand : undefined,
-      minPrice: minPrice ? parseFloat(minPrice) : undefined,
-      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
-      onlyNew: onlyNew === 'true',
-      search: search || undefined,
-      sortBy: sortBy
-    };
-    
-    let filteredProducts = filterAndSortProducts(allProducts, filters);
-    console.log(`🔍 После фильтрации: ${filteredProducts.length}`);
-    
+
+    let filteredProducts = cachedData.elements || [];
+
+    // Фильтрация по категории
+    if (category) {
+      filteredProducts = filteredProducts.filter(p => 
+        p.category && p.category.toString() === category.toString()
+      );
+    }
+
+    // Фильтрация по цене
+    if (minPrice || maxPrice) {
+      filteredProducts = filteredProducts.filter(product => {
+        const price = product.price2 || product.price1 || product.price || 0;
+        if (minPrice && price < Number(minPrice)) return false;
+        if (maxPrice && price > Number(maxPrice)) return false;
+        return true;
+      });
+    }
+
+    // Фильтрация по бренду
+    if (brand) {
+      filteredProducts = filteredProducts.filter(product => 
+        product.brand?.toLowerCase() === brand.toLowerCase()
+      );
+    }
+
+    // Фильтрация "Только новинки"
+    if (onlyNew === 'true') {
+      filteredProducts = filteredProducts.filter(product => product.isnew === 1);
+    }
+
+    // Поиск
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredProducts = filteredProducts.filter(product => 
+        product.name?.toLowerCase().includes(searchLower) ||
+        product.full_name?.toLowerCase().includes(searchLower) ||
+        product.brand?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Сортировка
+    switch (sortBy) {
+      case 'price_asc':
+        filteredProducts.sort((a, b) => {
+          const priceA = a.price2 || a.price1 || a.price || 0;
+          const priceB = b.price2 || b.price1 || b.price || 0;
+          return priceA - priceB;
+        });
+        break;
+      case 'price_desc':
+        filteredProducts.sort((a, b) => {
+          const priceA = a.price2 || a.price1 || a.price || 0;
+          const priceB = b.price2 || b.price1 || b.price || 0;
+          return priceB - priceA;
+        });
+        break;
+      case 'name_asc':
+        filteredProducts.sort((a, b) => 
+          (a.name || '').localeCompare(b.name || '')
+        );
+        break;
+      case 'newest':
+        filteredProducts.sort((a, b) => (b.isnew || 0) - (a.isnew || 0));
+        break;
+    }
+
+    console.log('🔍 После фильтрации:', filteredProducts.length);
+
     // Пагинация
-    const startIndex = parseInt(offset);
-    const endIndex = startIndex + parseInt(limit);
+    const startIndex = Number(offset);
+    const endIndex = startIndex + Number(limit);
     const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
-    
-    console.log(`📄 Отправляем: ${paginatedProducts.length} товаров`);
-    
+
+    console.log('📄 Отправляем:', paginatedProducts.length, 'товаров');
+
     res.json({
       elements: paginatedProducts,
       pagination: {
-        totalCount: filteredProducts.length,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: endIndex < filteredProducts.length
+        total: filteredProducts.length,
+        offset: Number(offset),
+        limit: Number(limit),
+        hasMore: endIndex < filteredProducts.length,
+        totalCount: filteredProducts.length
       }
     });
-    
+
   } catch (error) {
-    console.error('❌ Ошибка:', error.message);
-    
-    if (error.response?.status === 403) {
-      const cacheKey = getCacheKey('products_all', {});
-      const staleCache = cache.get(cacheKey);
-      
-      if (staleCache) {
-        console.log('⚠️ Rate limit! Возвращаем кеш');
-        return res.json({ 
-          elements: staleCache.data.slice(0, 12),
-          pagination: { totalCount: 0, hasMore: false }
-        });
-      }
-    }
-    
-    res.status(error.response?.status || 500).json({
-      error: error.message,
+    console.error('❌ Ошибка /api/products:', error.message);
+    res.status(500).json({ 
+      error: 'Ошибка загрузки товаров',
       elements: [],
-      pagination: { totalCount: 0, hasMore: false }
+      pagination: { total: 0, offset: 0, limit: 12, hasMore: false }
     });
   }
 });
 
 // ============================================
-// GET /api/search - АВТОДОПОЛНЕНИЕ
+// SINGLE PRODUCT
+// ============================================
+app.get('/api/product/:article', async (req, res) => {
+  try {
+    const { article } = req.params;
+    const cacheKey = `product_${article}`;
+    
+    let cachedProduct = cache.get(cacheKey);
+    
+    if (!cachedProduct) {
+      const response = await rateLimitedRequest({
+        method: 'GET',
+        url: '/element-info',
+        params: {
+          access_token: ALSTYLE_TOKEN,
+          article: article
+        }
+      });
+
+      cachedProduct = response.data;
+      cache.set(cacheKey, cachedProduct, 60);
+    }
+
+    res.json(cachedProduct);
+
+  } catch (error) {
+    console.error('❌ Ошибка /api/product:', error.message);
+    res.status(500).json({ error: 'Ошибка загрузки товара' });
+  }
+});
+
+// ============================================
+// CATEGORIES
+// ============================================
+app.get('/api/categories', async (req, res) => {
+  try {
+    const cacheKey = 'categories';
+    let cachedCategories = cache.get(cacheKey);
+
+    if (!cachedCategories) {
+      const response = await rateLimitedRequest({
+        method: 'GET',
+        url: '/categories',
+        params: {
+          access_token: ALSTYLE_TOKEN
+        }
+      });
+
+      cachedCategories = response.data;
+      cache.set(cacheKey, cachedCategories, 300);
+      console.log('💾 Сохранено в кеш');
+    }
+
+    res.json(cachedCategories);
+
+  } catch (error) {
+    console.error('❌ Ошибка /api/categories:', error.message);
+    res.status(500).json({ error: 'Ошибка загрузки категорий' });
+  }
+});
+
+// ============================================
+// FILTERS с улучшенной обработкой ошибок
+// ============================================
+app.get('/api/filters', async (req, res) => {
+  try {
+    const cached = cache.get('filters');
+    if (cached) {
+      console.log('💾 Фильтры из кеша');
+      return res.json(cached);
+    }
+
+    console.log('📊 Загрузка данных для фильтров...');
+
+    let brands = [];
+    let priceRange = { min: 0, max: 1000000 };
+
+    // Пытаемся получить бренды из API
+    try {
+      const brandsResponse = await rateLimitedRequest({
+        method: 'GET',
+        url: '/brands',
+        params: { access_token: ALSTYLE_TOKEN }
+      });
+
+      if (brandsResponse.data && Array.isArray(brandsResponse.data)) {
+        brands = brandsResponse.data
+          .filter(brand => brand.name && brand.name.trim())
+          .map(brand => brand.name)
+          .sort();
+      }
+    } catch (brandError) {
+      console.log('⚠️  Не удалось загрузить бренды из API, используем кеш товаров');
+      
+      // Fallback: берем бренды из закешированных товаров
+      const cachedProducts = cache.get('products');
+      if (cachedProducts && cachedProducts.elements) {
+        const uniqueBrands = new Set();
+        cachedProducts.elements.forEach(product => {
+          if (product.brand && product.brand.trim()) {
+            uniqueBrands.add(product.brand);
+          }
+        });
+        brands = Array.from(uniqueBrands).sort();
+        console.log(`✅ Извлечено ${brands.length} брендов из кеша товаров`);
+      }
+    }
+
+    // Получаем диапазон цен из кеша товаров
+    const cachedProducts = cache.get('products');
+    if (cachedProducts && cachedProducts.elements) {
+      const prices = cachedProducts.elements
+        .map(p => p.price2 || p.price1 || p.price || 0)
+        .filter(p => p > 0);
+
+      if (prices.length > 0) {
+        priceRange.min = Math.min(...prices);
+        priceRange.max = Math.max(...prices);
+      }
+    }
+
+    const filtersData = {
+      brands: brands.slice(0, 50),
+      priceRange: priceRange
+    };
+
+    cache.set('filters', filtersData, 300);
+    console.log(`✅ Фильтры готовы: ${brands.length} брендов`);
+
+    res.json(filtersData);
+
+  } catch (error) {
+    console.error('❌ Ошибка фильтров:', error.message);
+    
+    // Возвращаем минимальные данные вместо ошибки
+    res.json({
+      brands: [],
+      priceRange: { min: 0, max: 1000000 }
+    });
+  }
+});
+
+// ============================================
+// SEARCH (автодополнение)
 // ============================================
 app.get('/api/search', async (req, res) => {
   try {
     const { q } = req.query;
     
     if (!q || q.length < 2) {
-      return res.json({ suggestions: [] });
+      return res.json([]);
     }
-    
-    const cacheKey = getCacheKey('products_all', {});
-    let allProducts = getFromCache(cacheKey);
-    
-    if (!allProducts) {
-      const params = {
-        'access-token': ACCESS_TOKEN,
-        limit: 100,
-        offset: 0,
-        exclude_missing: 'true', // Только товары с остатком
-        additional_fields: 'brand,images'
-      };
-      
-      const response = await axios.get(`${API_BASE_URL}/elements-pagination`, { params });
-      allProducts = response.data?.elements || [];
-      setCache(cacheKey, allProducts);
+
+    const cachedProducts = cache.get('products');
+    if (!cachedProducts || !cachedProducts.elements) {
+      return res.json([]);
     }
-    
+
     const searchLower = q.toLowerCase();
-    const suggestions = allProducts
-      .filter(p => {
-        const name = (p.name || '').toLowerCase();
-        const brand = (p.brand || '').toLowerCase();
-        const article = (p.article || '').toString();
-        return name.includes(searchLower) || 
-               brand.includes(searchLower) ||
-               article.includes(searchLower);
-      })
+    const results = cachedProducts.elements
+      .filter(product => 
+        product.name?.toLowerCase().includes(searchLower) ||
+        product.full_name?.toLowerCase().includes(searchLower) ||
+        product.brand?.toLowerCase().includes(searchLower)
+      )
       .slice(0, 10)
-      .map(p => ({
-        article: p.article,
-        name: p.name,
-        brand: p.brand,
-        price: p.price2 || p.price1 || p.price,
-        image: p.images?.[0] || null
+      .map(product => ({
+        article: product.article,
+        name: product.name || product.full_name,
+        brand: product.brand,
+        price: product.price2 || product.price1 || product.price,
+        image: product.images?.[0] || null
       }));
-    
-    res.json({ suggestions });
-    
+
+    res.json(results);
+
   } catch (error) {
-    console.error('❌ Ошибка поиска:', error.message);
-    res.json({ suggestions: [] });
+    console.error('❌ Ошибка /api/search:', error.message);
+    res.json([]);
   }
 });
 
-// ============================================
-// GET /api/filters - ДОСТУПНЫЕ ФИЛЬТРЫ
-// ============================================
-app.get('/api/filters', async (req, res) => {
-  try {
-    const cacheKey = 'filters_data';
-    let filtersData = getFromCache(cacheKey, 300000); // 5 минут
-    
-    if (!filtersData) {
-      console.log('📊 Загрузка данных для фильтров...');
-      
-      // Получаем бренды из Al-Style API
-      const brandsResponse = await axios.get(`${API_BASE_URL}/brands`, {
-        params: { 'access-token': ACCESS_TOKEN }
-      });
-      
-      const brandsData = brandsResponse.data?.data || [];
-      const brands = brandsData
-        .filter(b => b.count > 0) // Только бренды с товарами
-        .map(b => b.name)
-        .sort();
-      
-      // Получаем товары для определения диапазона цен
-      const productsResponse = await axios.get(`${API_BASE_URL}/elements-pagination`, {
-        params: {
-          'access-token': ACCESS_TOKEN,
-          limit: 100,
-          offset: 0,
-          exclude_missing: 'true'
-        }
-      });
-      
-      const products = productsResponse.data?.elements || [];
-      
-      // Диапазон цен
-      const prices = products
-        .map(p => p.price2 || p.price1 || p.price || 0)
-        .filter(p => p > 0);
-      
-      const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-      const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-      
-      filtersData = {
-        brands: brands,
-        priceRange: {
-          min: Math.floor(minPrice),
-          max: Math.ceil(maxPrice)
-        },
-        totalProducts: productsResponse.data?.pagination?.totalCount || products.length
-      };
-      
-      setCache(cacheKey, filtersData);
-      console.log('✅ Фильтры готовы:', filtersData);
-    }
-    
-    res.json(filtersData);
-    
-  } catch (error) {
-    console.error('❌ Ошибка фильтров:', error.message);
-    
-    // Fallback данные
-    res.json({
-      brands: [],
-      priceRange: { min: 0, max: 1000000 },
-      totalProducts: 0
-    });
-  }
-});
-
-// ============================================
-// GET /api/product/:article
-// ============================================
-app.get('/api/product/:article', async (req, res) => {
-  const { article } = req.params;
-  
-  try {
-    console.log('🔍 Запрос товара:', article);
-    
-    const cacheKey = getCacheKey('product', { article });
-    const cached = getFromCache(cacheKey, PRODUCT_CACHE_TTL);
-    if (cached) {
-      return res.json(cached);
-    }
-    
-    const params = {
-      'access-token': ACCESS_TOKEN,
-      article: article,
-      additional_fields: 'description,brand,images,url,warranty,weight'
-    };
-    
-    const response = await axios.get(`${API_BASE_URL}/element-info`, { params });
-    
-    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-      const product = response.data[0];
-      console.log('✅ Товар найден:', product.name);
-      
-      const result = {
-        status: true,
-        data: product
-      };
-      
-      setCache(cacheKey, result);
-      res.json(result);
-    } else {
-      res.status(404).json({
-        status: false,
-        message: 'Товар не найден'
-      });
-    }
-    
-  } catch (error) {
-    console.error('❌ Ошибка:', error.message);
-    
-    if (error.response?.status === 403) {
-      const cacheKey = getCacheKey('product', { article });
-      const staleCache = cache.get(cacheKey);
-      
-      if (staleCache) {
-        console.log('⚠️ Rate limit! Возвращаем кеш');
-        return res.json(staleCache.data);
-      }
-    }
-    
-    res.status(error.response?.status || 500).json({
-      status: false,
-      error: error.message
-    });
-  }
-});
-
-// ============================================
-// GET /api/categories
-// ============================================
-app.get('/api/categories', async (req, res) => {
-  try {
-    const cacheKey = 'categories';
-    const cached = getFromCache(cacheKey, 3600000);
-    if (cached) {
-      return res.json(cached);
-    }
-    
-    // Используем правильный endpoint: /categories (не /category)
-    const response = await axios.get(`${API_BASE_URL}/categories`, {
-      params: { 'access-token': ACCESS_TOKEN }
-    });
-    
-    setCache(cacheKey, response.data);
-    res.json(response.data);
-  } catch (error) {
-    console.error('❌ Ошибка категорий:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 404
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not Found' });
-});
-
-// Очистка кеша
-setInterval(() => {
-  const now = Date.now();
-  let deleted = 0;
-  
-  for (const [key, value] of cache.entries()) {
-    if (now - value.timestamp > 600000) {
-      cache.delete(key);
-      deleted++;
-    }
-  }
-  
-  if (deleted > 0) {
-    console.log(`🧹 Очищено ${deleted} записей`);
-  }
-}, 600000);
-
-// Запуск
+// Запуск сервера
 app.listen(PORT, () => {
-  console.log('');
-  console.log('✨ Backend готов!');
-  console.log('🔍 Фильтрация: цена, бренд, поиск');
-  console.log('📊 Сортировка: цена, название, новизна');
+  console.log('\n🚀 LUXE Backend Server v2.2');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`📡 Server: http://localhost:${PORT}`);
+  console.log('🔗 API: https://api.al-style.kz/api');
   console.log('✅ exclude_missing=true - только товары в наличии!');
-  console.log('');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📍 Endpoints:');
   console.log('  GET /health');
   console.log('  GET /api/products');
-  console.log('  GET /api/search?q=...');
-  console.log('  GET /api/filters');
   console.log('  GET /api/product/:article');
   console.log('  GET /api/categories');
-  console.log('');
+  console.log('  GET /api/filters');
+  console.log('  GET /api/search?q=...');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 Фильтрация: цена, бренд, поиск');
+  console.log('📊 Сортировка: цена, название, новизна');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('✨ Backend готов!\n');
 });
-
-export default app;
