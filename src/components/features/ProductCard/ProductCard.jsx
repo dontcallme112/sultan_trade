@@ -3,146 +3,154 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
 import './ProductCard.css';
 
-export default function ProductCard({ product, onClick }) {
+export default function ProductCard({ product }) {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const handleClick = (e) => {
-    // Если клик не на кнопку "В корзину"
-    if (!e.target.closest('.add-to-cart-btn')) {
-      if (onClick) {
-        onClick(product);
-      } else {
-        navigate(`/product/${product.article || product.id}`);
-      }
-    }
+  const handleClick = () => {
+    navigate(`/product/${product.article}`);
   };
 
   const handleAddToCart = (e) => {
     e.stopPropagation();
     
-    // Добавляем в корзину через CartContext
-    addToCart({
-      id: product.id || product.article,
+    const price = getProductPrice();
+    
+    const cartItem = {
+      id: product.article,
       article: product.article,
-      name: product.name || product.title,
-      price: product.priceWithMarkup || product.price,
-      image: product.image || product.images?.[0],
-    });
+      name: product.name || 'Товар',
+      price: Math.round(price * 1.1), // +10% наценка
+      image: getProductImage(),
+    };
 
-    // Анимация добавления
+    console.log('🛒 Adding to cart:', cartItem);
+
+    addToCart(cartItem);
+
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('ru-RU').format(price);
+  // Получение цены товара
+  const getProductPrice = () => {
+    // Приоритет: price2 > price1 > price
+    const price = product.price2 || product.price1 || product.price || 0;
+    
+    // Проверяем что это число
+    const numPrice = typeof price === 'number' ? price : parseFloat(price);
+    
+    return isNaN(numPrice) ? 0 : numPrice;
   };
 
-  return (
-    <article className="product-card" onClick={handleClick}>
-      {/* Бейдж "Новинка" */}
-      {product.isNew && (
-        <div className="product-badge new-badge">Новинка</div>
-      )}
+  // Форматирование цены
+  const formatPrice = (price) => {
+    const numPrice = typeof price === 'number' ? price : parseFloat(price);
+    
+    if (isNaN(numPrice) || numPrice === 0) {
+      return 'Цена по запросу';
+    }
+    
+    const priceWithMarkup = Math.round(numPrice * 1.1);
+    return new Intl.NumberFormat('ru-RU').format(priceWithMarkup) + ' ₸';
+  };
 
-      {/* Бейдж "В наличии" */}
-      {product.stock > 0 && (
+  // Получение изображения
+  const getProductImage = () => {
+    if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+      return product.images[0];
+    }
+    if (product.image) {
+      return product.image;
+    }
+    return 'https://via.placeholder.com/400x400?text=No+Image';
+  };
+
+  // Проверка наличия
+  const isInStock = () => {
+    const qty = product.quantity;
+    
+    if (typeof qty === 'number') return qty > 0;
+    if (typeof qty === 'string') {
+      if (qty === '0' || qty === '') return false;
+      if (qty.startsWith('>')) return true;
+      const num = parseInt(qty);
+      return !isNaN(num) && num > 0;
+    }
+    
+    return false;
+  };
+
+  const currentPrice = getProductPrice();
+  const productName = product.name || product.full_name || 'Товар';
+  const productBrand = product.brand;
+
+  return (
+    <div className="product-card" onClick={handleClick}>
+      {/* Бейджи */}
+      {product.isnew === 1 && (
+        <div className="product-badge new-badge">NEW</div>
+      )}
+      
+      {isInStock() && (
         <div className="product-badge stock-badge">В наличии</div>
       )}
 
       {/* Изображение */}
       <div className="product-image-wrapper">
-        {!imageLoaded && (
-          <div className="image-skeleton">
-            <div className="skeleton-shimmer"></div>
-          </div>
-        )}
-        <img 
-          src={product.image || product.images?.[0] || '/placeholder.png'}
-          alt={product.name || product.title}
+        {!imageLoaded && <div className="image-skeleton"></div>}
+        <img
+          src={getProductImage()}
+          alt={productName}
           className={`product-image ${imageLoaded ? 'loaded' : ''}`}
           onLoad={() => setImageLoaded(true)}
-          loading="lazy"
+          onError={(e) => {
+            e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+            setImageLoaded(true);
+          }}
         />
       </div>
 
       {/* Информация */}
       <div className="product-info">
-        {/* Бренд */}
-        {product.brand && (
-          <p className="product-brand">{product.brand}</p>
+        {productBrand && (
+          <p className="product-brand">{productBrand}</p>
         )}
+        
+        <h3 className="product-title">{productName}</h3>
 
-        {/* Название */}
-        <h3 className="product-title">
-          {product.name || product.title}
-        </h3>
-
-        {/* Описание */}
-        {product.description && (
-          <p className="product-description">
-            {product.description}
-          </p>
-        )}
-
-        {/* Рейтинг */}
-        {product.rating?.average > 0 && (
-          <div className="product-rating">
-            <div className="stars">
-              {[...Array(5)].map((_, i) => (
-                <span 
-                  key={i} 
-                  className={i < Math.round(product.rating.average) ? 'star filled' : 'star'}
-                >
-                  ★
-                </span>
-              ))}
-            </div>
-            <span className="rating-count">({product.rating.count})</span>
-          </div>
-        )}
-
-        {/* Цена и кнопка */}
+        {/* Footer с ценой и кнопкой */}
         <div className="product-footer">
           <div className="product-price-block">
-            <p className="product-price">
-              {formatPrice(product.priceWithMarkup || product.price)} ₸
-            </p>
-            {product.price1 && product.price !== product.priceWithMarkup && (
-              <p className="product-price-old">
-                {formatPrice(product.price)} ₸
-              </p>
-            )}
+            <p className="product-price">{formatPrice(currentPrice)}</p>
           </div>
 
-          <button 
+          <button
             className={`add-to-cart-btn ${addedToCart ? 'added' : ''}`}
             onClick={handleAddToCart}
-            disabled={product.stock === 0}
+            disabled={!isInStock()}
           >
             {addedToCart ? (
               <>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Добавлено
+                ✓
               </>
             ) : (
               <>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="9" cy="21" r="1"/>
                   <circle cx="20" cy="21" r="1"/>
                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
                 </svg>
-                В корзину
               </>
             )}
           </button>
         </div>
       </div>
-    </article>
+    </div>
   );
 }
