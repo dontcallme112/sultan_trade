@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BACKEND_URL } from '../../api/client';
+import { BACKEND_URL } from '../../../api/client';
 import './SearchBar.css';
 
 export default function SearchBar() {
