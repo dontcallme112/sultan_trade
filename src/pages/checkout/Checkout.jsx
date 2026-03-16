@@ -15,19 +15,17 @@ export default function Checkout() {
   });
   const [paymentMethod, setPaymentMethod] = useState('kaspi');
   const [loading, setLoading] = useState(false);
-  const [orderId, setOrderId] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     // Генерируем ID заказа
-    const newOrderId = 'ORD-' + Date.now();
-    setOrderId(newOrderId);
+    const orderId = 'ORD-' + Date.now();
 
     // Формируем данные заказа
     const orderData = {
-      orderId: newOrderId,
+      orderId: orderId,
       customer: formData,
       items: cart,
       total: getTotalPrice(),
@@ -38,21 +36,15 @@ export default function Checkout() {
 
     console.log('📦 Заказ создан:', orderData);
 
-    // Здесь можно отправить на backend для сохранения
-    // await fetch(`${BACKEND_URL}/api/orders`, { method: 'POST', body: JSON.stringify(orderData) })
-
-    // Сохраняем в localStorage (временно)
+    // Сохраняем в localStorage
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     orders.push(orderData);
     localStorage.setItem('orders', JSON.stringify(orders));
 
     setLoading(false);
 
-    // Показываем страницу оплаты
-    if (paymentMethod === 'kaspi') {
-      // Переходим на страницу с инструкцией Kaspi
-      navigate(`/order-confirmation/${newOrderId}`);
-    }
+    // Переходим на страницу подтверждения
+    navigate(`/order-confirmation/${orderId}`);
   };
 
   const handleChange = (e) => {
@@ -62,6 +54,7 @@ export default function Checkout() {
     });
   };
 
+  // Если корзина пуста
   if (cart.length === 0) {
     return (
       <div className="checkout-page">
@@ -234,7 +227,7 @@ export default function Checkout() {
 
               <button 
                 type="submit" 
-                className="btn btn-primary btn-lg btn-block"
+                className="btn btn-primary btn-lg btn-block checkout-submit-btn"
                 disabled={loading}
               >
                 {loading ? 'Оформление...' : `Оформить заказ на ${getTotalPrice().toLocaleString('ru-RU')} ₸`}

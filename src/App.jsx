@@ -10,28 +10,31 @@ import Product from './pages/product/Product.jsx';
 import Cart from './pages/cart/Cart.jsx';
 import Checkout from './pages/checkout/Checkout.jsx';
 import NotFound from './pages/NotFound/NotFound.jsx';
+import OrderConfirmation from './pages/OrderConfirmation/OrderConfirmation';
+import NewProducts from './pages/NewProducts/NewProducts';
 import './styles/globals.css';
 import './styles/variables.css';
 import './styles/animations.css';
+
 
 function App() {
   return (
     <CartProvider>
       <Router>
-        <div className="app">
+        <div className="App">
           <Header />
-          <main className="main-content">
+          <main>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/catalog" element={<Catalog />} />
               <Route path="/product/:id" element={<Product />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
+              <Route path="/new" element={<NewProducts />} />
             </Routes>
           </main>
           <Footer />
-          <Toast />
         </div>
       </Router>
     </CartProvider>
