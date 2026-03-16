@@ -1,89 +1,195 @@
 /* ============================================
-   ORDER CONFIRMATION PAGE
+   ORDER CONFIRMATION - PREMIUM DESIGN
    ============================================ */
 
 .order-confirmation-page {
   min-height: 100vh;
-  background-color: #0A0A0A;
+  background: linear-gradient(180deg, #0A0A0A 0%, #0F0F0F 100%);
   padding: calc(80px + var(--space-8)) 0 var(--space-16);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Анимированные конфетти */
+.order-confirmation-page::before,
+.order-confirmation-page::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #B8860B;
+  border-radius: 50%;
+  animation: confetti 3s ease-out infinite;
+}
+
+.order-confirmation-page::before {
+  top: 10%;
+  left: 20%;
+  animation-delay: 0.5s;
+}
+
+.order-confirmation-page::after {
+  top: 20%;
+  right: 30%;
+  background: #DAA520;
+  animation-delay: 1s;
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(1000px) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 .confirmation-content {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ============================================
-   SUCCESS HEADER
+   SUCCESS HEADER - WOW ЭФФЕКТ
    ============================================ */
 
 .success-header {
   text-align: center;
-  margin-bottom: var(--space-10);
-  padding: var(--space-10);
-  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
-  border: 1px solid #2A2A2A;
-  border-radius: 24px;
+  margin-bottom: var(--space-12);
+  padding: var(--space-12);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(15, 15, 15, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  border: 2px solid #2A2A2A;
+  border-radius: 32px;
+  position: relative;
+  overflow: hidden;
+  animation: scaleIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.success-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .success-icon {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   margin-bottom: var(--space-6);
   background: linear-gradient(135deg, #10B981 0%, #059669 100%);
   border-radius: 50%;
   color: #FFFFFF;
-  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 16px 64px rgba(16, 185, 129, 0.5);
+  animation: bounce 1s ease-in-out 0.5s;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 
 .success-header h1 {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-display);
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 800;
   color: #FFFFFF;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: linear-gradient(135deg, #FFFFFF 0%, #10B981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .order-number {
-  font-size: 1.125rem;
+  position: relative;
+  z-index: 1;
+  font-size: 1.25rem;
   color: #A0A0A0;
 }
 
 .order-number strong {
   color: #B8860B;
-  font-weight: 700;
+  font-weight: 800;
+  font-family: var(--font-display);
 }
 
 /* ============================================
-   KASPI PAYMENT SECTION
+   PAYMENT SECTION - KASPI
    ============================================ */
 
 .payment-section {
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
   padding: var(--space-8);
-  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
-  border: 1px solid #2A2A2A;
-  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(15, 15, 15, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  border: 2px solid #2A2A2A;
+  border-radius: 24px;
+  animation: fadeInUp 0.6s ease-out 0.3s backwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .payment-section h2 {
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
   color: #FFFFFF;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
   text-align: center;
 }
 
 .kaspi-payment {
-  border: 2px solid #F14635;
+  border-color: #F14635;
+  box-shadow: 0 0 40px rgba(241, 70, 53, 0.2);
 }
 
 /* ============================================
-   KASPI INSTRUCTIONS
+   KASPI INSTRUCTIONS - ПОШАГОВО
    ============================================ */
 
 .kaspi-instructions {
@@ -94,24 +200,45 @@
   display: flex;
   gap: var(--space-5);
   margin-bottom: var(--space-6);
-  padding: var(--space-5);
+  padding: var(--space-6);
   background: rgba(241, 70, 53, 0.05);
-  border-radius: 16px;
-  border: 1px solid rgba(241, 70, 53, 0.2);
+  border-radius: 20px;
+  border: 2px solid rgba(241, 70, 53, 0.2);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideInLeft 0.5s ease-out backwards;
+  animation-delay: calc(var(--index, 0) * 0.15s);
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.kaspi-step:hover {
+  background: rgba(241, 70, 53, 0.1);
+  border-color: #F14635;
+  transform: translateX(8px);
 }
 
 .step-number {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
   background: linear-gradient(135deg, #F14635 0%, #D63027 100%);
   border-radius: 50%;
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.75rem;
+  font-weight: 800;
   color: #FFFFFF;
+  box-shadow: 0 8px 24px rgba(241, 70, 53, 0.4);
 }
 
 .step-content {
@@ -119,40 +246,41 @@
 }
 
 .step-content h3 {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #FFFFFF;
   margin-bottom: var(--space-3);
 }
 
 .step-content p {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   color: #A0A0A0;
   margin-bottom: var(--space-3);
 }
 
 /* ============================================
-   KASPI INPUT BLOCKS
+   KASPI INPUT BLOCKS - КОПИРОВАНИЕ
    ============================================ */
 
 .kaspi-phone-block,
 .kaspi-comment-block {
   display: flex;
   gap: var(--space-3);
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .kaspi-phone,
 .kaspi-comment {
   flex: 1;
   padding: var(--space-4);
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #FFFFFF;
-  background: #0A0A0A;
+  background: rgba(10, 10, 10, 0.8);
   border: 2px solid #F14635;
   border-radius: 12px;
   text-align: center;
+  font-family: var(--font-display);
 }
 
 .kaspi-name {
@@ -163,33 +291,48 @@
 }
 
 .kaspi-amount {
-  margin-top: var(--space-3);
-  padding: var(--space-5);
-  font-size: 2rem;
-  font-weight: 800;
+  margin-top: var(--space-4);
+  padding: var(--space-6);
+  font-size: 2.5rem;
+  font-weight: 900;
   color: #F14635;
   background: rgba(241, 70, 53, 0.1);
-  border: 2px solid #F14635;
-  border-radius: 16px;
+  border: 3px solid #F14635;
+  border-radius: 20px;
   text-align: center;
+  font-family: var(--font-display);
+  box-shadow: 0 8px 32px rgba(241, 70, 53, 0.3);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 8px 32px rgba(241, 70, 53, 0.3);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 12px 48px rgba(241, 70, 53, 0.5);
+  }
 }
 
 .copy-btn {
-  padding: var(--space-3) var(--space-5);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  padding: var(--space-3) var(--space-6);
+  font-size: 1rem;
+  font-weight: 700;
   color: #FFFFFF;
   background: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(184, 134, 11, 0.4);
 }
 
 .copy-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(184, 134, 11, 0.6);
 }
 
 /* ============================================
@@ -197,36 +340,38 @@
    ============================================ */
 
 .kaspi-qr-section {
-  margin-top: var(--space-8);
-  padding: var(--space-6);
+  margin-top: var(--space-10);
+  padding: var(--space-8);
   background: rgba(184, 134, 11, 0.05);
-  border-radius: 16px;
+  border-radius: 20px;
+  border: 2px solid rgba(184, 134, 11, 0.2);
   text-align: center;
 }
 
 .kaspi-qr-section h3 {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   color: #FFFFFF;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
 }
 
 .kaspi-qr-placeholder {
-  width: 250px;
-  height: 250px;
+  width: 280px;
+  height: 280px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: #FFFFFF;
-  border-radius: 16px;
+  border-radius: 20px;
   color: #0A0A0A;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
 }
 
 .qr-note {
   font-size: 0.75rem;
   color: #6A6A6A;
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 /* ============================================
@@ -237,11 +382,11 @@
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
-  padding: var(--space-4);
-  margin-top: var(--space-6);
+  padding: var(--space-5);
+  margin-top: var(--space-8);
   background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 12px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 16px;
 }
 
 .payment-note svg {
@@ -250,7 +395,7 @@
 }
 
 .payment-note p {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   color: #A0A0A0;
   margin: 0;
 }
@@ -260,16 +405,18 @@
    ============================================ */
 
 .order-details {
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
   padding: var(--space-8);
-  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
-  border: 1px solid #2A2A2A;
-  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(15, 15, 15, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  border: 2px solid #2A2A2A;
+  border-radius: 24px;
+  animation: fadeInUp 0.6s ease-out 0.5s backwards;
 }
 
 .order-details h2 {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: #FFFFFF;
   margin-bottom: var(--space-6);
@@ -285,25 +432,20 @@
 .info-block h4 {
   font-size: 0.875rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.1em;
   color: #B8860B;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-weight: 800;
 }
 
 .info-block p {
   font-size: 1rem;
   color: #FFFFFF;
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+  line-height: 1.6;
 }
 
-/* ============================================
-   ORDER ITEMS
-   ============================================ */
-
-.order-items {
-  margin-bottom: var(--space-6);
-}
-
+/* Order Items */
 .order-items h4 {
   font-size: 1.125rem;
   font-weight: 700;
@@ -317,16 +459,22 @@
   gap: var(--space-4);
   padding: var(--space-4);
   margin-bottom: var(--space-3);
-  background: #0A0A0A;
-  border-radius: 12px;
+  background: rgba(10, 10, 10, 0.5);
+  border-radius: 16px;
+  transition: transform 0.3s;
+}
+
+.order-item:hover {
+  transform: translateX(8px);
 }
 
 .order-item img {
-  width: 70px;
-  height: 70px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #1A1A1A;
+  padding: var(--space-2);
 }
 
 .order-item-info {
@@ -334,43 +482,46 @@
 }
 
 .order-item-info h5 {
-  font-size: 1rem;
+  font-size: 1.125rem;
   color: #FFFFFF;
   margin-bottom: var(--space-1);
 }
 
 .order-item-info p {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: #6A6A6A;
   margin: 0;
 }
 
 .order-item-total {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #B8860B;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #DAA520;
+  flex-shrink: 0;
 }
 
 .order-total {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-5);
+  padding: var(--space-6);
+  margin-top: var(--space-6);
   background: rgba(184, 134, 11, 0.1);
-  border-radius: 12px;
-  border: 1px solid rgba(184, 134, 11, 0.3);
+  border-radius: 16px;
+  border: 2px solid rgba(184, 134, 11, 0.3);
 }
 
 .order-total span:first-child {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   color: #A0A0A0;
 }
 
 .total-amount {
   font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 800;
+  font-size: 2.5rem;
+  font-weight: 900;
   color: #DAA520;
+  text-shadow: 0 2px 8px rgba(218, 165, 32, 0.4);
 }
 
 /* ============================================
@@ -381,6 +532,12 @@
   display: flex;
   gap: var(--space-4);
   justify-content: center;
+  flex-wrap: wrap;
+  animation: fadeIn 0.6s ease-out 0.7s backwards;
+}
+
+.confirmation-actions .btn {
+  min-width: 250px;
 }
 
 /* ============================================
@@ -399,11 +556,6 @@
     flex-direction: column;
   }
 
-  .kaspi-phone,
-  .kaspi-comment {
-    width: 100%;
-  }
-
   .confirmation-actions {
     flex-direction: column;
   }
@@ -411,4 +563,38 @@
   .confirmation-actions .btn {
     width: 100%;
   }
-}   
+
+  .kaspi-amount {
+    font-size: 2rem;
+  }
+
+  .order-total {
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: center;
+  }
+
+  .total-amount {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .order-confirmation-page {
+    padding: calc(60px + var(--space-4)) 0 var(--space-12);
+  }
+
+  .success-icon {
+    width: 100px;
+    height: 100px;
+  }
+
+  .success-header h1 {
+    font-size: 2rem;
+  }
+
+  .payment-section,
+  .order-details {
+    padding: var(--space-6);
+  }
+}
