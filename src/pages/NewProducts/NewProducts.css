@@ -1,0 +1,162 @@
+/* ============================================
+   NEW PRODUCTS PAGE
+   ============================================ */
+
+.new-products-page {
+  min-height: 100vh;
+  background-color: #0A0A0A;
+  padding: calc(80px + var(--space-8)) 0 var(--space-16);
+}
+
+/* ============================================
+   HEADER WITH NEW BADGE
+   ============================================ */
+
+.new-products-header {
+  margin-bottom: var(--space-8);
+  padding: var(--space-8);
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+  border: 1px solid #2A2A2A;
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.new-products-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at top right, rgba(184, 134, 11, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.header-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.new-badge-large {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
+  border-radius: 50%;
+  color: #0A0A0A;
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  box-shadow: 0 8px 32px rgba(184, 134, 11, 0.4);
+  animation: pulse-glow 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(184, 134, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 12px 48px rgba(184, 134, 11, 0.6);
+  }
+}
+
+.new-badge-large svg {
+  animation: rotate-star 3s linear infinite;
+}
+
+@keyframes rotate-star {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.new-products-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-3);
+  background: linear-gradient(135deg, #FFFFFF 0%, #DAA520 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.new-products-subtitle {
+  font-size: 1.125rem;
+  color: #A0A0A0;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* ============================================
+   REUSE CATALOG STYLES
+   ============================================ */
+
+/* Все остальные стили наследуются от Catalog.css */
+.new-products-page .catalog-content,
+.new-products-page .catalog-sidebar,
+.new-products-page .catalog-main,
+.new-products-page .products-grid,
+.new-products-page .catalog-loading,
+.new-products-page .catalog-error,
+.new-products-page .catalog-empty,
+.new-products-page .load-more-container,
+.new-products-page .end-of-list {
+  /* Используем те же стили что и в Catalog */
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+  .new-products-page {
+    padding-top: calc(70px + var(--space-6));
+  }
+
+  .new-products-header {
+    padding: var(--space-6);
+  }
+
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .new-badge-large {
+    width: 80px;
+    height: 80px;
+    font-size: 0.75rem;
+  }
+
+  .new-badge-large svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .new-products-title {
+    font-size: 2rem;
+  }
+
+  .new-products-subtitle {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .new-products-page {
+    padding: calc(60px + var(--space-4)) 0 var(--space-12);
+  }
+
+  .new-products-title {
+    font-size: 1.75rem;
+  }
+}

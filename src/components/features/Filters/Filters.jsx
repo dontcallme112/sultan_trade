@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../../../api/client';
 import './Filters.css';
 
-export default function Filters({ onFilterChange, activeFilters }) {
+export default function Filters({ onFilterChange, activeFilters, hideOnlyNew = false }) {
   const [filtersData, setFiltersData] = useState({
     brands: [],
     priceRange: { min: 0, max: 1000000 }
@@ -47,7 +47,6 @@ export default function Filters({ onFilterChange, activeFilters }) {
       
     } catch (error) {
       console.error('Filters error:', error);
-      // Используем fallback данные
       setFiltersData({
         brands: [],
         priceRange: { min: 0, max: 1000000 }
@@ -95,7 +94,7 @@ export default function Filters({ onFilterChange, activeFilters }) {
       brand: null,
       minPrice: null,
       maxPrice: null,
-      onlyNew: false,
+      onlyNew: hideOnlyNew ? true : false, // Если скрыт - оставляем true
       sortBy: 'default'
     });
   };
@@ -108,7 +107,7 @@ export default function Filters({ onFilterChange, activeFilters }) {
   const activeFiltersCount = [
     activeFilters.brand,
     activeFilters.minPrice !== null,
-    activeFilters.onlyNew
+    !hideOnlyNew && activeFilters.onlyNew // Не считаем если скрыт
   ].filter(Boolean).length;
 
   if (loading) {
@@ -214,17 +213,19 @@ export default function Filters({ onFilterChange, activeFilters }) {
           </div>
         )}
 
-        {/* Только новинки */}
-        <div className="filter-section">
-          <label className="filter-checkbox">
-            <input
-              type="checkbox"
-              checked={activeFilters.onlyNew || false}
-              onChange={handleOnlyNewChange}
-            />
-            <span>Только новинки</span>
-          </label>
-        </div>
+        {/* Только новинки (скрывается на странице NewProducts) */}
+        {!hideOnlyNew && (
+          <div className="filter-section">
+            <label className="filter-checkbox">
+              <input
+                type="checkbox"
+                checked={activeFilters.onlyNew || false}
+                onChange={handleOnlyNewChange}
+              />
+              <span>Только новинки</span>
+            </label>
+          </div>
+        )}
       </div>
     </div>
   );

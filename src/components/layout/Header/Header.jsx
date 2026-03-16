@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
 import './Header.css';
 
@@ -7,6 +7,7 @@ const Header = () => {
   const { cartItems } = useCart();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,7 +17,17 @@ const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Закрывать меню при смене роута
+  useEffect(() => {
+    setMobileMenu(false);
+  }, [location]);
+
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Закрытие меню при клике на ссылку
+  const handleLinkClick = () => {
+    setMobileMenu(false);
+  };
 
   return (
     <header className={`header ${scrolled ? 'scrolled' : ''}`}>
@@ -25,7 +36,7 @@ const Header = () => {
       <div className="container">
         <div className="header-content">
           {/* Logo */}
-          <Link to="/" className="logo">
+          <Link to="/" className="logo" onClick={handleLinkClick}>
             <div className="logo-icon">⚡</div>
             <span className="logo-text">LUXE</span>
             <div className="logo-glow"></div>
@@ -33,19 +44,19 @@ const Header = () => {
 
           {/* Navigation */}
           <nav className={`nav ${mobileMenu ? 'active' : ''}`}>
-            <Link to="/" className="nav-link">
+            <Link to="/" className="nav-link" onClick={handleLinkClick}>
               <span>Главная</span>
               <div className="nav-link-glow"></div>
             </Link>
-            <Link to="/catalog" className="nav-link">
+            <Link to="/catalog" className="nav-link" onClick={handleLinkClick}>
               <span>Каталог</span>
               <div className="nav-link-glow"></div>
             </Link>
-            <Link to="/catalog" className="nav-link">
+            <Link to="/catalog?onlyNew=true" className="nav-link" onClick={handleLinkClick}>
               <span>Новинки</span>
               <div className="nav-link-glow"></div>
             </Link>
-            <Link to="/catalog" className="nav-link">
+            <Link to="/catalog?sortBy=price_desc" className="nav-link" onClick={handleLinkClick}>
               <span>Sale</span>
               <div className="nav-link-glow"></div>
             </Link>
@@ -60,7 +71,7 @@ const Header = () => {
               </svg>
             </button>
 
-            <Link to="/cart" className="icon-btn cart-btn">
+            <Link to="/cart" className="icon-btn cart-btn" onClick={handleLinkClick}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="9" cy="21" r="1"/>
                 <circle cx="20" cy="21" r="1"/>
@@ -71,7 +82,11 @@ const Header = () => {
               )}
             </Link>
 
-            <button className="mobile-menu-btn" onClick={() => setMobileMenu(!mobileMenu)}>
+            <button 
+              className="mobile-menu-btn" 
+              onClick={() => setMobileMenu(!mobileMenu)}
+              aria-label="Toggle menu"
+            >
               <span></span>
               <span></span>
               <span></span>

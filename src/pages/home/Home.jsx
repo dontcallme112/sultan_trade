@@ -1,60 +1,118 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useProducts } from '../../hooks/useProducts';
+import { BACKEND_URL } from '../../api/client';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
 import './Home.css';
 
-const Home = () => {
-  const { products, loading } = useProducts({ limit: 8 });
+export default function Home() {
+  const [categories, setCategories] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCategories();
+    loadFeaturedProducts();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/categories`);
+      const data = await response.json();
+      
+      // Маппинг реальных категорий на наши иконки
+      const categoryMapping = [
+        { 
+          keyword: ['телефон', 'смартфон', 'мобильн'], 
+          icon: '📱', 
+          displayName: 'Смартфоны',
+          color: '#B8860B'
+        },
+        { 
+          keyword: ['ноутбук', 'laptop', 'компьютер'], 
+          icon: '💻', 
+          displayName: 'Ноутбуки',
+          color: '#DAA520'
+        },
+        { 
+          keyword: ['наушник', 'headphone', 'audio', 'колонк'], 
+          icon: '🎧', 
+          displayName: 'Наушники',
+          color: '#B8860B'
+        },
+        { 
+          keyword: ['кабел', 'зарядн', 'адаптер', 'аксессуар', 'чехол'], 
+          icon: '🔌', 
+          displayName: 'Аксессуары',
+          color: '#DAA520'
+        }
+      ];
+
+      // Находим соответствующие категории из API
+      const mappedCategories = categoryMapping.map(mapping => {
+        const foundCategory = data.find(cat => 
+          mapping.keyword.some(keyword => 
+            cat.name.toLowerCase().includes(keyword)
+          )
+        );
+
+        return {
+          id: foundCategory?.id || null,
+          name: mapping.displayName,
+          icon: mapping.icon,
+          color: mapping.color,
+          apiName: foundCategory?.name || null
+        };
+      }).filter(cat => cat.id !== null);
+
+      setCategories(mappedCategories);
+      
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      
+      // Fallback - показываем категории без ID (перейдут на общий каталог)
+      setCategories([
+        { id: null, name: 'Смартфоны', icon: '📱', color: '#B8860B' },
+        { id: null, name: 'Ноутбуки', icon: '💻', color: '#DAA520' },
+        { id: null, name: 'Наушники', icon: '🎧', color: '#B8860B' },
+        { id: null, name: 'Аксессуары', icon: '🔌', color: '#DAA520' }
+      ]);
+    }
+  };
+
+  const loadFeaturedProducts = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${BACKEND_URL}/api/products?limit=8&offset=0&onlyNew=true`);
+      const data = await response.json();
+      setFeaturedProducts(data.elements || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+      setFeaturedProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="home">
+    <div className="home-page">
       {/* Hero Section */}
       <section className="hero">
-        <div className="hero-background">
-          <div className="hero-glow"></div>
-        </div>
-        
-        <div className="container hero-content">
-          <div className="hero-text animate-fadeInUp">
-            <span className="hero-badge">🔥 Новинки 2026</span>
-            <h1 className="hero-title">
+        <div className="container">
+          <div className="hero-content">
+            <h1 className="hero-title animate-fadeInUp">
               Премиум электроника
-              <br />
-              <span className="text-gradient">для вас</span>
+              <span className="gradient-text">от официального дилера</span>
             </h1>
-            <p className="hero-description">
-              Смартфоны, ноутбуки, наушники от мировых брендов.
-              Официальная гарантия, быстрая доставка по Казахстану
+            <p className="hero-subtitle animate-fadeInUp delay-1">
+              Гарантия качества • Оригинальная продукция • Доставка по Алматы
             </p>
-            <div className="hero-actions">
-              <Link to="/catalog" className="btn-primary">
-                Смотреть каталог
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                  <polyline points="12 5 19 12 12 19"/>
-                </svg>
+            <div className="hero-buttons animate-fadeInUp delay-2">
+              <Link to="/catalog" className="btn btn-primary btn-lg">
+                Перейти в каталог
               </Link>
-              <Link to="/catalog" className="btn-secondary">
-                Хиты продаж
+              <Link to="/catalog?onlyNew=true" className="btn btn-secondary btn-lg">
+                Новинки
               </Link>
-            </div>
-          </div>
-
-          <div className="hero-stats animate-fadeInUp stagger-2">
-            <div className="stat-item">
-              <div className="stat-number">10K+</div>
-              <div className="stat-label">Товаров в наличии</div>
-            </div>
-            <div className="stat-divider"></div>
-            <div className="stat-item">
-              <div className="stat-number">100+</div>
-              <div className="stat-label">Брендов</div>
-            </div>
-            <div className="stat-divider"></div>
-            <div className="stat-item">
-              <div className="stat-number">4.9</div>
-              <div className="stat-label">Рейтинг магазина</div>
             </div>
           </div>
         </div>
@@ -74,21 +132,20 @@ const Home = () => {
           </div>
 
           <div className="categories-grid">
-            {[
-              { name: 'Смартфоны', icon: '📱', slug: 'smartphones' },
-              { name: 'Ноутбуки', icon: '💻', slug: 'laptops' },
-              { name: 'Наушники', icon: '🎧', slug: 'headphones' },
-              { name: 'Аксессуары', icon: '🔌', slug: 'accessories' }
-            ].map((category, index) => (
+            {categories.map((category, index) => (
               <Link 
-                to={`/catalog`} 
-                key={category.slug}
+                to={category.id ? `/catalog?category=${category.id}` : '/catalog'} 
+                key={index}
                 className={`category-card animate-fadeInScale stagger-${index + 1}`}
+                style={{ '--category-color': category.color }}
               >
                 <div className="category-icon">
                   {category.icon}
                 </div>
                 <h3 className="category-name">{category.name}</h3>
+                {category.apiName && (
+                  <p className="category-api-name">{category.apiName}</p>
+                )}
                 <span className="category-arrow">→</span>
               </Link>
             ))}
@@ -100,12 +157,9 @@ const Home = () => {
       <section className="featured-products">
         <div className="container">
           <div className="section-header">
-            <div>
-              <h2 className="section-title">Хиты продаж</h2>
-              <p className="section-subtitle">Самые популярные товары месяца</p>
-            </div>
-            <Link to="/catalog" className="section-link">
-              Смотреть все
+            <h2 className="section-title">Новинки</h2>
+            <Link to="/catalog?onlyNew=true" className="section-link">
+              Все новинки
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
@@ -113,80 +167,66 @@ const Home = () => {
           </div>
 
           {loading ? (
-            <div className="products-grid">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="product-skeleton">
-                  <div className="skeleton" style={{ paddingTop: '125%' }}></div>
-                  <div style={{ padding: 'var(--space-lg)' }}>
-                    <div className="skeleton" style={{ height: '12px', width: '40%', marginBottom: '8px' }}></div>
-                    <div className="skeleton" style={{ height: '20px', width: '80%', marginBottom: '8px' }}></div>
-                    <div className="skeleton" style={{ height: '24px', width: '30%' }}></div>
-                  </div>
-                </div>
-              ))}
+            <div className="products-loading">
+              <div className="loader"></div>
+              <p>Загрузка товаров...</p>
             </div>
           ) : (
             <div className="products-grid">
-              {products.map((product, index) => (
-                <div key={product.id} className={`animate-fadeInUp stagger-${(index % 4) + 1}`}>
-                  <ProductCard product={product} />
-                </div>
+              {featuredProducts.slice(0, 8).map((product) => (
+                <ProductCard key={product.article} product={product} />
               ))}
             </div>
           )}
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features */}
       <section className="features">
         <div className="container">
           <div className="features-grid">
-            <div className="feature-item animate-fadeInUp stagger-1">
+            <div className="feature-card animate-fadeInUp">
               <div className="feature-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                  <polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
-              </div>
-              <h3 className="feature-title">Быстрая доставка</h3>
-              <p className="feature-description">1-2 дня по Алматы и Астане</p>
-            </div>
-
-            <div className="feature-item animate-fadeInUp stagger-2">
-              <div className="feature-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </svg>
-              </div>
-              <h3 className="feature-title">Официальная гарантия</h3>
-              <p className="feature-description">12 месяцев на всю технику</p>
-            </div>
-
-            <div className="feature-item animate-fadeInUp stagger-3">
-              <div className="feature-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
               </div>
-              <h3 className="feature-title">100% оригинал</h3>
-              <p className="feature-description">Только оригинальная техника от производителей</p>
+              <h3 className="feature-title">Гарантия качества</h3>
+              <p className="feature-text">
+                Официальная гарантия от производителя на всю продукцию
+              </p>
             </div>
 
-            <div className="feature-item animate-fadeInUp stagger-4">
+            <div className="feature-card animate-fadeInUp delay-1">
               <div className="feature-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="1" y="3" width="15" height="13"/>
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                  <circle cx="5.5" cy="18.5" r="2.5"/>
+                  <circle cx="18.5" cy="18.5" r="2.5"/>
+                </svg>
+              </div>
+              <h3 className="feature-title">Быстрая доставка</h3>
+              <p className="feature-text">
+                Доставка по Алматы в течение 1-2 дней
+              </p>
+            </div>
+
+            <div className="feature-card animate-fadeInUp delay-2">
+              <div className="feature-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
               <h3 className="feature-title">Поддержка 24/7</h3>
-              <p className="feature-description">Консультация по выбору техники</p>
+              <p className="feature-text">
+                Профессиональная консультация в любое время
+              </p>
             </div>
           </div>
         </div>
       </section>
     </div>
   );
-};
-
-export default Home;
+}

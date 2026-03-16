@@ -1,0 +1,414 @@
+/* ============================================
+   ORDER CONFIRMATION PAGE
+   ============================================ */
+
+.order-confirmation-page {
+  min-height: 100vh;
+  background-color: #0A0A0A;
+  padding: calc(80px + var(--space-8)) 0 var(--space-16);
+}
+
+.confirmation-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ============================================
+   SUCCESS HEADER
+   ============================================ */
+
+.success-header {
+  text-align: center;
+  margin-bottom: var(--space-10);
+  padding: var(--space-10);
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+  border: 1px solid #2A2A2A;
+  border-radius: 24px;
+}
+
+.success-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  margin-bottom: var(--space-6);
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  border-radius: 50%;
+  color: #FFFFFF;
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4);
+}
+
+.success-header h1 {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-3);
+}
+
+.order-number {
+  font-size: 1.125rem;
+  color: #A0A0A0;
+}
+
+.order-number strong {
+  color: #B8860B;
+  font-weight: 700;
+}
+
+/* ============================================
+   KASPI PAYMENT SECTION
+   ============================================ */
+
+.payment-section {
+  margin-bottom: var(--space-8);
+  padding: var(--space-8);
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+  border: 1px solid #2A2A2A;
+  border-radius: 20px;
+}
+
+.payment-section h2 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-6);
+  text-align: center;
+}
+
+.kaspi-payment {
+  border: 2px solid #F14635;
+}
+
+/* ============================================
+   KASPI INSTRUCTIONS
+   ============================================ */
+
+.kaspi-instructions {
+  margin-bottom: var(--space-8);
+}
+
+.kaspi-step {
+  display: flex;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  background: rgba(241, 70, 53, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(241, 70, 53, 0.2);
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #F14635 0%, #D63027 100%);
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-content h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-3);
+}
+
+.step-content p {
+  font-size: 0.9375rem;
+  color: #A0A0A0;
+  margin-bottom: var(--space-3);
+}
+
+/* ============================================
+   KASPI INPUT BLOCKS
+   ============================================ */
+
+.kaspi-phone-block,
+.kaspi-comment-block {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.kaspi-phone,
+.kaspi-comment {
+  flex: 1;
+  padding: var(--space-4);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: #0A0A0A;
+  border: 2px solid #F14635;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.kaspi-name {
+  margin-top: var(--space-2);
+  font-size: 0.875rem;
+  color: #6A6A6A;
+  text-align: center;
+}
+
+.kaspi-amount {
+  margin-top: var(--space-3);
+  padding: var(--space-5);
+  font-size: 2rem;
+  font-weight: 800;
+  color: #F14635;
+  background: rgba(241, 70, 53, 0.1);
+  border: 2px solid #F14635;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.copy-btn {
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.copy-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.4);
+}
+
+/* ============================================
+   KASPI QR
+   ============================================ */
+
+.kaspi-qr-section {
+  margin-top: var(--space-8);
+  padding: var(--space-6);
+  background: rgba(184, 134, 11, 0.05);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.kaspi-qr-section h3 {
+  font-size: 1.125rem;
+  color: #FFFFFF;
+  margin-bottom: var(--space-5);
+}
+
+.kaspi-qr-placeholder {
+  width: 250px;
+  height: 250px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border-radius: 16px;
+  color: #0A0A0A;
+}
+
+.qr-note {
+  font-size: 0.75rem;
+  color: #6A6A6A;
+  margin-top: var(--space-2);
+}
+
+/* ============================================
+   PAYMENT NOTE
+   ============================================ */
+
+.payment-note {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4);
+  margin-top: var(--space-6);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+}
+
+.payment-note svg {
+  color: #3B82F6;
+  flex-shrink: 0;
+}
+
+.payment-note p {
+  font-size: 0.9375rem;
+  color: #A0A0A0;
+  margin: 0;
+}
+
+/* ============================================
+   ORDER DETAILS
+   ============================================ */
+
+.order-details {
+  margin-bottom: var(--space-8);
+  padding: var(--space-8);
+  background: linear-gradient(135deg, #1A1A1A 0%, #0F0F0F 100%);
+  border: 1px solid #2A2A2A;
+  border-radius: 20px;
+}
+
+.order-details h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-6);
+}
+
+.order-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+.info-block h4 {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #B8860B;
+  margin-bottom: var(--space-2);
+}
+
+.info-block p {
+  font-size: 1rem;
+  color: #FFFFFF;
+  margin-bottom: var(--space-1);
+}
+
+/* ============================================
+   ORDER ITEMS
+   ============================================ */
+
+.order-items {
+  margin-bottom: var(--space-6);
+}
+
+.order-items h4 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-4);
+}
+
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+  background: #0A0A0A;
+  border-radius: 12px;
+}
+
+.order-item img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #1A1A1A;
+}
+
+.order-item-info {
+  flex: 1;
+}
+
+.order-item-info h5 {
+  font-size: 1rem;
+  color: #FFFFFF;
+  margin-bottom: var(--space-1);
+}
+
+.order-item-info p {
+  font-size: 0.875rem;
+  color: #6A6A6A;
+  margin: 0;
+}
+
+.order-item-total {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #B8860B;
+}
+
+.order-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-5);
+  background: rgba(184, 134, 11, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(184, 134, 11, 0.3);
+}
+
+.order-total span:first-child {
+  font-size: 1.125rem;
+  color: #A0A0A0;
+}
+
+.total-amount {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  color: #DAA520;
+}
+
+/* ============================================
+   ACTIONS
+   ============================================ */
+
+.confirmation-actions {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: center;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+  .kaspi-step {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .kaspi-phone-block,
+  .kaspi-comment-block {
+    flex-direction: column;
+  }
+
+  .kaspi-phone,
+  .kaspi-comment {
+    width: 100%;
+  }
+
+  .confirmation-actions {
+    flex-direction: column;
+  }
+
+  .confirmation-actions .btn {
+    width: 100%;
+  }
+}   
