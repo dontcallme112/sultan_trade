@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../../api/client';
+import { BACKEND_URL } from '../../../api/client';
 import './Filters.css';
 
 export default function Filters({ onFilterChange, activeFilters }) {
