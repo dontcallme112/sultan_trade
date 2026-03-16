@@ -1,0 +1,249 @@
+/* ============================================
+   FILTERS CONTAINER
+   ============================================ */
+
+.filters-container {
+  margin-bottom: var(--space-6);
+}
+
+.filters-toggle {
+  display: none; /* Скрыт на desktop */
+}
+
+.filters-panel {
+  background-color: #1A1A1A;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  padding: var(--space-6);
+}
+
+.filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid #333333;
+}
+
+.filters-header h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.filters-reset {
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.875rem;
+  color: #B8860B;
+  background: none;
+  border: 1px solid #B8860B;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filters-reset:hover {
+  background-color: #B8860B;
+  color: #0A0A0A;
+}
+
+/* ============================================
+   FILTER SECTIONS
+   ============================================ */
+
+.filter-section {
+  margin-bottom: var(--space-6);
+}
+
+.filter-section:last-child {
+  margin-bottom: 0;
+}
+
+.filter-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: var(--space-3);
+}
+
+/* ============================================
+   SELECT
+   ============================================ */
+
+.filter-select {
+  width: 100%;
+  padding: var(--space-3);
+  font-size: 0.875rem;
+  color: #FFFFFF;
+  background-color: #0A0A0A;
+  border: 1px solid #333333;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-select:hover,
+.filter-select:focus {
+  border-color: #B8860B;
+  outline: none;
+}
+
+/* ============================================
+   PRICE INPUTS
+   ============================================ */
+
+.price-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.price-input {
+  flex: 1;
+  padding: var(--space-3);
+  font-size: 0.875rem;
+  color: #FFFFFF;
+  background-color: #0A0A0A;
+  border: 1px solid #333333;
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all 0.2s;
+}
+
+.price-input:focus {
+  border-color: #B8860B;
+}
+
+.price-inputs span {
+  color: #6A6A6A;
+}
+
+.filter-apply-btn {
+  width: 100%;
+  padding: var(--space-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0A0A0A;
+  background-color: #B8860B;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-apply-btn:hover {
+  background-color: #DAA520;
+}
+
+/* ============================================
+   CHECKBOXES
+   ============================================ */
+
+.filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: var(--radius-sm);
+}
+
+.filter-checkbox:hover {
+  background-color: #2A2A2A;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #B8860B;
+  cursor: pointer;
+}
+
+.filter-checkbox span {
+  font-size: 0.875rem;
+  color: #FFFFFF;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 1024px) {
+  .filters-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    width: 100%;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #FFFFFF;
+    background-color: #1A1A1A;
+    border: 1px solid #333333;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    position: relative;
+  }
+
+  .filters-toggle:hover {
+    border-color: #B8860B;
+  }
+
+  .filters-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #0A0A0A;
+    background-color: #B8860B;
+    border-radius: 50%;
+  }
+
+  .filters-panel {
+    display: none;
+    margin-top: var(--space-4);
+  }
+
+  .filters-panel.open {
+    display: block;
+  }
+}
+
+@media (max-width: 768px) {
+  .filters-panel {
+    padding: var(--space-4);
+  }
+
+  .filter-section {
+    margin-bottom: var(--space-4);
+  }
+
+  .price-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .price-inputs span {
+    display: none;
+  }
+}

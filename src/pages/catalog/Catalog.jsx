@@ -1,66 +1,149 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useProducts } from '../../hooks/useProducts';
+import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
+import Filters from '../../components/features/Filters/Filters';
+import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
 
 export default function Catalog() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const LIMIT = 12;
+
+  // Активные фильтры из URL
   const [filters, setFilters] = useState({
-    category: searchParams.get('category') || null,
     brand: searchParams.get('brand') || null,
-    search: searchParams.get('search') || '',
-    limit: 12,
-    offset: 0
+    minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null,
+    maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null,
+    onlyNew: searchParams.get('onlyNew') === 'true',
+    sortBy: searchParams.get('sortBy') || 'default',
+    search: searchParams.get('search') || null
   });
 
-  const [allProducts, setAllProducts] = useState([]);
-  const [hasMore, setHasMore] = useState(true);
-
-  const { products, loading, error } = useProducts(filters);
-
-  // Загрузка товаров
   useEffect(() => {
-    if (products && products.length > 0) {
-      if (filters.offset === 0) {
-        // Первая загрузка - заменяем товары
-        setAllProducts(products);
+    loadProducts(true); // Reset при смене фильтров
+  }, [filters]);
+
+  const loadProducts = async (reset = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const currentOffset = reset ? 0 : offset;
+      const params = new URLSearchParams({
+        limit: LIMIT,
+        offset: currentOffset
+      });
+
+      if (filters.brand) params.append('brand', filters.brand);
+      if (filters.minPrice) params.append('minPrice', filters.minPrice);
+      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+      if (filters.onlyNew) params.append('onlyNew', 'true');
+      if (filters.sortBy && filters.sortBy !== 'default') params.append('sortBy', filters.sortBy);
+      if (filters.search) params.append('search', filters.search);
+
+      console.log('🔍 Loading products:', params.toString());
+
+      const response = await fetch(`${BACKEND_URL}/api/products?${params}`);
+      const data = await response.json();
+
+      console.log('📦 Received:', data);
+
+      if (reset) {
+        setProducts(data.elements || []);
+        setOffset(LIMIT);
       } else {
-        // Подгрузка - добавляем товары
-        setAllProducts(prev => [...prev, ...products]);
+        setProducts(prev => [...prev, ...(data.elements || [])]);
+        setOffset(prev => prev + LIMIT);
       }
-      
-      // Проверяем есть ли еще товары
-      setHasMore(products.length === filters.limit);
+
+      setTotalCount(data.pagination?.totalCount || 0);
+      setHasMore(data.pagination?.hasMore || false);
+
+    } catch (err) {
+      console.error('❌ Error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [products]);
-
-  // Загрузить еще товары
-  const loadMore = () => {
-    setFilters(prev => ({
-      ...prev,
-      offset: prev.offset + prev.limit
-    }));
   };
 
-  // Сброс фильтров
-  const resetFilters = () => {
-    setFilters({
-      category: null,
-      brand: null,
-      search: '',
-      limit: 12,
-      offset: 0
-    });
-    setSearchParams({});
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+
+    // Обновляем URL
+    const params = new URLSearchParams();
+    if (newFilters.brand) params.set('brand', newFilters.brand);
+    if (newFilters.minPrice) params.set('minPrice', newFilters.minPrice);
+    if (newFilters.maxPrice) params.set('maxPrice', newFilters.maxPrice);
+    if (newFilters.onlyNew) params.set('onlyNew', 'true');
+    if (newFilters.sortBy && newFilters.sortBy !== 'default') params.set('sortBy', newFilters.sortBy);
+    if (newFilters.search) params.set('search', newFilters.search);
+
+    setSearchParams(params);
+    setOffset(0);
   };
 
-  // Переход на страницу товара
-  const handleProductClick = (product) => {
-    navigate(`/product/${product.article || product.id}`);
+  const handleLoadMore = () => {
+    loadProducts(false);
   };
+
+  const handleRemoveFilter = (filterKey) => {
+    const newFilters = { ...filters };
+    if (filterKey === 'price') {
+      newFilters.minPrice = null;
+      newFilters.maxPrice = null;
+    } else {
+      newFilters[filterKey] = filterKey === 'onlyNew' ? false : null;
+    }
+    handleFilterChange(newFilters);
+  };
+
+  // Активные фильтры для отображения
+  const activeFilterTags = [];
+  if (filters.brand) activeFilterTags.push({ key: 'brand', label: filters.brand });
+  if (filters.minPrice || filters.maxPrice) {
+    const priceLabel = `${filters.minPrice || 0} ₸ - ${filters.maxPrice || '∞'} ₸`;
+    activeFilterTags.push({ key: 'price', label: priceLabel });
+  }
+  if (filters.onlyNew) activeFilterTags.push({ key: 'onlyNew', label: 'Новинки' });
+  if (filters.search) activeFilterTags.push({ key: 'search', label: `Поиск: "${filters.search}"` });
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="catalog-page">
+        <div className="container">
+          <div className="catalog-loading">
+            <div className="loader"></div>
+            <p>Загрузка товаров...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="catalog-page">
+        <div className="container">
+          <div className="catalog-error">
+            <div className="error-icon">⚠️</div>
+            <h3>Ошибка загрузки</h3>
+            <p>{error}</p>
+            <button className="btn btn-primary" onClick={() => loadProducts(true)}>
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="catalog-page">
@@ -70,126 +153,97 @@ export default function Catalog() {
           <div>
             <h1 className="catalog-title">Каталог товаров</h1>
             <p className="catalog-subtitle">
-              {allProducts.length > 0 
-                ? `Найдено товаров: ${allProducts.length}` 
-                : 'Просмотрите нашу коллекцию премиум электроники'}
+              {totalCount > 0 ? `Найдено товаров: ${totalCount}` : 'Товары не найдены'}
             </p>
           </div>
-
-          {(filters.category || filters.brand || filters.search) && (
-            <button className="btn btn-secondary" onClick={resetFilters}>
-              Сбросить фильтры
-            </button>
-          )}
         </div>
 
-        {/* Активные фильтры */}
-        {(filters.category || filters.brand || filters.search) && (
+        {/* Active Filters */}
+        {activeFilterTags.length > 0 && (
           <div className="active-filters">
-            {filters.category && (
-              <span className="filter-tag">
-                Категория: {filters.category}
-                <button onClick={() => setFilters(prev => ({ ...prev, category: null }))}>×</button>
-              </span>
-            )}
-            {filters.brand && (
-              <span className="filter-tag">
-                Бренд: {filters.brand}
-                <button onClick={() => setFilters(prev => ({ ...prev, brand: null }))}>×</button>
-              </span>
-            )}
-            {filters.search && (
-              <span className="filter-tag">
-                Поиск: {filters.search}
-                <button onClick={() => setFilters(prev => ({ ...prev, search: '' }))}>×</button>
-              </span>
-            )}
+            {activeFilterTags.map((tag) => (
+              <div key={tag.key} className="filter-tag">
+                <span>{tag.label}</span>
+                <button onClick={() => handleRemoveFilter(tag.key)}>×</button>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Loading состояние для первой загрузки */}
-        {loading && allProducts.length === 0 && (
-          <div className="catalog-loading">
-            <div className="loader"></div>
-            <p>Загружаем товары...</p>
-          </div>
-        )}
+        {/* Main Content */}
+        <div className="catalog-content">
+          {/* Sidebar with Filters */}
+          <aside className="catalog-sidebar">
+            <Filters 
+              onFilterChange={handleFilterChange}
+              activeFilters={filters}
+            />
+          </aside>
 
-        {/* Error состояние */}
-        {error && (
-          <div className="catalog-error">
-            <div className="error-icon">⚠️</div>
-            <h3>Произошла ошибка</h3>
-            <p>{error}</p>
-            <button className="btn btn-primary" onClick={() => window.location.reload()}>
-              Попробовать снова
-            </button>
-          </div>
-        )}
-
-        {/* Товары */}
-        {!loading && !error && allProducts.length === 0 && (
-          <div className="catalog-empty">
-            <div className="empty-icon">
-              <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="m21 21-4.35-4.35"/>
-              </svg>
-            </div>
-            <h2>Товары не найдены</h2>
-            <p>Попробуйте изменить параметры поиска или фильтры</p>
-            <button className="btn btn-primary" onClick={resetFilters}>
-              Сбросить фильтры
-            </button>
-          </div>
-        )}
-
-        {/* Сетка товаров */}
-        {allProducts.length > 0 && (
-          <>
-            <div className="products-grid">
-              {allProducts.map((product, index) => (
-                <ProductCard 
-                  key={product.id || product.article || index} 
-                  product={product}
-                  onClick={() => handleProductClick(product)}
-                />
-              ))}
-            </div>
-
-            {/* Кнопка "Загрузить еще" */}
-            {hasMore && (
-              <div className="load-more-container">
+          {/* Products Grid */}
+          <div className="catalog-main">
+            {products.length === 0 ? (
+              <div className="catalog-empty">
+                <div className="empty-icon">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </div>
+                <h2>Товары не найдены</h2>
+                <p>Попробуйте изменить параметры поиска или фильтры</p>
                 <button 
-                  className="btn btn-secondary btn-lg load-more-btn"
-                  onClick={loadMore}
-                  disabled={loading}
+                  className="btn btn-primary"
+                  onClick={() => handleFilterChange({
+                    brand: null,
+                    minPrice: null,
+                    maxPrice: null,
+                    onlyNew: false,
+                    sortBy: 'default',
+                    search: null
+                  })}
                 >
-                  {loading ? (
-                    <>
-                      <div className="btn-loader"></div>
-                      Загрузка...
-                    </>
-                  ) : (
-                    <>
-                      Загрузить еще
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 12 15 18 9"/>
-                      </svg>
-                    </>
-                  )}
+                  Сбросить фильтры
                 </button>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="products-grid">
+                  {products.map((product) => (
+                    <ProductCard key={product.article} product={product} />
+                  ))}
+                </div>
 
-            {/* Конец списка */}
-            {!hasMore && allProducts.length > 0 && (
-              <div className="end-of-list">
-                <p>Вы просмотрели все товары</p>
-              </div>
+                {/* Load More */}
+                {hasMore && (
+                  <div className="load-more-container">
+                    <button 
+                      className="btn btn-secondary load-more-btn"
+                      onClick={handleLoadMore}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <span className="btn-loader"></span>
+                          Загрузка...
+                        </>
+                      ) : (
+                        `Показать ещё (${products.length} из ${totalCount})`
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* End of List */}
+                {!hasMore && products.length > 0 && (
+                  <div className="end-of-list">
+                    <p>Показаны все товары ({totalCount})</p>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );

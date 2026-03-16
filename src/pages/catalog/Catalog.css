@@ -1,12 +1,12 @@
 /* ============================================
-   CATALOG PAGE - Dark Theme
+   CATALOG PAGE - With Filters Sidebar
    ============================================ */
 
 .catalog-page {
   min-height: 100vh;
   background-color: #0A0A0A;
   padding: var(--space-8) 0 var(--space-16);
-  padding-top: calc(80px + var(--space-8)); /* Отступ под header! */
+  padding-top: calc(80px + var(--space-8));
 }
 
 /* ============================================
@@ -14,12 +14,8 @@
    ============================================ */
 
 .catalog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-6);
-  margin-bottom: var(--space-8);
-  padding-bottom: var(--space-6);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid #333333;
 }
 
@@ -38,14 +34,14 @@
 }
 
 /* ============================================
-   ACTIVE FILTERS
+   ACTIVE FILTERS TAGS
    ============================================ */
 
 .active-filters {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
   padding: var(--space-4);
   background-color: #1A1A1A;
   border-radius: var(--radius-lg);
@@ -78,12 +74,32 @@
   font-size: 1.125rem;
   line-height: 1;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s;
 }
 
 .filter-tag button:hover {
   background-color: #B8860B;
   color: #0A0A0A;
+}
+
+/* ============================================
+   CATALOG CONTENT LAYOUT
+   ============================================ */
+
+.catalog-content {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--space-8);
+}
+
+.catalog-sidebar {
+  position: sticky;
+  top: calc(80px + var(--space-8));
+  height: fit-content;
+}
+
+.catalog-main {
+  min-width: 0;
 }
 
 /* ============================================
@@ -109,14 +125,14 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1400px) {
   .products-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
 /* ============================================
-   LOADING STATE
+   LOADING
    ============================================ */
 
 .catalog-loading {
@@ -148,7 +164,7 @@
 }
 
 /* ============================================
-   ERROR STATE
+   ERROR
    ============================================ */
 
 .catalog-error {
@@ -179,7 +195,7 @@
 }
 
 /* ============================================
-   EMPTY STATE
+   EMPTY
    ============================================ */
 
 .catalog-empty {
@@ -222,7 +238,7 @@
 }
 
 .load-more-btn {
-  min-width: 200px;
+  min-width: 250px;
 }
 
 .btn-loader {
@@ -233,6 +249,7 @@
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   display: inline-block;
+  margin-right: var(--space-2);
 }
 
 /* ============================================
@@ -256,14 +273,23 @@
    RESPONSIVE
    ============================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .catalog-content {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-sidebar {
+    position: static;
+  }
+
   .catalog-page {
     padding-top: calc(70px + var(--space-6));
   }
+}
 
-  .catalog-header {
-    flex-direction: column;
-    align-items: flex-start;
+@media (max-width: 768px) {
+  .catalog-page {
+    padding-top: calc(70px + var(--space-6));
   }
 
   .catalog-title {
