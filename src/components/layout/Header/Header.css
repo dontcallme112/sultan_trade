@@ -131,6 +131,21 @@
 }
 
 /* ============================================
+   SEARCH BAR
+   ============================================ */
+
+.header-search-desktop {
+  flex: 1;
+  max-width: 500px;
+  display: flex;
+  align-items: center;
+}
+
+.header-search-mobile {
+  display: none;
+}
+
+/* ============================================
    ACTIONS
    ============================================ */
 
@@ -162,6 +177,16 @@
   color: #0ff;
   transform: translateY(-2px);
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+}
+
+.search-toggle {
+  display: none; /* Показывается только на мобилке */
+}
+
+.search-toggle.active {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: #0ff;
+  color: #0ff;
 }
 
 .cart-btn {
@@ -220,9 +245,55 @@
   transition: all 0.3s ease;
 }
 
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 1024px) {
+  .header-search-desktop {
+    max-width: 350px;
+  }
+
+  .nav {
+    gap: 0.25rem;
+  }
+
+  .nav-link {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
 @media (max-width: 768px) {
   .mobile-menu-btn {
     display: flex;
+  }
+
+  .search-toggle {
+    display: flex;
+  }
+
+  /* Скрываем desktop search */
+  .header-search-desktop {
+    display: none;
+  }
+
+  /* Показываем mobile search dropdown */
+  .header-search-mobile {
+    display: block;
+    padding: 1rem 0;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .nav {
@@ -276,5 +347,20 @@
 
   .logo-text {
     font-size: 1.25rem;
+  }
+
+  .header-actions {
+    gap: 0.5rem;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cart-badge {
+    min-width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
   }
 }

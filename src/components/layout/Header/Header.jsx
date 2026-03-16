@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
+import SearchBar from '../../features/SearchBar/SearchBar';
 import './Header.css';
 
 const Header = () => {
   const { cartItems } = useCart();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -17,16 +19,20 @@ const Header = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Закрывать меню при смене роута
+  // Закрывать меню и поиск при смене роута
   useEffect(() => {
     setMobileMenu(false);
+    setShowSearch(false);
   }, [location]);
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Закрытие меню при клике на ссылку
   const handleLinkClick = () => {
     setMobileMenu(false);
+  };
+
+  const toggleSearch = () => {
+    setShowSearch(!showSearch);
   };
 
   return (
@@ -52,7 +58,7 @@ const Header = () => {
               <span>Каталог</span>
               <div className="nav-link-glow"></div>
             </Link>
-            <Link to="/catalog?onlyNew=true" className="nav-link" onClick={handleLinkClick}>
+            <Link to="/new" className="nav-link" onClick={handleLinkClick}>
               <span>Новинки</span>
               <div className="nav-link-glow"></div>
             </Link>
@@ -62,9 +68,19 @@ const Header = () => {
             </Link>
           </nav>
 
+          {/* Search Bar - Desktop */}
+          <div className="header-search-desktop">
+            <SearchBar />
+          </div>
+
           {/* Actions */}
           <div className="header-actions">
-            <button className="icon-btn">
+            {/* Search Button - Mobile */}
+            <button 
+              className={`icon-btn search-toggle ${showSearch ? 'active' : ''}`}
+              onClick={toggleSearch}
+              aria-label="Toggle search"
+            >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8"/>
                 <path d="m21 21-4.35-4.35"/>
@@ -93,6 +109,13 @@ const Header = () => {
             </button>
           </div>
         </div>
+
+        {/* Search Bar - Mobile Dropdown */}
+        {showSearch && (
+          <div className="header-search-mobile">
+            <SearchBar />
+          </div>
+        )}
       </div>
     </header>
   );
