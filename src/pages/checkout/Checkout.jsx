@@ -5,7 +5,8 @@ import './Checkout.css';
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { cart, getTotalPrice, clearCart } = useCart();
+  const { cart = [], getTotalPrice, clearCart } = useCart();
+  
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -16,19 +17,26 @@ export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState('kaspi');
   const [loading, setLoading] = useState(false);
 
+  // Безопасное получение total
+  const getTotal = () => {
+    if (typeof getTotalPrice === 'function') {
+      return getTotalPrice();
+    }
+    // Fallback расчет
+    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Генерируем ID заказа
     const orderId = 'ORD-' + Date.now();
 
-    // Формируем данные заказа
     const orderData = {
       orderId: orderId,
       customer: formData,
       items: cart,
-      total: getTotalPrice(),
+      total: getTotal(),
       paymentMethod: paymentMethod,
       status: 'pending',
       createdAt: new Date().toISOString()
@@ -37,13 +45,15 @@ export default function Checkout() {
     console.log('📦 Заказ создан:', orderData);
 
     // Сохраняем в localStorage
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    orders.push(orderData);
-    localStorage.setItem('orders', JSON.stringify(orders));
+    try {
+      const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+      orders.push(orderData);
+      localStorage.setItem('orders', JSON.stringify(orders));
+    } catch (error) {
+      console.error('Error saving order:', error);
+    }
 
     setLoading(false);
-
-    // Переходим на страницу подтверждения
     navigate(`/order-confirmation/${orderId}`);
   };
 
@@ -54,8 +64,8 @@ export default function Checkout() {
     });
   };
 
-  // Если корзина пуста
-  if (cart.length === 0) {
+  // Если корзина пуста или undefined
+  if (!cart || cart.length === 0) {
     return (
       <div className="checkout-page">
         <div className="container">
@@ -70,6 +80,9 @@ export default function Checkout() {
       </div>
     );
   }
+
+  const totalPrice = getTotal();
+  const itemCount = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
   return (
     <div className="checkout-page">
@@ -227,10 +240,10 @@ export default function Checkout() {
 
               <button 
                 type="submit" 
-                className="btn btn-primary btn-lg btn-block checkout-submit-btn"
+                className="btn btn-primary btn-lg btn-block"
                 disabled={loading}
               >
-                {loading ? 'Оформление...' : `Оформить заказ на ${getTotalPrice().toLocaleString('ru-RU')} ₸`}
+                {loading ? 'Оформление...' : `Оформить заказ на ${totalPrice.toLocaleString('ru-RU')} ₸`}
               </button>
             </form>
           </div>
@@ -242,13 +255,13 @@ export default function Checkout() {
             <div className="summary-items">
               {cart.map((item) => (
                 <div key={item.id} className="summary-item">
-                  <img src={item.image} alt={item.name} />
+                  <img src={item.image || 'https://via.placeholder.com/60'} alt={item.name} />
                   <div className="summary-item-info">
-                    <h4>{item.name}</h4>
-                    <p>{item.quantity} × {item.price.toLocaleString('ru-RU')} ₸</p>
+                    <h4>{item.name || 'Товар'}</h4>
+                    <p>{item.quantity || 1} × {(item.price || 0).toLocaleString('ru-RU')} ₸</p>
                   </div>
                   <div className="summary-item-total">
-                    {(item.price * item.quantity).toLocaleString('ru-RU')} ₸
+                    {((item.price || 0) * (item.quantity || 1)).toLocaleString('ru-RU')} ₸
                   </div>
                 </div>
               ))}
@@ -256,8 +269,8 @@ export default function Checkout() {
 
             <div className="summary-totals">
               <div className="summary-row">
-                <span>Товары ({cart.reduce((sum, item) => sum + item.quantity, 0)} шт.)</span>
-                <span>{getTotalPrice().toLocaleString('ru-RU')} ₸</span>
+                <span>Товары ({itemCount} шт.)</span>
+                <span>{totalPrice.toLocaleString('ru-RU')} ₸</span>
               </div>
               <div className="summary-row">
                 <span>Доставка</span>
@@ -265,7 +278,7 @@ export default function Checkout() {
               </div>
               <div className="summary-row total">
                 <span>Итого</span>
-                <span>{getTotalPrice().toLocaleString('ru-RU')} ₸</span>
+                <span>{totalPrice.toLocaleString('ru-RU')} ₸</span>
               </div>
             </div>
           </div>
