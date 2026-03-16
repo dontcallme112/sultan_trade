@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../../../api/client';
+import { BACKEND_URL } from '../../api/client';
 import './Filters.css';
 
 export default function Filters({ onFilterChange, activeFilters }) {
   const [filtersData, setFiltersData] = useState({
     brands: [],
-    priceRange: { min: 0, max: 0 }
+    priceRange: { min: 0, max: 1000000 }
   });
   const [isOpen, setIsOpen] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 0]);
+  const [loading, setLoading] = useState(true);
+  const [priceRange, setPriceRange] = useState([0, 1000000]);
 
   useEffect(() => {
     loadFilters();
   }, []);
 
   useEffect(() => {
-    if (filtersData.priceRange.max > 0) {
+    if (filtersData.priceRange && filtersData.priceRange.max > 0) {
       setPriceRange([
         activeFilters.minPrice || filtersData.priceRange.min,
         activeFilters.maxPrice || filtersData.priceRange.max
@@ -25,12 +26,34 @@ export default function Filters({ onFilterChange, activeFilters }) {
 
   const loadFilters = async () => {
     try {
+      setLoading(true);
       const response = await fetch(`${BACKEND_URL}/api/filters`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to load filters');
+      }
+      
       const data = await response.json();
-      setFiltersData(data);
-      setPriceRange([data.priceRange.min, data.priceRange.max]);
+      
+      setFiltersData({
+        brands: data.brands || [],
+        priceRange: data.priceRange || { min: 0, max: 1000000 }
+      });
+      
+      setPriceRange([
+        data.priceRange?.min || 0,
+        data.priceRange?.max || 1000000
+      ]);
+      
     } catch (error) {
       console.error('Filters error:', error);
+      // Используем fallback данные
+      setFiltersData({
+        brands: [],
+        priceRange: { min: 0, max: 1000000 }
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,7 +87,10 @@ export default function Filters({ onFilterChange, activeFilters }) {
   };
 
   const handleReset = () => {
-    setPriceRange([filtersData.priceRange.min, filtersData.priceRange.max]);
+    setPriceRange([
+      filtersData.priceRange?.min || 0,
+      filtersData.priceRange?.max || 1000000
+    ]);
     onFilterChange({
       brand: null,
       minPrice: null,
@@ -75,6 +101,7 @@ export default function Filters({ onFilterChange, activeFilters }) {
   };
 
   const formatPrice = (price) => {
+    if (!price && price !== 0) return '0 ₸';
     return new Intl.NumberFormat('ru-RU').format(Math.round(price)) + ' ₸';
   };
 
@@ -83,6 +110,19 @@ export default function Filters({ onFilterChange, activeFilters }) {
     activeFilters.minPrice !== null,
     activeFilters.onlyNew
   ].filter(Boolean).length;
+
+  if (loading) {
+    return (
+      <div className="filters-container">
+        <div className="filters-panel">
+          <div className="filters-loading">
+            <div className="spinner"></div>
+            <p>Загрузка фильтров...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="filters-container">
@@ -156,11 +196,11 @@ export default function Filters({ onFilterChange, activeFilters }) {
         </div>
 
         {/* Бренды */}
-        {filtersData.brands.length > 0 && (
+        {filtersData.brands && filtersData.brands.length > 0 && (
           <div className="filter-section">
-            <label className="filter-label">Бренд</label>
+            <label className="filter-label">Бренд ({filtersData.brands.length})</label>
             <div className="filter-options">
-              {filtersData.brands.map((brand) => (
+              {filtersData.brands.slice(0, 20).map((brand) => (
                 <label key={brand} className="filter-checkbox">
                   <input
                     type="checkbox"
