@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
-import CategorySidebar from '../../components/features/CategorySidebar/CategorySidebar';
+import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
 import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
 
