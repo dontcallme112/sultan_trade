@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
-import Filters from '../../components/features/Filters/Filters';
+import CategorySidebar from '../../components/features/CategorySidebar/CategorySidebar';
 import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
 
@@ -16,19 +16,14 @@ export default function Catalog() {
 
   const LIMIT = 12;
 
-  // Активные фильтры из URL
-  const [filters, setFilters] = useState({
-    brand: searchParams.get('brand') || null,
-    minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null,
-    maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null,
-    onlyNew: searchParams.get('onlyNew') === 'true',
-    sortBy: searchParams.get('sortBy') || 'default',
-    search: searchParams.get('search') || null
-  });
+  // Активная категория из URL
+  const activeCategory = searchParams.get('category') || null;
+  const searchQuery = searchParams.get('search') || null;
+  const sortBy = searchParams.get('sortBy') || 'default';
 
   useEffect(() => {
-    loadProducts(true); // Reset при смене фильтров
-  }, [filters]);
+    loadProducts(true); // Reset при смене категории
+  }, [activeCategory, searchQuery, sortBy]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -41,12 +36,9 @@ export default function Catalog() {
         offset: currentOffset
       });
 
-      if (filters.brand) params.append('brand', filters.brand);
-      if (filters.minPrice) params.append('minPrice', filters.minPrice);
-      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
-      if (filters.onlyNew) params.append('onlyNew', 'true');
-      if (filters.sortBy && filters.sortBy !== 'default') params.append('sortBy', filters.sortBy);
-      if (filters.search) params.append('search', filters.search);
+      if (activeCategory) params.append('category', activeCategory);
+      if (searchQuery) params.append('search', searchQuery);
+      if (sortBy && sortBy !== 'default') params.append('sortBy', sortBy);
 
       console.log('🔍 Loading products:', params.toString());
 
@@ -63,7 +55,7 @@ export default function Catalog() {
         setOffset(prev => prev + LIMIT);
       }
 
-      setTotalCount(data.pagination?.totalCount || 0);
+      setTotalCount(data.pagination?.total || 0);
       setHasMore(data.pagination?.hasMore || false);
 
     } catch (err) {
@@ -74,46 +66,36 @@ export default function Catalog() {
     }
   };
 
-  const handleFilterChange = (newFilters) => {
-    setFilters(newFilters);
-
-    // Обновляем URL
+  const handleCategoryChange = (categoryId) => {
     const params = new URLSearchParams();
-    if (newFilters.brand) params.set('brand', newFilters.brand);
-    if (newFilters.minPrice) params.set('minPrice', newFilters.minPrice);
-    if (newFilters.maxPrice) params.set('maxPrice', newFilters.maxPrice);
-    if (newFilters.onlyNew) params.set('onlyNew', 'true');
-    if (newFilters.sortBy && newFilters.sortBy !== 'default') params.set('sortBy', newFilters.sortBy);
-    if (newFilters.search) params.set('search', newFilters.search);
+    
+    if (categoryId) params.set('category', categoryId);
+    if (searchQuery) params.set('search', searchQuery);
+    if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
 
     setSearchParams(params);
     setOffset(0);
+  };
+
+  const handleSortChange = (e) => {
+    const newSort = e.target.value;
+    const params = new URLSearchParams();
+    
+    if (activeCategory) params.set('category', activeCategory);
+    if (searchQuery) params.set('search', searchQuery);
+    if (newSort && newSort !== 'default') params.set('sortBy', newSort);
+
+    setSearchParams(params);
   };
 
   const handleLoadMore = () => {
     loadProducts(false);
   };
 
-  const handleRemoveFilter = (filterKey) => {
-    const newFilters = { ...filters };
-    if (filterKey === 'price') {
-      newFilters.minPrice = null;
-      newFilters.maxPrice = null;
-    } else {
-      newFilters[filterKey] = filterKey === 'onlyNew' ? false : null;
-    }
-    handleFilterChange(newFilters);
+  const handleClearFilters = () => {
+    setSearchParams(new URLSearchParams());
+    setOffset(0);
   };
-
-  // Активные фильтры для отображения
-  const activeFilterTags = [];
-  if (filters.brand) activeFilterTags.push({ key: 'brand', label: filters.brand });
-  if (filters.minPrice || filters.maxPrice) {
-    const priceLabel = `${filters.minPrice || 0} ₸ - ${filters.maxPrice || '∞'} ₸`;
-    activeFilterTags.push({ key: 'price', label: priceLabel });
-  }
-  if (filters.onlyNew) activeFilterTags.push({ key: 'onlyNew', label: 'Новинки' });
-  if (filters.search) activeFilterTags.push({ key: 'search', label: `Поиск: "${filters.search}"` });
 
   if (loading && products.length === 0) {
     return (
@@ -156,27 +138,47 @@ export default function Catalog() {
               {totalCount > 0 ? `Найдено товаров: ${totalCount}` : 'Товары не найдены'}
             </p>
           </div>
+
+          {/* Сортировка */}
+          <div className="catalog-sort">
+            <label htmlFor="sort">Сортировка:</label>
+            <select 
+              id="sort" 
+              value={sortBy}
+              onChange={handleSortChange}
+              className="sort-select"
+            >
+              <option value="default">По умолчанию</option>
+              <option value="price_asc">Цена: по возрастанию</option>
+              <option value="price_desc">Цена: по убыванию</option>
+              <option value="name_asc">По названию (А-Я)</option>
+              <option value="newest">Сначала новинки</option>
+            </select>
+          </div>
         </div>
 
         {/* Active Filters */}
-        {activeFilterTags.length > 0 && (
+        {(activeCategory || searchQuery) && (
           <div className="active-filters">
-            {activeFilterTags.map((tag) => (
-              <div key={tag.key} className="filter-tag">
-                <span>{tag.label}</span>
-                <button onClick={() => handleRemoveFilter(tag.key)}>×</button>
+            {searchQuery && (
+              <div className="filter-tag">
+                <span>Поиск: "{searchQuery}"</span>
+                <button onClick={handleClearFilters}>×</button>
               </div>
-            ))}
+            )}
+            <button className="clear-all-btn" onClick={handleClearFilters}>
+              Сбросить все
+            </button>
           </div>
         )}
 
         {/* Main Content */}
         <div className="catalog-content">
-          {/* Sidebar with Filters */}
+          {/* Sidebar with Categories */}
           <aside className="catalog-sidebar">
-            <Filters 
-              onFilterChange={handleFilterChange}
-              activeFilters={filters}
+            <CategorySidebar 
+              onCategoryChange={handleCategoryChange}
+              activeCategory={activeCategory}
             />
           </aside>
 
@@ -191,19 +193,12 @@ export default function Catalog() {
                   </svg>
                 </div>
                 <h2>Товары не найдены</h2>
-                <p>Попробуйте изменить параметры поиска или фильтры</p>
+                <p>Попробуйте выбрать другую категорию или изменить поисковый запрос</p>
                 <button 
                   className="btn btn-primary"
-                  onClick={() => handleFilterChange({
-                    brand: null,
-                    minPrice: null,
-                    maxPrice: null,
-                    onlyNew: false,
-                    sortBy: 'default',
-                    search: null
-                  })}
+                  onClick={handleClearFilters}
                 >
-                  Сбросить фильтры
+                  Показать все товары
                 </button>
               </div>
             ) : (
