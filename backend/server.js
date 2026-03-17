@@ -35,7 +35,7 @@ function setCache(key, data) {
 
 // Rate limiting для API запросов
 let lastApiCall = 0;
-const MIN_INTERVAL = 5000; // 5 секунд между запросами
+const MIN_INTERVAL = 5000;
 
 async function waitForRateLimit() {
   const now = Date.now();
@@ -43,7 +43,7 @@ async function waitForRateLimit() {
   
   if (timeSinceLastCall < MIN_INTERVAL) {
     const waitTime = MIN_INTERVAL - timeSinceLastCall;
-    console.log(`⏳ Ждем ${waitTime}ms для rate limit...`);
+    console.log(`⏳ Ждем ${waitTime}ms...`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
   }
   
@@ -70,7 +70,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// Логирование запросов
+// Логирование
 app.use((req, res, next) => {
   console.log(`${new Date().toLocaleTimeString()} - ${req.method} ${req.path}`);
   next();
@@ -94,7 +94,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// PRODUCTS с улучшенным кешированием
+// PRODUCTS
 app.get('/api/products', async (req, res) => {
   try {
     const { 
@@ -109,11 +109,10 @@ app.get('/api/products', async (req, res) => {
       category 
     } = req.query;
 
-    // Проверяем кеш (30 сек для products)
     let cached = getCache('products', 30000);
     
     if (!cached) {
-      console.log('📦 Загрузка товаров из Al-Style API...');
+      console.log('📦 Загрузка товаров из API...');
       
       try {
         await waitForRateLimit();
@@ -121,7 +120,7 @@ app.get('/api/products', async (req, res) => {
         const response = await api.get('/elements-pagination', {
           params: {
             access_token: ALSTYLE_TOKEN,
-            exclude_missing: 'true', // ВАЖНО! Только товары в наличии
+            exclude_missing: 'true',
             limit: 100,
             offset: 0
           }
@@ -129,18 +128,16 @@ app.get('/api/products', async (req, res) => {
         
         cached = response.data;
         setCache('products', cached);
-        console.log('✅ Загружено товаров:', cached.elements?.length || 0);
+        console.log('✅ Загружено:', cached.elements?.length || 0);
         
       } catch (apiError) {
-        console.error('❌ Ошибка API:', apiError.response?.status, apiError.message);
+        console.error('❌ API Error:', apiError.response?.status, apiError.message);
         
-        // Если 403 - пытаемся использовать старый кеш
         if (apiError.response?.status === 403) {
-          console.log('⚠️  Rate limit! Используем старый кеш если есть...');
           const oldCache = cache.get('products');
           if (oldCache) {
             cached = oldCache.data;
-            console.log('✅ Используем старый кеш');
+            console.log('⚠️  Используем старый кеш');
           } else {
             throw apiError;
           }
@@ -149,21 +146,29 @@ app.get('/api/products', async (req, res) => {
         }
       }
     } else {
-      console.log('💾 Товары из кеша');
+      console.log('💾 Из кеша');
     }
 
-    let products = cached.elements || [];
-    console.log('📊 Всего товаров в базе:', products.length);
+    // ВАЖНО! Проверяем что elements существует и это массив
+    let products = [];
+    if (cached && cached.elements && Array.isArray(cached.elements)) {
+      products = cached.elements;
+    } else if (cached && Array.isArray(cached)) {
+      products = cached;
+    } else {
+      console.error('❌ Неверный формат данных:', typeof cached);
+      throw new Error('Invalid data format from API');
+    }
 
-    // Фильтрация по категории
+    console.log('📊 Товаров в базе:', products.length);
+
+    // Фильтрация
     if (category) {
       products = products.filter(p => 
         p.category && p.category.toString() === category.toString()
       );
-      console.log('🔍 После фильтра категории:', products.length);
     }
 
-    // Фильтрация по цене
     if (minPrice || maxPrice) {
       products = products.filter(p => {
         const price = p.price2 || p.price1 || p.price || 0;
@@ -171,24 +176,19 @@ app.get('/api/products', async (req, res) => {
         if (maxPrice && price > Number(maxPrice)) return false;
         return true;
       });
-      console.log('🔍 После фильтра цены:', products.length);
     }
 
-    // Фильтрация по бренду
     if (brand) {
       products = products.filter(p => 
         p.brand?.toLowerCase() === brand.toLowerCase()
       );
-      console.log('🔍 После фильтра бренда:', products.length);
     }
 
-    // Только новинки
     if (onlyNew === 'true') {
       products = products.filter(p => p.isnew === 1);
-      console.log('🔍 Только новинки:', products.length);
+      console.log('🆕 Только новинки:', products.length);
     }
 
-    // Поиск
     if (search) {
       const s = search.toLowerCase();
       products = products.filter(p => 
@@ -196,7 +196,6 @@ app.get('/api/products', async (req, res) => {
         p.full_name?.toLowerCase().includes(s) ||
         p.brand?.toLowerCase().includes(s)
       );
-      console.log('🔍 После поиска:', products.length);
     }
 
     // Сортировка
@@ -228,7 +227,7 @@ app.get('/api/products', async (req, res) => {
     const end = start + Number(limit);
     const paginated = products.slice(start, end);
 
-    console.log('📄 Отправляем товаров:', paginated.length);
+    console.log('📄 Отправляем:', paginated.length);
 
     res.json({
       elements: paginated,
@@ -242,9 +241,10 @@ app.get('/api/products', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Критическая ошибка /api/products:', error.message);
+    console.error('❌ Критическая ошибка:', error.message);
     res.status(500).json({ 
       error: 'Ошибка загрузки товаров',
+      message: error.message,
       elements: [],
       pagination: { total: 0, offset: 0, limit: 12, hasMore: false, totalCount: 0 }
     });
@@ -257,7 +257,7 @@ app.get('/api/product/:article', async (req, res) => {
     const { article } = req.params;
     const key = `product_${article}`;
     
-    let product = getCache(key, 60000); // 1 минута
+    let product = getCache(key, 60000);
     
     if (!product) {
       console.log('📦 Загрузка товара:', article);
@@ -274,21 +274,24 @@ app.get('/api/product/:article', async (req, res) => {
       setCache(key, product);
       console.log('✅ Товар загружен');
     } else {
-      console.log('💾 Товар из кеша');
+      console.log('💾 Из кеша');
     }
 
     res.json(product);
 
   } catch (error) {
-    console.error('❌ Ошибка /api/product:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки товара' });
+    console.error('❌ Ошибка:', error.message);
+    res.status(500).json({ 
+      error: 'Ошибка загрузки товара',
+      message: error.message 
+    });
   }
 });
 
 // CATEGORIES
 app.get('/api/categories', async (req, res) => {
   try {
-    let categories = getCache('categories', 300000); // 5 минут
+    let categories = getCache('categories', 300000);
 
     if (!categories) {
       console.log('📦 Загрузка категорий...');
@@ -299,24 +302,39 @@ app.get('/api/categories', async (req, res) => {
       });
       
       categories = response.data;
+      
+      // ВАЖНО! Проверяем что это массив
+      if (!Array.isArray(categories)) {
+        console.log('⚠️  Категории не массив, преобразуем');
+        // Если это объект с категориями внутри
+        if (categories && typeof categories === 'object') {
+          categories = Object.values(categories);
+        } else {
+          categories = [];
+        }
+      }
+      
       setCache('categories', categories);
-      console.log('✅ Категории загружены:', categories.length);
+      console.log('✅ Категорий загружено:', categories.length);
     } else {
-      console.log('💾 Категории из кеша');
+      console.log('💾 Из кеша');
     }
 
     res.json(categories);
 
   } catch (error) {
-    console.error('❌ Ошибка /api/categories:', error.message);
-    res.status(500).json({ error: 'Ошибка загрузки категорий' });
+    console.error('❌ Ошибка:', error.message);
+    res.status(500).json({ 
+      error: 'Ошибка загрузки категорий',
+      message: error.message 
+    });
   }
 });
 
-// FILTERS с fallback
+// FILTERS
 app.get('/api/filters', async (req, res) => {
   try {
-    let filters = getCache('filters', 300000); // 5 минут
+    let filters = getCache('filters', 300000);
     
     if (filters) {
       console.log('💾 Фильтры из кеша');
@@ -326,7 +344,6 @@ app.get('/api/filters', async (req, res) => {
     console.log('📦 Загрузка фильтров...');
     let brands = [];
     
-    // Пытаемся получить бренды из API
     try {
       await waitForRateLimit();
       
@@ -334,19 +351,28 @@ app.get('/api/filters', async (req, res) => {
         params: { access_token: ALSTYLE_TOKEN }
       });
       
-      if (Array.isArray(response.data)) {
-        brands = response.data
-          .filter(b => b.name && b.name.trim())
+      let brandsData = response.data;
+      
+      // Проверяем формат данных
+      if (Array.isArray(brandsData)) {
+        brands = brandsData
+          .filter(b => b && b.name && b.name.trim())
           .map(b => b.name)
           .sort();
-        console.log('✅ Бренды из API:', brands.length);
+      } else if (brandsData && typeof brandsData === 'object') {
+        brands = Object.values(brandsData)
+          .filter(b => b && b.name && b.name.trim())
+          .map(b => b.name)
+          .sort();
       }
-    } catch (e) {
-      console.log('⚠️  Ошибка API брендов, используем товары');
       
-      // Fallback: берем бренды из кеша товаров
+      console.log('✅ Бренды из API:', brands.length);
+      
+    } catch (e) {
+      console.log('⚠️  Используем товары для брендов');
+      
       const products = getCache('products', 999999);
-      if (products?.elements) {
+      if (products?.elements && Array.isArray(products.elements)) {
         const set = new Set();
         products.elements.forEach(p => {
           if (p.brand && p.brand.trim()) set.add(p.brand);
@@ -356,11 +382,11 @@ app.get('/api/filters', async (req, res) => {
       }
     }
 
-    // Диапазон цен из товаров
+    // Диапазон цен
     let priceRange = { min: 0, max: 1000000 };
     const products = getCache('products', 999999);
     
-    if (products?.elements) {
+    if (products?.elements && Array.isArray(products.elements)) {
       const prices = products.elements
         .map(p => p.price2 || p.price1 || p.price || 0)
         .filter(p => p > 0);
@@ -368,7 +394,6 @@ app.get('/api/filters', async (req, res) => {
       if (prices.length > 0) {
         priceRange.min = Math.min(...prices);
         priceRange.max = Math.max(...prices);
-        console.log('✅ Диапазон цен:', priceRange);
       }
     }
 
@@ -383,7 +408,7 @@ app.get('/api/filters', async (req, res) => {
     res.json(filters);
 
   } catch (error) {
-    console.error('❌ Ошибка /api/filters:', error.message);
+    console.error('❌ Ошибка:', error.message);
     res.json({ 
       brands: [], 
       priceRange: { min: 0, max: 1000000 } 
@@ -401,7 +426,8 @@ app.get('/api/search', async (req, res) => {
     }
 
     const products = getCache('products', 999999);
-    if (!products?.elements) {
+    
+    if (!products?.elements || !Array.isArray(products.elements)) {
       return res.json([]);
     }
 
@@ -424,20 +450,20 @@ app.get('/api/search', async (req, res) => {
     res.json(results);
 
   } catch (error) {
-    console.error('❌ Ошибка /api/search:', error.message);
+    console.error('❌ Ошибка:', error.message);
     res.json([]);
   }
 });
 
-// Запуск сервера
+// Запуск
 app.listen(PORT, () => {
-  console.log('\n🚀 LUXE Backend Server v2.3');
+  console.log('\n🚀 LUXE Backend Server v2.4');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Server: http://localhost:${PORT}`);
   console.log('🔗 API: https://api.al-style.kz/api');
-  console.log('✅ exclude_missing=true - только товары в наличии');
-  console.log('⏱️  Rate limit: 5 секунд между запросами');
-  console.log('💾 Кеш: 30с товары, 1м товар, 5м категории');
+  console.log('✅ exclude_missing=true');
+  console.log('⏱️  Rate limit: 5 секунд');
+  console.log('💾 Кеш: 30с товары, 1м товар, 5м остальное');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('✨ Backend готов!\n');
+  console.log('✨ Готово!\n');
 });
