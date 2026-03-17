@@ -100,7 +100,7 @@ app.get('/api/products', async (req, res) => {
       
       const response = await api.get('/elements-pagination', {
         params: {
-          access_token: ALSTYLE_TOKEN,
+          'access-token': ALSTYLE_TOKEN,
           exclude_missing: 'true',
           limit: 100,
           offset: 0,
@@ -179,7 +179,7 @@ app.get('/api/product/:article', async (req, res) => {
       await waitForRateLimit();
       const response = await api.get('/element-info', {
         params: {
-          access_token: ALSTYLE_TOKEN,
+          'access-token': ALSTYLE_TOKEN,
           article: req.params.article,
           additional_fields: 'brand,images,description'
         }
@@ -206,7 +206,7 @@ app.get('/api/categories', async (req, res) => {
       await waitForRateLimit();
       
       const response = await api.get('/categories', {
-        params: { access_token: ALSTYLE_TOKEN }
+        params: { 'access-token': ALSTYLE_TOKEN }
       });
       
       categories = Array.isArray(response.data) ? response.data : [];
@@ -235,7 +235,7 @@ app.get('/api/filters', async (req, res) => {
     try {
       await waitForRateLimit();
       const response = await api.get('/brands', {
-        params: { access_token: ALSTYLE_TOKEN }
+        params: { 'access-token': ALSTYLE_TOKEN }
       });
       
       let brandsData = response.data;
