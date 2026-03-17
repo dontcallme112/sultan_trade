@@ -17,7 +17,22 @@ export default function Home() {
   const loadCategories = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/categories`);
-      const data = await response.json();
+      let data = await response.json();
+
+      // Проверяем что data это массив
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ Категории не массив:', typeof data);
+        
+        if (data && data.data && Array.isArray(data.data)) {
+          data = data.data;
+        } else if (data && typeof data === 'object') {
+          data = Object.values(data);
+        } else {
+          data = [];
+        }
+      }
+
+      console.log('✅ Категорий получено:', data.length);
       
       const categoryMapping = [
         { 
@@ -51,11 +66,11 @@ export default function Home() {
       ];
 
       const mappedCategories = categoryMapping.map(mapping => {
-        const foundCategory = data.find(cat => 
-          mapping.keyword.some(keyword => 
+        const foundCategory = Array.isArray(data) ? data.find(cat => 
+          cat && cat.name && mapping.keyword.some(keyword => 
             cat.name.toLowerCase().includes(keyword)
           )
-        );
+        ) : null;
 
         return {
           id: foundCategory?.id || null,
@@ -321,4 +336,4 @@ export default function Home() {
       </section>
     </div>
   );
-} 
+}
