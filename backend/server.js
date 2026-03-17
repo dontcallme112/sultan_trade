@@ -1,8 +1,10 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const NodeCache = require('node-cache');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
+import NodeCache from 'node-cache';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -17,7 +19,7 @@ if (!ALSTYLE_TOKEN) {
 
 console.log('🔑 Token:', '✓', ALSTYLE_TOKEN.substring(0, 10) + '...');
 
-// Инициализация кеша (30 сек для товаров, 60 сек для одного товара, 5 мин для фильтров)
+// Инициализация кеша
 const cache = new NodeCache({ stdTTL: 30, checkperiod: 60 });
 
 // CORS настройка
@@ -63,9 +65,9 @@ const alStyleAPI = axios.create({
   }
 });
 
-// Rate limiting для API
+// Rate limiting
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 5000; // 5 секунд между запросами
+const MIN_REQUEST_INTERVAL = 5000;
 
 async function rateLimitedRequest(config) {
   const now = Date.now();
@@ -91,9 +93,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// ============================================
-// PRODUCTS ENDPOINT с фильтрацией
-// ============================================
+// PRODUCTS ENDPOINT
 app.get('/api/products', async (req, res) => {
   try {
     const { 
@@ -108,7 +108,6 @@ app.get('/api/products', async (req, res) => {
       category
     } = req.query;
 
-    // Проверяем кеш
     const cacheKey = 'products';
     let cachedData = cache.get(cacheKey);
 
@@ -121,7 +120,7 @@ app.get('/api/products', async (req, res) => {
           url: '/elements-pagination',
           params: {
             access_token: ALSTYLE_TOKEN,
-            exclude_missing: 'true', // ВАЖНО! Только товары в наличии
+            exclude_missing: 'true',
             limit: 100,
             offset: 0
           }
@@ -170,7 +169,7 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    // Фильтрация "Только новинки"
+    // Только новинки
     if (onlyNew === 'true') {
       filteredProducts = filteredProducts.filter(product => product.isnew === 1);
     }
@@ -241,9 +240,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// ============================================
 // SINGLE PRODUCT
-// ============================================
 app.get('/api/product/:article', async (req, res) => {
   try {
     const { article } = req.params;
@@ -273,9 +270,7 @@ app.get('/api/product/:article', async (req, res) => {
   }
 });
 
-// ============================================
 // CATEGORIES
-// ============================================
 app.get('/api/categories', async (req, res) => {
   try {
     const cacheKey = 'categories';
@@ -303,9 +298,7 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-// ============================================
-// FILTERS с улучшенной обработкой ошибок
-// ============================================
+// FILTERS с fallback
 app.get('/api/filters', async (req, res) => {
   try {
     const cached = cache.get('filters');
@@ -336,7 +329,7 @@ app.get('/api/filters', async (req, res) => {
     } catch (brandError) {
       console.log('⚠️  Не удалось загрузить бренды из API, используем кеш товаров');
       
-      // Fallback: берем бренды из закешированных товаров
+      // Fallback
       const cachedProducts = cache.get('products');
       if (cachedProducts && cachedProducts.elements) {
         const uniqueBrands = new Set();
@@ -350,7 +343,7 @@ app.get('/api/filters', async (req, res) => {
       }
     }
 
-    // Получаем диапазон цен из кеша товаров
+    // Диапазон цен
     const cachedProducts = cache.get('products');
     if (cachedProducts && cachedProducts.elements) {
       const prices = cachedProducts.elements
@@ -375,8 +368,6 @@ app.get('/api/filters', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Ошибка фильтров:', error.message);
-    
-    // Возвращаем минимальные данные вместо ошибки
     res.json({
       brands: [],
       priceRange: { min: 0, max: 1000000 }
@@ -384,9 +375,7 @@ app.get('/api/filters', async (req, res) => {
   }
 });
 
-// ============================================
-// SEARCH (автодополнение)
-// ============================================
+// SEARCH
 app.get('/api/search', async (req, res) => {
   try {
     const { q } = req.query;
