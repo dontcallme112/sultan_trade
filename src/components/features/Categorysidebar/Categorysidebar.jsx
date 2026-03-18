@@ -2,8 +2,65 @@ import { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../../../api/client';
 import './Categorysidebar.css';
 
+// Группы категорий: ключ = название группы, value = массив ключевых слов
+const CATEGORY_GROUPS = [
+  {
+    id: 'phones',
+    name: 'Телефоны и планшеты',
+    icon: '📱',
+    keywords: ['телефон', 'смартфон', 'планшет', 'tablet', 'iphone', 'samsung', 'ipad'],
+  },
+  {
+    id: 'computers',
+    name: 'Компьютеры и ноутбуки',
+    icon: '💻',
+    keywords: ['ноутбук', 'laptop', 'компьютер', 'пк', 'моноблок', 'системн'],
+  },
+  {
+    id: 'accessories',
+    name: 'Аксессуары',
+    icon: '🎧',
+    keywords: ['наушник', 'headphone', 'колонк', 'speaker', 'клавиатур', 'keyboard', 'мыш', 'mouse', 'чехол', 'case', 'наклад', 'защит', 'кабел', 'провод', 'зарядн', 'адаптер', 'аудио', 'микрофон'],
+  },
+  {
+    id: 'tv_monitors',
+    name: 'Телевизоры и мониторы',
+    icon: '🖥️',
+    keywords: ['монитор', 'дисплей', 'тв', 'телевизор', 'проектор'],
+  },
+  {
+    id: 'photo_video',
+    name: 'Фото и видео',
+    icon: '📷',
+    keywords: ['камер', 'фото', 'видео', 'объектив', 'штатив', 'экшн'],
+  },
+  {
+    id: 'wearables',
+    name: 'Умные устройства',
+    icon: '⌚',
+    keywords: ['часы', 'watch', 'браслет', 'фитнес', 'умн', 'smart'],
+  },
+  {
+    id: 'gaming',
+    name: 'Игры и консоли',
+    icon: '🎮',
+    keywords: ['игров', 'game', 'консол', 'playstation', 'xbox', 'nintendo'],
+  },
+];
+
+// Определяем группу для категории по её названию
+function getGroupId(categoryName) {
+  const name = categoryName.toLowerCase();
+  for (const group of CATEGORY_GROUPS) {
+    if (group.keywords.some(kw => name.includes(kw))) {
+      return group.id;
+    }
+  }
+  return 'other';
+}
+
 export default function CategorySidebar({ onCategoryChange, activeCategory }) {
-  const [categories, setCategories] = useState([]);
+  const [groupCounts, setGroupCounts] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,36 +73,42 @@ export default function CategorySidebar({ onCategoryChange, activeCategory }) {
       const response = await fetch(`${BACKEND_URL}/api/categories`);
       let data = await response.json();
 
-      // Проверяем формат
       if (!Array.isArray(data)) {
-        if (data && data.data && Array.isArray(data.data)) {
-          data = data.data;
-        } else if (data && typeof data === 'object') {
-          data = Object.values(data);
-        } else {
-          data = [];
-        }
+        if (data?.data && Array.isArray(data.data)) data = data.data;
+        else if (data && typeof data === 'object') data = Object.values(data);
+        else data = [];
       }
 
-      // Фильтруем только категории с товарами
-      const categoriesWithProducts = data.filter(cat => cat.elements > 0);
+      // Считаем суммарное количество товаров по группам
+      const counts = {};
+      let otherCount = 0;
 
-      setCategories(categoriesWithProducts);
-      console.log('✅ Категорий загружено:', categoriesWithProducts.length);
+      data.filter(cat => cat.elements > 0).forEach(cat => {
+        const groupId = getGroupId(cat.name);
+        if (groupId === 'other') {
+          otherCount += cat.elements;
+        } else {
+          counts[groupId] = (counts[groupId] || 0) + cat.elements;
+        }
+      });
+
+      if (otherCount > 0) counts['other'] = otherCount;
+
+      setGroupCounts(counts);
+      console.log('✅ Групп загружено:', Object.keys(counts).length);
     } catch (error) {
       console.error('❌ Ошибка загрузки категорий:', error);
-      setCategories([]);
+      setGroupCounts({});
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCategoryClick = (categoryId) => {
-    if (activeCategory === categoryId) {
-      // Если уже выбрана - сбрасываем
+  const handleGroupClick = (groupId) => {
+    if (activeCategory === groupId) {
       onCategoryChange(null);
     } else {
-      onCategoryChange(categoryId);
+      onCategoryChange(groupId);
     }
   };
 
@@ -63,21 +126,23 @@ export default function CategorySidebar({ onCategoryChange, activeCategory }) {
     );
   }
 
+  // Показываем только группы, у которых есть товары
+  const visibleGroups = CATEGORY_GROUPS.filter(g => groupCounts[g.id]);
+  const hasOther = !!groupCounts['other'];
+
   return (
     <div className="category-sidebar">
       <div className="sidebar-header">
         <h3>Категории</h3>
         {activeCategory && (
-          <button 
-            className="reset-btn"
-            onClick={() => onCategoryChange(null)}
-          >
+          <button className="reset-btn" onClick={() => onCategoryChange(null)}>
             Сбросить
           </button>
         )}
       </div>
 
       <div className="categories-list">
+        {/* Все товары */}
         <button
           className={`category-item ${!activeCategory ? 'active' : ''}`}
           onClick={() => onCategoryChange(null)}
@@ -88,49 +153,35 @@ export default function CategorySidebar({ onCategoryChange, activeCategory }) {
           </div>
         </button>
 
-        {categories.map((category) => (
+        {/* Группы */}
+        {visibleGroups.map((group) => (
           <button
-            key={category.id}
-            className={`category-item ${activeCategory === category.id.toString() ? 'active' : ''}`}
-            onClick={() => handleCategoryClick(category.id.toString())}
+            key={group.id}
+            className={`category-item ${activeCategory === group.id ? 'active' : ''}`}
+            onClick={() => handleGroupClick(group.id)}
           >
-            <span className="category-icon">
-              {getCategoryIcon(category.name)}
-            </span>
+            <span className="category-icon">{group.icon}</span>
             <div className="category-info">
-              <span className="category-name">{category.name}</span>
-              <span className="category-count">{category.elements} товаров</span>
+              <span className="category-name">{group.name}</span>
+              <span className="category-count">{groupCounts[group.id]} товаров</span>
             </div>
           </button>
         ))}
+
+        {/* Прочее */}
+        {hasOther && (
+          <button
+            className={`category-item ${activeCategory === 'other' ? 'active' : ''}`}
+            onClick={() => handleGroupClick('other')}
+          >
+            <span className="category-icon">📦</span>
+            <div className="category-info">
+              <span className="category-name">Прочее</span>
+              <span className="category-count">{groupCounts['other']} товаров</span>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );
-}
-
-// Функция для иконок категорий
-function getCategoryIcon(categoryName) {
-  const name = categoryName.toLowerCase();
-  
-  if (name.includes('телефон') || name.includes('смартфон')) return '📱';
-  if (name.includes('планшет') || name.includes('tablet')) return '📲';
-  if (name.includes('ноутбук') || name.includes('laptop')) return '💻';
-  if (name.includes('компьютер') || name.includes('пк')) return '🖥️';
-  if (name.includes('наушник') || name.includes('headphone')) return '🎧';
-  if (name.includes('колонк') || name.includes('speaker')) return '🔊';
-  if (name.includes('клавиатур') || name.includes('keyboard')) return '⌨️';
-  if (name.includes('мыш') || name.includes('mouse')) return '🖱️';
-  if (name.includes('монитор') || name.includes('дисплей')) return '🖥️';
-  if (name.includes('кабел') || name.includes('провод')) return '🔌';
-  if (name.includes('зарядн') || name.includes('адаптер')) return '🔋';
-  if (name.includes('чехол') || name.includes('case')) return '📱';
-  if (name.includes('наклад') || name.includes('защит')) return '🛡️';
-  if (name.includes('камер')) return '📷';
-  if (name.includes('тв') || name.includes('телевизор')) return '📺';
-  if (name.includes('часы') || name.includes('watch')) return '⌚';
-  if (name.includes('игров') || name.includes('game')) return '🎮';
-  if (name.includes('аудио')) return '🎵';
-  if (name.includes('видео')) return '📹';
-  
-  return '📦'; // По умолчанию
 }
