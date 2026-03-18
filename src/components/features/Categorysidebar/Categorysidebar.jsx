@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BACKEND_URL } from '../../../api/client';
-import './CategorySideBar.css'
+import './Categorysidebar.css';
 
 export default function CategorySidebar({ onCategoryChange, activeCategory }) {
   const [categories, setCategories] = useState([]);
