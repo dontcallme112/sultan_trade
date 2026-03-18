@@ -16,19 +16,32 @@ export default function Catalog() {
 
   const LIMIT = 12;
 
-  // activeCategory — groupId для подсветки в сайдбаре (например 'tv_monitors')
-  // activeCategoryIds — реальные числовые ID для запроса (например ['3510', '3786'])
+  // Читаем из URL:
+  // group=phones — groupId для подсветки в сайдбаре
+  // category=3638&category=3641 — реальные ID для запроса
   const [activeCategory, setActiveCategory] = useState(
-    searchParams.get('category') || null
+    searchParams.get('group') || null
   );
-  const [activeCategoryIds, setActiveCategoryIds] = useState([]);
+  const [activeCategoryIds, setActiveCategoryIds] = useState(
+    searchParams.getAll('category') || []
+  );
 
   const searchQuery = searchParams.get('search') || null;
   const sortBy = searchParams.get('sortBy') || 'default';
 
   useEffect(() => {
+    setOffset(0);
     loadProducts(true);
   }, [activeCategoryIds, searchQuery, sortBy]);
+
+  // Синхронизация при изменении URL извне (например, переход с Home)
+  useEffect(() => {
+    const groupFromUrl = searchParams.get('group') || null;
+    const idsFromUrl = searchParams.getAll('category') || [];
+
+    setActiveCategory(groupFromUrl);
+    setActiveCategoryIds(idsFromUrl);
+  }, [searchParams]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -37,7 +50,6 @@ export default function Catalog() {
 
       const currentOffset = reset ? 0 : offset;
 
-      // Строим params вручную — категории передаём как ?category=3&category=7
       const params = new URLSearchParams();
       params.set('limit', LIMIT);
       params.set('offset', currentOffset);
@@ -74,15 +86,15 @@ export default function Catalog() {
     }
   };
 
-  // CategorySidebar передаёт (groupId, realCategoryIds[])
+  // Вызывается из CategorySidebar: (groupId, realIds[])
   const handleCategoryChange = (groupId, categoryIds) => {
     setActiveCategory(groupId);
     setActiveCategoryIds(categoryIds || []);
     setOffset(0);
 
-    // Сохраняем groupId в URL только для отображения
     const params = new URLSearchParams();
-    if (groupId) params.set('category', groupId);
+    if (groupId) params.set('group', groupId);
+    if (categoryIds?.length) categoryIds.forEach(id => params.append('category', id));
     if (searchQuery) params.set('search', searchQuery);
     if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
     setSearchParams(params);
@@ -91,7 +103,8 @@ export default function Catalog() {
   const handleSortChange = (e) => {
     const newSort = e.target.value;
     const params = new URLSearchParams();
-    if (activeCategory) params.set('category', activeCategory);
+    if (activeCategory) params.set('group', activeCategory);
+    activeCategoryIds.forEach(id => params.append('category', id));
     if (searchQuery) params.set('search', searchQuery);
     if (newSort && newSort !== 'default') params.set('sortBy', newSort);
     setSearchParams(params);
@@ -150,7 +163,6 @@ export default function Catalog() {
             </p>
           </div>
 
-          {/* Сортировка */}
           <div className="catalog-sort">
             <label htmlFor="sort">Сортировка:</label>
             <select

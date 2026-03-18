@@ -4,10 +4,63 @@ import { BACKEND_URL } from '../../api/client';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
 import './Home.css';
 
+// Те же группы что и в CategorySidebar
+const CATEGORY_GROUPS = [
+  { id: 'phones',      keywords: ['телефон', 'смартфон', 'планшет', 'tablet', 'iphone', 'ipad'] },
+  { id: 'computers',   keywords: ['ноутбук', 'laptop', 'компьютер', 'пк', 'моноблок', 'системн'] },
+  { id: 'accessories', keywords: ['наушник', 'headphone', 'колонк', 'speaker', 'клавиатур', 'keyboard', 'мыш', 'mouse', 'чехол', 'case', 'наклад', 'защит', 'кабел', 'провод', 'зарядн', 'адаптер', 'аудио', 'микрофон'] },
+  { id: 'tv_monitors', keywords: ['монитор', 'дисплей', 'тв', 'телевизор', 'проектор'] },
+  { id: 'photo_video', keywords: ['камер', 'фото', 'видео', 'объектив', 'штатив', 'экшн'] },
+  { id: 'wearables',   keywords: ['часы', 'watch', 'браслет', 'фитнес', 'умн', 'smart'] },
+  { id: 'gaming',      keywords: ['игров', 'game', 'консол', 'playstation', 'xbox', 'nintendo'] },
+];
+
+function getGroupId(categoryName) {
+  const name = categoryName.toLowerCase();
+  for (const group of CATEGORY_GROUPS) {
+    if (group.keywords.some(kw => name.includes(kw))) return group.id;
+  }
+  return 'other';
+}
+
+// Отображение категорий на главной
+const HOME_CATEGORIES = [
+  {
+    groupId: 'phones',
+    icon: '📱',
+    displayName: 'Смартфоны',
+    color: '#B8860B',
+    gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)'
+  },
+  {
+    groupId: 'computers',
+    icon: '💻',
+    displayName: 'Ноутбуки',
+    color: '#8B4513',
+    gradient: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)'
+  },
+  {
+    groupId: 'accessories',
+    icon: '🎧',
+    displayName: 'Аксессуары',
+    color: '#4169E1',
+    gradient: 'linear-gradient(135deg, #4169E1 0%, #1E90FF 100%)'
+  },
+  {
+    groupId: 'gaming',
+    icon: '🎮',
+    displayName: 'Игры и консоли',
+    color: '#32CD32',
+    gradient: 'linear-gradient(135deg, #32CD32 0%, #00FA9A 100%)'
+  },
+];
+
 export default function Home() {
   const [categories, setCategories] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // groupId → реальные ID категорий из API
+  const [groupCategoryIds, setGroupCategoryIds] = useState({});
 
   useEffect(() => {
     loadCategories();
@@ -19,79 +72,33 @@ export default function Home() {
       const response = await fetch(`${BACKEND_URL}/api/categories`);
       let data = await response.json();
 
-      // Проверяем что data это массив
       if (!Array.isArray(data)) {
-        console.warn('⚠️ Категории не массив:', typeof data);
-        
-        if (data && data.data && Array.isArray(data.data)) {
-          data = data.data;
-        } else if (data && typeof data === 'object') {
-          data = Object.values(data);
-        } else {
-          data = [];
-        }
+        if (data?.data && Array.isArray(data.data)) data = data.data;
+        else if (data && typeof data === 'object') data = Object.values(data);
+        else data = [];
       }
 
-      console.log('✅ Категорий получено:', data.length);
-      
-      const categoryMapping = [
-        { 
-          keyword: ['телефон', 'смартфон', 'мобильн'], 
-          icon: '📱', 
-          displayName: 'Смартфоны',
-          color: '#B8860B',
-          gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)'
-        },
-        { 
-          keyword: ['ноутбук', 'laptop', 'компьютер'], 
-          icon: '💻', 
-          displayName: 'Ноутбуки',
-          color: '#8B4513',
-          gradient: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)'
-        },
-        { 
-          keyword: ['наушник', 'headphone', 'audio', 'колонк'], 
-          icon: '🎧', 
-          displayName: 'Наушники',
-          color: '#4169E1',
-          gradient: 'linear-gradient(135deg, #4169E1 0%, #1E90FF 100%)'
-        },
-        { 
-          keyword: ['кабел', 'зарядн', 'адаптер', 'аксессуар', 'чехол'], 
-          icon: '🔌', 
-          displayName: 'Аксессуары',
-          color: '#32CD32',
-          gradient: 'linear-gradient(135deg, #32CD32 0%, #00FA9A 100%)'
-        }
-      ];
-
-      const mappedCategories = categoryMapping.map(mapping => {
-        const foundCategory = Array.isArray(data) ? data.find(cat => 
-          cat && cat.name && mapping.keyword.some(keyword => 
-            cat.name.toLowerCase().includes(keyword)
-          )
-        ) : null;
-
-        return {
-          id: foundCategory?.id || null,
-          name: mapping.displayName,
-          icon: mapping.icon,
-          color: mapping.color,
-          gradient: mapping.gradient,
-          apiName: foundCategory?.name || null
-        };
+      // Строим карту groupId → [id1, id2, ...]
+      const grouped = {};
+      data.filter(cat => cat.elements > 0).forEach(cat => {
+        const groupId = getGroupId(cat.name);
+        if (!grouped[groupId]) grouped[groupId] = [];
+        grouped[groupId].push(cat.id.toString());
       });
 
-      setCategories(mappedCategories);
-      
+      setGroupCategoryIds(grouped);
+
+      // Формируем категории для отображения
+      const mapped = HOME_CATEGORIES.map(cat => ({
+        ...cat,
+        categoryIds: grouped[cat.groupId] || [],
+      }));
+
+      setCategories(mapped);
+      console.log('✅ Категорий с ID:', grouped);
     } catch (error) {
       console.error('Error loading categories:', error);
-      setCategories([
-        { id: null, name: 'Смартфоны', icon: '📱', color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)' },
-        { id: null, name: 'Ноутбуки', icon: '💻', color: '#8B4513', gradient: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)' },
-        { id: null, name: 'Наушники', icon: '🎧', color: '#4169E1', gradient: 'linear-gradient(135deg, #4169E1 0%, #1E90FF 100%)' },
-        { id: null, name: 'Аксессуары', icon: '🔌', color: '#32CD32', gradient: 'linear-gradient(135deg, #32CD32 0%, #00FA9A 100%)' }
-      ]);
+      setCategories(HOME_CATEGORIES.map(c => ({ ...c, categoryIds: [] })));
     }
   };
 
@@ -109,9 +116,19 @@ export default function Home() {
     }
   };
 
+  // Строим URL для каталога: передаём groupId и все реальные ID
+  // Например: /catalog?group=phones&category=3638&category=3641
+  const buildCatalogUrl = (cat) => {
+    if (!cat.categoryIds || cat.categoryIds.length === 0) return '/catalog';
+    const params = new URLSearchParams();
+    params.set('group', cat.groupId);
+    cat.categoryIds.forEach(id => params.append('category', id));
+    return `/catalog?${params.toString()}`;
+  };
+
   return (
     <div className="home-page">
-      {/* Hero Section - Премиум */}
+      {/* Hero Section */}
       <section className="hero">
         <div className="hero-background">
           <div className="hero-gradient"></div>
@@ -192,7 +209,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Categories Section - Улучшенная */}
+      {/* Categories Section */}
       <section className="categories">
         <div className="container">
           <div className="section-header">
@@ -206,11 +223,11 @@ export default function Home() {
 
           <div className="categories-grid">
             {categories.map((category, index) => (
-              <Link 
-                to={category.id ? `/catalog?category=${category.id}` : '/catalog'} 
+              <Link
+                to={buildCatalogUrl(category)}
                 key={index}
                 className="category-card"
-                style={{ 
+                style={{
                   '--category-color': category.color,
                   '--category-gradient': category.gradient,
                   '--animation-delay': `${index * 0.1}s`
@@ -220,9 +237,9 @@ export default function Home() {
                 <div className="category-icon-wrapper">
                   <div className="category-icon">{category.icon}</div>
                 </div>
-                <h3 className="category-name">{category.name}</h3>
-                {category.apiName && (
-                  <p className="category-description">{category.apiName}</p>
+                <h3 className="category-name">{category.displayName}</h3>
+                {category.categoryIds?.length > 0 && (
+                  <p className="category-description">{category.categoryIds.length} категор.</p>
                 )}
                 <div className="category-arrow">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -235,7 +252,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products - Новинки */}
+      {/* Featured Products */}
       <section className="featured-products">
         <div className="container">
           <div className="section-header">
@@ -267,7 +284,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features - Преимущества */}
+      {/* Features */}
       <section className="features">
         <div className="container">
           <div className="features-grid">
@@ -278,11 +295,8 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="feature-title">Гарантия качества</h3>
-              <p className="feature-text">
-                Официальная гарантия от производителя на всю продукцию. Проверка при получении.
-              </p>
+              <p className="feature-text">Официальная гарантия от производителя на всю продукцию. Проверка при получении.</p>
             </div>
-
             <div className="feature-card">
               <div className="feature-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -293,11 +307,8 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="feature-title">Быстрая доставка</h3>
-              <p className="feature-text">
-                Доставка по Алматы в течение 1-2 дней. Бесплатно от 50 000 ₸.
-              </p>
+              <p className="feature-text">Доставка по Алматы в течение 1-2 дней. Бесплатно от 50 000 ₸.</p>
             </div>
-
             <div className="feature-card">
               <div className="feature-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -306,15 +317,13 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="feature-title">Поддержка 24/7</h3>
-              <p className="feature-text">
-                Профессиональная консультация в любое время. Всегда на связи.
-              </p>
+              <p className="feature-text">Профессиональная консультация в любое время. Всегда на связи.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section - Призыв к действию */}
+      {/* CTA */}
       <section className="cta-section">
         <div className="cta-background">
           <div className="cta-gradient"></div>
@@ -322,9 +331,7 @@ export default function Home() {
         <div className="container">
           <div className="cta-content">
             <h2 className="cta-title">Готовы начать покупки?</h2>
-            <p className="cta-subtitle">
-              Более 1000 товаров от ведущих мировых брендов с доставкой по Казахстану
-            </p>
+            <p className="cta-subtitle">Более 1000 товаров от ведущих мировых брендов с доставкой по Казахстану</p>
             <Link to="/catalog" className="btn btn-primary btn-lg">
               Перейти в каталог
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
