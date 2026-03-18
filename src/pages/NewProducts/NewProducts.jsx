@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
-import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
+import CategorySidebar from '../../components/features/CategorySidebar/CategorySidebar';
 import { BACKEND_URL } from '../../api/client';
 import './NewProducts.css';
 
@@ -16,20 +16,14 @@ export default function NewProducts() {
 
   const LIMIT = 12;
 
-  // Дата 3 месяца назад
-  const getThreeMonthsAgo = () => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - 3);
-    return date.toISOString().split('T')[0]; // формат YYYY-MM-DD
-  };
-
-  const [activeCategory, setActiveCategory] = useState(
-    searchParams.get('category') || null
-  );
+  // activeCategory — groupId для подсветки в сайдбаре
+  // activeCategoryIds — реальные ID категорий из al-style (массив строк)
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategoryIds, setActiveCategoryIds] = useState([]);
 
   useEffect(() => {
     loadProducts(true);
-  }, [activeCategory]);
+  }, [activeCategoryIds]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -37,14 +31,15 @@ export default function NewProducts() {
       setError(null);
 
       const currentOffset = reset ? 0 : offset;
-      const params = new URLSearchParams({
-        limit: LIMIT,
-        offset: currentOffset,
-        onlyNew: 'true',
-        dateFrom: getThreeMonthsAgo(), // ← фильтр по дате: последние 3 месяца
-      });
 
-      if (activeCategory) params.append('category', activeCategory);
+      // Строим URL вручную — категории передаём как ?category=3&category=7&category=12
+      // Это стандарт для express req.query (даёт массив)
+      const params = new URLSearchParams();
+      params.set('limit', LIMIT);
+      params.set('offset', currentOffset);
+      params.set('onlyNew', 'true');
+
+      activeCategoryIds.forEach(id => params.append('category', id));
 
       console.log('🆕 Loading new products:', params.toString());
 
@@ -72,13 +67,14 @@ export default function NewProducts() {
     }
   };
 
-  const handleCategoryChange = (categoryId) => {
-    setActiveCategory(categoryId);
+  // groupId — для подсветки, categoryIds — реальные ID для запроса
+  const handleCategoryChange = (groupId, categoryIds) => {
+    setActiveCategory(groupId);
+    setActiveCategoryIds(categoryIds || []);
     setOffset(0);
 
-    // Обновляем URL
     const params = new URLSearchParams();
-    if (categoryId) params.set('category', categoryId);
+    if (groupId) params.set('group', groupId);
     setSearchParams(params);
   };
 
@@ -132,7 +128,7 @@ export default function NewProducts() {
               <h1 className="new-products-title">Новинки</h1>
               <p className="new-products-subtitle">
                 {totalCount > 0
-                  ? `Найдено новинок за последние 3 месяца: ${totalCount}`
+                  ? `Найдено новинок: ${totalCount}`
                   : 'Новинки не найдены'}
               </p>
             </div>
@@ -141,7 +137,6 @@ export default function NewProducts() {
 
         {/* Main Content */}
         <div className="catalog-content">
-          {/* Sidebar with Categories */}
           <aside className="catalog-sidebar">
             <CategorySidebar
               onCategoryChange={handleCategoryChange}
@@ -149,9 +144,8 @@ export default function NewProducts() {
             />
           </aside>
 
-          {/* Products Grid */}
           <div className="catalog-main">
-            {products.length === 0 ? (
+            {products.length === 0 && !loading ? (
               <div className="catalog-empty">
                 <div className="empty-icon">
                   <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -162,7 +156,7 @@ export default function NewProducts() {
                 <p>Попробуйте выбрать другую категорию</p>
                 <button
                   className="btn btn-primary"
-                  onClick={() => handleCategoryChange(null)}
+                  onClick={() => handleCategoryChange(null, null)}
                 >
                   Показать все новинки
                 </button>
@@ -175,7 +169,6 @@ export default function NewProducts() {
                   ))}
                 </div>
 
-                {/* Load More */}
                 {hasMore && (
                   <div className="load-more-container">
                     <button
@@ -184,10 +177,7 @@ export default function NewProducts() {
                       disabled={loading}
                     >
                       {loading ? (
-                        <>
-                          <span className="btn-loader"></span>
-                          Загрузка...
-                        </>
+                        <><span className="btn-loader"></span>Загрузка...</>
                       ) : (
                         `Показать ещё (${products.length} из ${totalCount})`
                       )}
@@ -195,7 +185,6 @@ export default function NewProducts() {
                   </div>
                 )}
 
-                {/* End of List */}
                 {!hasMore && products.length > 0 && (
                   <div className="end-of-list">
                     <p>Показаны все новинки ({totalCount})</p>
