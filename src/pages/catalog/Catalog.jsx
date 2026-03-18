@@ -16,14 +16,19 @@ export default function Catalog() {
 
   const LIMIT = 12;
 
-  // Активная категория из URL
-  const activeCategory = searchParams.get('category') || null;
+  // activeCategory — groupId для подсветки в сайдбаре (например 'tv_monitors')
+  // activeCategoryIds — реальные числовые ID для запроса (например ['3510', '3786'])
+  const [activeCategory, setActiveCategory] = useState(
+    searchParams.get('category') || null
+  );
+  const [activeCategoryIds, setActiveCategoryIds] = useState([]);
+
   const searchQuery = searchParams.get('search') || null;
   const sortBy = searchParams.get('sortBy') || 'default';
 
   useEffect(() => {
-    loadProducts(true); // Reset при смене категории
-  }, [activeCategory, searchQuery, sortBy]);
+    loadProducts(true);
+  }, [activeCategoryIds, searchQuery, sortBy]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -31,12 +36,15 @@ export default function Catalog() {
       setError(null);
 
       const currentOffset = reset ? 0 : offset;
-      const params = new URLSearchParams({
-        limit: LIMIT,
-        offset: currentOffset
-      });
 
-      if (activeCategory) params.append('category', activeCategory);
+      // Строим params вручную — категории передаём как ?category=3&category=7
+      const params = new URLSearchParams();
+      params.set('limit', LIMIT);
+      params.set('offset', currentOffset);
+
+      // Передаём реальные числовые ID категорий
+      activeCategoryIds.forEach(id => params.append('category', id));
+
       if (searchQuery) params.append('search', searchQuery);
       if (sortBy && sortBy !== 'default') params.append('sortBy', sortBy);
 
@@ -55,7 +63,7 @@ export default function Catalog() {
         setOffset(prev => prev + LIMIT);
       }
 
-      setTotalCount(data.pagination?.total || 0);
+      setTotalCount(data.pagination?.totalCount || data.pagination?.total || 0);
       setHasMore(data.pagination?.hasMore || false);
 
     } catch (err) {
@@ -66,25 +74,26 @@ export default function Catalog() {
     }
   };
 
-  const handleCategoryChange = (categoryId) => {
+  // CategorySidebar передаёт (groupId, realCategoryIds[])
+  const handleCategoryChange = (groupId, categoryIds) => {
+    setActiveCategory(groupId);
+    setActiveCategoryIds(categoryIds || []);
+    setOffset(0);
+
+    // Сохраняем groupId в URL только для отображения
     const params = new URLSearchParams();
-    
-    if (categoryId) params.set('category', categoryId);
+    if (groupId) params.set('category', groupId);
     if (searchQuery) params.set('search', searchQuery);
     if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
-
     setSearchParams(params);
-    setOffset(0);
   };
 
   const handleSortChange = (e) => {
     const newSort = e.target.value;
     const params = new URLSearchParams();
-    
     if (activeCategory) params.set('category', activeCategory);
     if (searchQuery) params.set('search', searchQuery);
     if (newSort && newSort !== 'default') params.set('sortBy', newSort);
-
     setSearchParams(params);
   };
 
@@ -93,8 +102,10 @@ export default function Catalog() {
   };
 
   const handleClearFilters = () => {
-    setSearchParams(new URLSearchParams());
+    setActiveCategory(null);
+    setActiveCategoryIds([]);
     setOffset(0);
+    setSearchParams(new URLSearchParams());
   };
 
   if (loading && products.length === 0) {
@@ -142,8 +153,8 @@ export default function Catalog() {
           {/* Сортировка */}
           <div className="catalog-sort">
             <label htmlFor="sort">Сортировка:</label>
-            <select 
-              id="sort" 
+            <select
+              id="sort"
               value={sortBy}
               onChange={handleSortChange}
               className="sort-select"
@@ -174,15 +185,13 @@ export default function Catalog() {
 
         {/* Main Content */}
         <div className="catalog-content">
-          {/* Sidebar with Categories */}
           <aside className="catalog-sidebar">
-            <CategorySidebar 
+            <CategorySidebar
               onCategoryChange={handleCategoryChange}
               activeCategory={activeCategory}
             />
           </aside>
 
-          {/* Products Grid */}
           <div className="catalog-main">
             {products.length === 0 ? (
               <div className="catalog-empty">
@@ -194,10 +203,7 @@ export default function Catalog() {
                 </div>
                 <h2>Товары не найдены</h2>
                 <p>Попробуйте выбрать другую категорию или изменить поисковый запрос</p>
-                <button 
-                  className="btn btn-primary"
-                  onClick={handleClearFilters}
-                >
+                <button className="btn btn-primary" onClick={handleClearFilters}>
                   Показать все товары
                 </button>
               </div>
@@ -209,19 +215,15 @@ export default function Catalog() {
                   ))}
                 </div>
 
-                {/* Load More */}
                 {hasMore && (
                   <div className="load-more-container">
-                    <button 
+                    <button
                       className="btn btn-secondary load-more-btn"
                       onClick={handleLoadMore}
                       disabled={loading}
                     >
                       {loading ? (
-                        <>
-                          <span className="btn-loader"></span>
-                          Загрузка...
-                        </>
+                        <><span className="btn-loader"></span>Загрузка...</>
                       ) : (
                         `Показать ещё (${products.length} из ${totalCount})`
                       )}
@@ -229,7 +231,6 @@ export default function Catalog() {
                   </div>
                 )}
 
-                {/* End of List */}
                 {!hasMore && products.length > 0 && (
                   <div className="end-of-list">
                     <p>Показаны все товары ({totalCount})</p>
