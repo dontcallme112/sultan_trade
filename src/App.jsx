@@ -12,10 +12,11 @@ import Checkout from './pages/checkout/Checkout.jsx';
 import NotFound from './pages/NotFound/NotFound.jsx';
 import OrderConfirmation from './pages/OrderConfirmation/OrderConfirmation';
 import NewProducts from './pages/NewProducts/NewProducts';
+import Profile from './pages/Profile/Profile.jsx';
+import AuthCallback from './pages/AuthCallback/AuthCallback.jsx';
 import './styles/globals.css';
 import './styles/variables.css';
 import './styles/animations.css';
-
 
 function App() {
   return (
@@ -32,6 +33,8 @@ function App() {
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
               <Route path="/new" element={<NewProducts />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
             </Routes>
           </main>
           <Footer />
