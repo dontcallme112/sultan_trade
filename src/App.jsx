@@ -35,6 +35,7 @@ function App() {
               <Route path="/new" element={<NewProducts />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/telegram" element={<AuthCallback />} />
             </Routes>
           </main>
           <Footer />
