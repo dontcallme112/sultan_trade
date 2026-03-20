@@ -33,7 +33,7 @@ export default function AuthModal({ onClose }) {
     script.setAttribute('data-telegram-login', TELEGRAM_BOT_NAME);
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '8');
-    script.setAttribute('data-auth-url', `https://sultantrade.vercel.app/auth/telegram`);
+  script.setAttribute('data-auth-url', `https://sultantrade.vercel.app/auth/telegram`);
     script.setAttribute('data-request-access', 'write');
     script.async = true;
 
