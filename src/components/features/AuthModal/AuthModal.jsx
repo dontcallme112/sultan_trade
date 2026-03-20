@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import './AuthModal.css';
 
-const TELEGRAM_BOT_NAME = 'ВАШ_БОТ_USERNAME'; // замените на username вашего бота без @
+const TELEGRAM_BOT_NAME = 'sultan_tradebot'; // замените на username вашего бота без @
 
 export default function AuthModal({ onClose }) {
   const [tab, setTab]           = useState('login');
