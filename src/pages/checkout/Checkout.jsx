@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../api/supabaseClient';
+import { applyMarkup } from '../../utils/priceUtils.js';
 import './Checkout.css';
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { cartItems: cart, getCartTotal, clearCart } = useCart();
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -26,24 +30,59 @@ export default function Checkout() {
 
     const orderId = 'ORD-' + Date.now();
 
+    // Формируем items с правильными ценами (с наценкой)
+    const itemsWithMarkup = (cart || []).map(item => ({
+      article:   item.id || item.article,
+      name:      item.title || item.name,
+      price:     applyMarkup(item.price || 0),
+      quantity:  item.quantity || 1,
+      image_url: item.image || null,
+    }));
+
     const orderData = {
       orderId,
-      customer: formData,
-      items: cart,
-      total: totalPrice,
+      customer:      formData,
+      items:         itemsWithMarkup,
+      total:         totalPrice,
       paymentMethod,
-      status: 'pending',
-      createdAt: new Date().toISOString()
+      status:        'pending',
+      createdAt:     new Date().toISOString()
     };
 
-    console.log('📦 Заказ создан:', orderData);
-
+    // 1. Сохраняем в localStorage (для OrderConfirmation)
     try {
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
       orders.push(orderData);
       localStorage.setItem('orders', JSON.stringify(orders));
-    } catch (error) {
-      console.error('Error saving order:', error);
+    } catch (err) {
+      console.error('localStorage error:', err);
+    }
+
+    // 2. Сохраняем в Supabase
+    try {
+      const { error } = await supabase.from('orders').insert({
+        user_id:      user?.id || null,
+        status:       'pending',
+        items:        itemsWithMarkup,
+        total_price:  totalPrice,
+        address_text: formData.address,
+        comment:      `
+          Имя: ${formData.name}
+          Телефон: ${formData.phone}
+          Email: ${formData.email || '-'}
+          Оплата: ${paymentMethod}
+          Комментарий: ${formData.comment || '-'}
+          ID: ${orderId}
+        `.trim(),
+      });
+
+      if (error) {
+        console.error('❌ Supabase error:', error.message);
+      } else {
+        console.log('✅ Заказ сохранён в Supabase');
+      }
+    } catch (err) {
+      console.error('❌ Supabase save error:', err);
     }
 
     clearCart();
@@ -84,21 +123,18 @@ export default function Checkout() {
               {/* Контактные данные */}
               <div className="form-section">
                 <h2 className="form-section-title">Контактные данные</h2>
-
                 <div className="form-group">
                   <label htmlFor="name">Имя и фамилия *</label>
                   <input type="text" id="name" name="name"
                     value={formData.name} onChange={handleChange}
                     required placeholder="Иван Иванов" />
                 </div>
-
                 <div className="form-group">
                   <label htmlFor="phone">Телефон *</label>
                   <input type="tel" id="phone" name="phone"
                     value={formData.phone} onChange={handleChange}
                     required placeholder="+7 (700) 123-45-67" />
                 </div>
-
                 <div className="form-group">
                   <label htmlFor="email">Email</label>
                   <input type="email" id="email" name="email"
@@ -110,7 +146,6 @@ export default function Checkout() {
               {/* Доставка */}
               <div className="form-section">
                 <h2 className="form-section-title">Адрес доставки</h2>
-
                 <div className="form-group">
                   <label htmlFor="address">Адрес *</label>
                   <textarea id="address" name="address"
@@ -118,7 +153,6 @@ export default function Checkout() {
                     required rows="3"
                     placeholder="Город, улица, дом, квартира" />
                 </div>
-
                 <div className="form-group">
                   <label htmlFor="comment">Комментарий к заказу</label>
                   <textarea id="comment" name="comment"
@@ -130,7 +164,6 @@ export default function Checkout() {
               {/* Способ оплаты */}
               <div className="form-section">
                 <h2 className="form-section-title">Способ оплаты</h2>
-
                 <div className="payment-methods">
                   <label className="payment-method">
                     <input type="radio" name="paymentMethod" value="kaspi"
@@ -196,22 +229,20 @@ export default function Checkout() {
           {/* Сводка заказа */}
           <div className="checkout-summary">
             <h2 className="summary-title">Ваш заказ</h2>
-
             <div className="summary-items">
               {cart.map((item, index) => (
                 <div key={item.id || index} className="summary-item">
                   <img src={item.image || 'https://via.placeholder.com/60'} alt={item.title || item.name} />
                   <div className="summary-item-info">
                     <h4>{item.title || item.name || 'Товар'}</h4>
-                    <p>{item.quantity || 1} × {(item.price || 0).toLocaleString('ru-RU')} ₸</p>
+                    <p>{item.quantity || 1} × {applyMarkup(item.price || 0).toLocaleString('ru-RU')} ₸</p>
                   </div>
                   <div className="summary-item-total">
-                    {((item.price || 0) * (item.quantity || 1)).toLocaleString('ru-RU')} ₸
+                    {(applyMarkup(item.price || 0) * (item.quantity || 1)).toLocaleString('ru-RU')} ₸
                   </div>
                 </div>
               ))}
             </div>
-
             <div className="summary-totals">
               <div className="summary-row">
                 <span>Товары ({itemCount} шт.)</span>
