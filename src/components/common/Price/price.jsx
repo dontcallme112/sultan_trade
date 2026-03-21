@@ -1,18 +1,18 @@
 import React from 'react';
 import './Price.css';
 
-const Price = ({ 
-  value, 
+const Price = ({
+  value,
   size = 'medium',
   showCurrency = true,
   discount = null,
-  oldPrice = null 
+  oldPrice = null
 }) => {
+  // Просто форматируем число — без наценки!
+  // Наценка применяется снаружи через applyMarkup
   const formatPrice = (price) => {
     if (price === 1) return 'Цена по запросу';
-    // Добавляем 10% наценку и округляем до целых
-    const priceWithMarkup = Math.round(price * 1.10); // +10% и округление
-    return priceWithMarkup.toLocaleString('ru-RU');
+    return Math.round(price).toLocaleString('ru-RU');
   };
 
   const sizeClass = `price-${size}`;

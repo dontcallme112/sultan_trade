@@ -65,6 +65,7 @@ const Cart = () => {
                 </div>
 
                 <div className="item-price">
+                  {/* Price уже не добавляет наценку — передаём уже посчитанную цену */}
                   <Price
                     value={applyMarkup(item.price) * item.quantity}
                     size="medium"
@@ -139,7 +140,6 @@ const Cart = () => {
               ← Продолжить покупки
             </Link>
 
-            {/* Trust Badges */}
             <div className="trust-badges">
               <div className="badge-item">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
