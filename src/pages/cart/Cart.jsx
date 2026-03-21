@@ -1,17 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext.jsx';
-import { formatNumber } from '../../utils/priceUtils.js';
+import { formatNumber, applyMarkup } from '../../utils/priceUtils.js';
 import Price from '../../components/common/Price/price.jsx';
 import './Cart.css';
 
 const Cart = () => {
-  const { 
-    cartItems, 
-    removeFromCart, 
-    updateQuantity, 
+  const {
+    cartItems,
+    removeFromCart,
+    updateQuantity,
     getCartTotal,
-    clearCart 
+    clearCart
   } = useCart();
 
   const subtotal = getCartTotal();
@@ -48,8 +48,8 @@ const Cart = () => {
           {/* Cart Items */}
           <div className="cart-items">
             {cartItems.map((item, index) => (
-              <div 
-                key={`${item.id}-${index}`} 
+              <div
+                key={`${item.id}-${index}`}
                 className="cart-item animate-fadeInUp"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
@@ -62,26 +62,19 @@ const Cart = () => {
                     {item.title}
                   </Link>
                   <div className="item-category">{item.category}</div>
-                  
-                  {item.rating && (
-                    <div className="item-rating">
-                      <div className="stars">
-                        {[...Array(5)].map((_, i) => (
-                          <span 
-                            key={i} 
-                            className={`star ${i < Math.floor(item.rating.rate) ? 'filled' : ''}`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                      <span className="rating-count">({item.rating.count})</span>
-                    </div>
-                  )}
+                </div>
+
+                <div className="item-price">
+                  <Price
+                    value={applyMarkup(item.price) * item.quantity}
+                    size="medium"
+                    showCurrency={true}
+                  />
+                  <div className="price-unit">{formatNumber(applyMarkup(item.price))} ₸ за шт.</div>
                 </div>
 
                 <div className="item-quantity">
-                  <button 
+                  <button
                     className="qty-btn"
                     onClick={() => updateQuantity(item.id, item.quantity - 1)}
                     aria-label="Уменьшить количество"
@@ -89,7 +82,7 @@ const Cart = () => {
                     −
                   </button>
                   <span className="qty-display">{item.quantity}</span>
-                  <button 
+                  <button
                     className="qty-btn"
                     onClick={() => updateQuantity(item.id, item.quantity + 1)}
                     aria-label="Увеличить количество"
@@ -98,16 +91,7 @@ const Cart = () => {
                   </button>
                 </div>
 
-                <div className="item-price">
-                  <Price 
-                    value={item.price * item.quantity}
-                    size="medium"
-                    showCurrency={true}
-                  />
-                  <div className="price-unit">{formatNumber(Math.round(item.price * 1.10))} ₸ за шт.</div>
-                </div>
-
-                <button 
+                <button
                   className="remove-btn"
                   onClick={() => removeFromCart(item.id)}
                   aria-label="Удалить товар"
@@ -132,6 +116,10 @@ const Cart = () => {
                 <span>Товары ({cartItems.length})</span>
                 <span>{formatNumber(subtotal)} ₸</span>
               </div>
+              <div className="summary-row">
+                <span>Доставка</span>
+                <span className="free-delivery">Бесплатно</span>
+              </div>
             </div>
 
             <div className="summary-total">
@@ -151,32 +139,22 @@ const Cart = () => {
               ← Продолжить покупки
             </Link>
 
-            {/* Promo Code */}
-            <div className="promo-section">
-              <input 
-                type="text" 
-                placeholder="Промокод"
-                className="promo-input"
-              />
-              <button className="promo-btn">Применить</button>
-            </div>
-
             {/* Trust Badges */}
             <div className="trust-badges">
               <div className="badge-item">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
                 <span>Безопасная оплата</span>
               </div>
               <div className="badge-item">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                 </svg>
                 <span>Быстрая доставка</span>
               </div>
               <div className="badge-item">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="1 4 1 10 7 10"/>
                   <polyline points="23 20 23 14 17 14"/>
                   <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
@@ -186,14 +164,6 @@ const Cart = () => {
             </div>
           </aside>
         </div>
-
-        {/* Recommended Products */}
-        <section className="recommended-section">
-          <h3 className="section-title">Вам может понравиться</h3>
-          <div className="recommended-message">
-            <p>Рекомендуемые товары появятся здесь</p>
-          </div>
-        </section>
       </div>
     </div>
   );
