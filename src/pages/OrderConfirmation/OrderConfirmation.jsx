@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { applyMarkup } from '../../utils/priceUtils.js';
 import './OrderConfirmation.css';
 
 export default function OrderConfirmation() {
@@ -10,27 +9,31 @@ export default function OrderConfirmation() {
   const { clearCart } = useCart();
   const [order, setOrder] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [copiedComment, setCopiedComment] = useState(false);
 
-  // ВАШ НОМЕР KASPI (замените на реальный!)
-  const KASPI_PHONE = '+7 700 123 45 67';
-  const KASPI_NAME = 'LUXE Electronics';
+  // Замените на ваши реальные данные
+  const KASPI_PHONE = '+7 700 278 82 08';
+  const KASPI_NAME = 'ТОО "Султан Trade LD"';
 
   useEffect(() => {
-    // Загружаем заказ из localStorage
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     const foundOrder = orders.find(o => o.orderId === orderId);
-    
     if (foundOrder) {
       setOrder(foundOrder);
-      // Очищаем корзину
       clearCart();
     }
-  }, [orderId, clearCart]);
+  }, [orderId]);
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+  const copyPhone = () => {
+    navigator.clipboard.writeText(KASPI_PHONE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyComment = () => {
+    navigator.clipboard.writeText(`Заказ ${orderId}`);
+    setCopiedComment(true);
+    setTimeout(() => setCopiedComment(false), 2000);
   };
 
   if (!order) {
@@ -47,6 +50,7 @@ export default function OrderConfirmation() {
     <div className="order-confirmation-page">
       <div className="container">
         <div className="confirmation-content">
+
           {/* Успех */}
           <div className="success-header">
             <div className="success-icon">
@@ -63,7 +67,7 @@ export default function OrderConfirmation() {
           {order.paymentMethod === 'kaspi' && (
             <div className="payment-section kaspi-payment">
               <h2>Оплата через Kaspi</h2>
-              
+
               <div className="kaspi-instructions">
                 <div className="kaspi-step">
                   <div className="step-number">1</div>
@@ -78,16 +82,8 @@ export default function OrderConfirmation() {
                   <div className="step-content">
                     <h3>Переведите на номер</h3>
                     <div className="kaspi-phone-block">
-                      <input 
-                        type="text" 
-                        value={KASPI_PHONE} 
-                        readOnly 
-                        className="kaspi-phone"
-                      />
-                      <button 
-                        className="copy-btn"
-                        onClick={() => copyToClipboard(KASPI_PHONE)}
-                      >
+                      <input type="text" value={KASPI_PHONE} readOnly className="kaspi-phone" />
+                      <button className="copy-btn" onClick={copyPhone}>
                         {copied ? '✓' : 'Копировать'}
                       </button>
                     </div>
@@ -110,17 +106,9 @@ export default function OrderConfirmation() {
                   <div className="step-content">
                     <h3>В комментарии укажите</h3>
                     <div className="kaspi-comment-block">
-                      <input 
-                        type="text" 
-                        value={`Заказ ${orderId}`} 
-                        readOnly 
-                        className="kaspi-comment"
-                      />
-                      <button 
-                        className="copy-btn"
-                        onClick={() => copyToClipboard(`Заказ ${orderId}`)}
-                      >
-                        Копировать
+                      <input type="text" value={`Заказ ${orderId}`} readOnly className="kaspi-comment" />
+                      <button className="copy-btn" onClick={copyComment}>
+                        {copiedComment ? '✓' : 'Копировать'}
                       </button>
                     </div>
                   </div>
@@ -159,7 +147,7 @@ export default function OrderConfirmation() {
           {/* Детали заказа */}
           <div className="order-details">
             <h2>Детали заказа</h2>
-            
+
             <div className="order-info-grid">
               <div className="info-block">
                 <h4>Покупатель</h4>
@@ -167,12 +155,10 @@ export default function OrderConfirmation() {
                 <p>{order.customer.phone}</p>
                 {order.customer.email && <p>{order.customer.email}</p>}
               </div>
-
               <div className="info-block">
                 <h4>Адрес доставки</h4>
                 <p>{order.customer.address}</p>
               </div>
-
               {order.customer.comment && (
                 <div className="info-block">
                   <h4>Комментарий</h4>
@@ -183,15 +169,16 @@ export default function OrderConfirmation() {
 
             <div className="order-items">
               <h4>Товары ({order.items.length})</h4>
-              {order.items.map((item) => (
-                <div key={item.id} className="order-item">
-                  <img src={item.image} alt={item.name} />
+              {order.items.map((item, index) => (
+                <div key={item.article || index} className="order-item">
+                  <img src={item.image_url || item.image} alt={item.name} />
                   <div className="order-item-info">
                     <h5>{item.name}</h5>
-                    <p>{item.quantity} × {applyMarkup(item.price).toLocaleString('ru-RU')} ₸</p>
+                    {/* item.price уже с наценкой — не применяем applyMarkup повторно */}
+                    <p>{item.quantity} × {(item.price || 0).toLocaleString('ru-RU')} ₸</p>
                   </div>
                   <div className="order-item-total">
-                    {(applyMarkup(item.price) * item.quantity).toLocaleString('ru-RU')} ₸
+                    {((item.price || 0) * item.quantity).toLocaleString('ru-RU')} ₸
                   </div>
                 </div>
               ))}
@@ -205,16 +192,10 @@ export default function OrderConfirmation() {
 
           {/* Действия */}
           <div className="confirmation-actions">
-            <button 
-              className="btn btn-primary btn-lg"
-              onClick={() => navigate('/')}
-            >
+            <button className="btn btn-primary btn-lg" onClick={() => navigate('/')}>
               Вернуться на главную
             </button>
-            <button 
-              className="btn btn-secondary btn-lg"
-              onClick={() => navigate('/catalog')}
-            >
+            <button className="btn btn-secondary btn-lg" onClick={() => navigate('/catalog')}>
               Продолжить покупки
             </button>
           </div>
