@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
+import { applyMarkup } from '../../utils/priceUtils.js';
 import './OrderConfirmation.css';
 
 export default function OrderConfirmation() {
@@ -187,10 +188,10 @@ export default function OrderConfirmation() {
                   <img src={item.image} alt={item.name} />
                   <div className="order-item-info">
                     <h5>{item.name}</h5>
-                    <p>{item.quantity} × {item.price.toLocaleString('ru-RU')} ₸</p>
+                    <p>{item.quantity} × {applyMarkup(item.price).toLocaleString('ru-RU')} ₸</p>
                   </div>
                   <div className="order-item-total">
-                    {(item.price * item.quantity).toLocaleString('ru-RU')} ₸
+                    {(applyMarkup(item.price) * item.quantity).toLocaleString('ru-RU')} ₸
                   </div>
                 </div>
               ))}
