@@ -4,6 +4,7 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../api/supabaseClient';
 import { applyMarkup } from '../../utils/priceUtils.js';
+import { BACKEND_URL } from '../../api/client';
 import './Checkout.css';
 
 export default function Checkout() {
@@ -20,6 +21,7 @@ export default function Checkout() {
   });
   const [paymentMethod, setPaymentMethod] = useState('kaspi');
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
 
   const totalPrice = getCartTotal ? getCartTotal() : 0;
   const itemCount = cart ? cart.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
@@ -30,7 +32,6 @@ export default function Checkout() {
 
     const orderId = 'ORD-' + Date.now();
 
-    // Формируем items с правильными ценами (с наценкой)
     const itemsWithMarkup = (cart || []).map(item => ({
       article:   item.id || item.article,
       name:      item.title || item.name,
@@ -49,7 +50,7 @@ export default function Checkout() {
       createdAt:     new Date().toISOString()
     };
 
-    // 1. Сохраняем в localStorage (для OrderConfirmation)
+    // 1. Сохраняем в localStorage для страницы подтверждения
     try {
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
       orders.push(orderData);
@@ -59,6 +60,7 @@ export default function Checkout() {
     }
 
     // 2. Сохраняем в Supabase
+    setLoadingStep('Сохраняем заказ...');
     try {
       const { error } = await supabase.from('orders').insert({
         user_id:      user?.id || null,
@@ -66,27 +68,55 @@ export default function Checkout() {
         items:        itemsWithMarkup,
         total_price:  totalPrice,
         address_text: formData.address,
-        comment:      `
-          Имя: ${formData.name}
-          Телефон: ${formData.phone}
-          Email: ${formData.email || '-'}
-          Оплата: ${paymentMethod}
-          Комментарий: ${formData.comment || '-'}
-          ID: ${orderId}
-        `.trim(),
+        comment:      `Имя: ${formData.name} | Тел: ${formData.phone} | Email: ${formData.email || '-'} | Оплата: ${paymentMethod} | Комментарий: ${formData.comment || '-'} | ID: ${orderId}`,
       });
-
-      if (error) {
-        console.error('❌ Supabase error:', error.message);
-      } else {
-        console.log('✅ Заказ сохранён в Supabase');
-      }
+      if (error) console.error('❌ Supabase error:', error.message);
+      else console.log('✅ Заказ сохранён в Supabase');
     } catch (err) {
       console.error('❌ Supabase save error:', err);
     }
 
+    // 3. Создаём заказ в al-style автоматически
+    setLoadingStep('Оформляем заказ у поставщика...');
+    try {
+      const alstyleItems = (cart || []).map(item => ({
+        article:  item.id || item.article,
+        quantity: item.quantity || 1,
+      }));
+
+      const response = await fetch(`${BACKEND_URL}/api/alstyle-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items:   alstyleItems,
+          comment: `${formData.name}, ${formData.phone}, ${formData.address}`,
+          orderId,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        console.log(`✅ Заказ создан в al-style: #${result.alstyleOrderId}`);
+        // Обновляем localStorage с al-style ID
+        try {
+          const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+          const idx = orders.findIndex(o => o.orderId === orderId);
+          if (idx !== -1) {
+            orders[idx].alstyleOrderId = result.alstyleOrderId;
+            localStorage.setItem('orders', JSON.stringify(orders));
+          }
+        } catch (e) {}
+      } else {
+        console.error('❌ al-style error:', result.error);
+      }
+    } catch (err) {
+      console.error('❌ al-style order error:', err);
+      // Не прерываем процесс — заказ уже сохранён в Supabase
+    }
+
     clearCart();
     setLoading(false);
+    setLoadingStep('');
     navigate(`/order-confirmation/${orderId}`);
   };
 
@@ -116,11 +146,9 @@ export default function Checkout() {
         <h1 className="checkout-title">Оформление заказа</h1>
 
         <div className="checkout-content">
-          {/* Форма */}
           <div className="checkout-form-section">
             <form onSubmit={handleSubmit} className="checkout-form">
 
-              {/* Контактные данные */}
               <div className="form-section">
                 <h2 className="form-section-title">Контактные данные</h2>
                 <div className="form-group">
@@ -143,7 +171,6 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Доставка */}
               <div className="form-section">
                 <h2 className="form-section-title">Адрес доставки</h2>
                 <div className="form-group">
@@ -161,7 +188,6 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Способ оплаты */}
               <div className="form-section">
                 <h2 className="form-section-title">Способ оплаты</h2>
                 <div className="payment-methods">
@@ -221,12 +247,15 @@ export default function Checkout() {
               </div>
 
               <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-                {loading ? 'Оформление...' : `Оформить заказ на ${totalPrice.toLocaleString('ru-RU')} ₸`}
+                {loading ? (
+                  <>{loadingStep || 'Оформление...'}</>
+                ) : (
+                  `Оформить заказ на ${totalPrice.toLocaleString('ru-RU')} ₸`
+                )}
               </button>
             </form>
           </div>
 
-          {/* Сводка заказа */}
           <div className="checkout-summary">
             <h2 className="summary-title">Ваш заказ</h2>
             <div className="summary-items">
