@@ -128,9 +128,8 @@ export default function OrderConfirmation() {
 
               <div className="kaspi-qr-section">
                 <h3>Или отсканируйте QR-код</h3>
-                <div className="kaspi-qr-placeholder">
-                  <p>QR-код для оплаты</p>
-                  <p className="qr-note">(Добавьте ваш Kaspi QR код сюда)</p>
+                <div className="kaspi-qr-image">
+                  <img src="/kaspi-qr.png" alt="Kaspi QR" />
                 </div>
               </div>
 
