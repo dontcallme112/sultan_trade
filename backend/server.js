@@ -27,13 +27,24 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_KEY
 
 // ─── Кеш ─────────────────────────────────────────────────────
 const cache = new Map();
-function getCache(key, maxAge = 30000) {
+
+const CACHE_TIMES = {
+  products:   10 * 60 * 1000,  // 10 минут — товары меняются редко
+  categories: 30 * 60 * 1000,  // 30 минут — категории почти не меняются
+  filters:    30 * 60 * 1000,  // 30 минут
+  product:     5 * 60 * 1000,  // 5 минут — одиночный товар
+};
+
+function getCache(key, maxAge) {
   const item = cache.get(key);
   if (!item) return null;
   if (Date.now() - item.timestamp > maxAge) { cache.delete(key); return null; }
+  console.log(`💾 Кеш hit: ${key}`);
   return item.data;
 }
-function setCache(key, data) { cache.set(key, { data, timestamp: Date.now() }); }
+function setCache(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 // ─── Rate limiting ────────────────────────────────────────────
 let lastApiCall = 0;
@@ -68,7 +79,7 @@ const requireAuth = async (req, res, next) => {
 };
 
 // API клиент al-style
-const api = axios.create({ baseURL: 'https://api.al-style.kz/api', timeout: 30000 });
+const api     = axios.create({ baseURL: 'https://api.al-style.kz/api',      timeout: 30000 });
 const cartApi = axios.create({ baseURL: 'https://api.al-style.kz/cart-api', timeout: 30000 });
 
 // ─── Health ───────────────────────────────────────────────────
@@ -89,10 +100,10 @@ app.get('/api/products', async (req, res) => {
     }
 
     const cacheKey = `products_cat_${categoryParam || 'all'}`;
-    let cached = getCache(cacheKey, 30000);
+    let cached = getCache(cacheKey, CACHE_TIMES.products);
 
     if (!cached) {
-      console.log(`📦 Загрузка товаров... категория: ${categoryParam || 'все'}`);
+      console.log(`📦 Загрузка товаров из API... категория: ${categoryParam || 'все'}`);
       await waitForRateLimit();
       const apiParams = {
         'access-token': ALSTYLE_TOKEN,
@@ -105,7 +116,7 @@ app.get('/api/products', async (req, res) => {
       const response = await api.get('/elements-pagination', { params: apiParams });
       cached = response.data;
       setCache(cacheKey, cached);
-      console.log('✅ Загружено:', cached.elements?.length || 0);
+      console.log('✅ Загружено и закешировано на 10 минут:', cached.elements?.length || 0);
     }
 
     let products = cached.elements || [];
@@ -150,7 +161,7 @@ app.get('/api/products', async (req, res) => {
 app.get('/api/product/:article', async (req, res) => {
   try {
     const key = `product_${req.params.article}`;
-    let product = getCache(key, 60000);
+    let product = getCache(key, CACHE_TIMES.product);
     if (!product) {
       await waitForRateLimit();
       const response = await api.get('/element-info', {
@@ -168,12 +179,14 @@ app.get('/api/product/:article', async (req, res) => {
 // ─── CATEGORIES ──────────────────────────────────────────────
 app.get('/api/categories', async (req, res) => {
   try {
-    let categories = getCache('categories', 300000);
+    let categories = getCache('categories', CACHE_TIMES.categories);
     if (!categories) {
+      console.log('📦 Загрузка категорий из API...');
       await waitForRateLimit();
       const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
       categories = Array.isArray(response.data) ? response.data : [];
       setCache('categories', categories);
+      console.log('✅ Категорий закешировано на 30 минут:', categories.length);
     }
     res.json(categories);
   } catch (error) {
@@ -184,7 +197,7 @@ app.get('/api/categories', async (req, res) => {
 // ─── FILTERS ─────────────────────────────────────────────────
 app.get('/api/filters', async (req, res) => {
   try {
-    let filters = getCache('filters', 300000);
+    let filters = getCache('filters', CACHE_TIMES.filters);
     if (filters) return res.json(filters);
     let brands = [];
     try {
@@ -230,57 +243,30 @@ app.get('/api/search', async (req, res) => {
 });
 
 // ─── AL-STYLE ORDER CREATION ──────────────────────────────────
-// Создать заказ в al-style автоматически
 app.post('/api/alstyle-order', async (req, res) => {
   try {
     const { items, comment, orderId } = req.body;
-
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items обязательны' });
     }
 
-    // Шаг 1: Получаем данные пользователя (доверенности и способы доставки)
     await waitForRateLimit();
-    const userDataResponse = await api.get('/user-data', {
-      params: { 'access-token': ALSTYLE_TOKEN }
-    });
+    const userDataResponse = await api.get('/user-data', { params: { 'access-token': ALSTYLE_TOKEN } });
     const userData = userDataResponse.data?.data;
+    if (!userData) return res.status(500).json({ error: 'Не удалось получить данные пользователя al-style' });
 
-    if (!userData) {
-      return res.status(500).json({ error: 'Не удалось получить данные пользователя al-style' });
-    }
+    const attorney = userData['Доверенности']?.find(d => d['Основной'] && !d['empty']) || userData['Доверенности']?.[0];
+    const delivery = userData['Транспортники']?.find(d => d['Основной']) || userData['Транспортники']?.[0];
+    if (!attorney || !delivery) return res.status(500).json({ error: 'Не найдены доверенность или способ доставки' });
 
-    // Берём основную доверенность и основной способ доставки
-    const attorney = userData['Доверенности']?.find(d => d['Основной'] && !d['empty']) 
-      || userData['Доверенности']?.[0];
-    const delivery = userData['Транспортники']?.find(d => d['Основной']) 
-      || userData['Транспортники']?.[0];
-
-    if (!attorney || !delivery) {
-      return res.status(500).json({ error: 'Не найдены доверенность или способ доставки' });
-    }
-
-    // Шаг 2: Очищаем корзину al-style
     await waitForRateLimit();
     await cartApi.get('/clear', { params: { 'access-token': ALSTYLE_TOKEN } });
 
-    // Шаг 3: Добавляем товары в корзину al-style
     const articles  = items.map(i => i.article).join(',');
     const quantities = items.map(i => i.quantity).join(',');
-
     await waitForRateLimit();
-    const addResponse = await cartApi.get('/add', {
-      params: {
-        'access-token': ALSTYLE_TOKEN,
-        add: articles,
-        quantity: quantities,
-      }
-    });
+    await cartApi.get('/add', { params: { 'access-token': ALSTYLE_TOKEN, add: articles, quantity: quantities } });
 
-    console.log('🛒 Товары добавлены в корзину al-style:', addResponse.data);
-
-    // Шаг 4: Создаём заказ в al-style
-    // Дата отгрузки — завтра
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const shippingDate = `${String(tomorrow.getDate()).padStart(2,'0')}.${String(tomorrow.getMonth()+1).padStart(2,'0')}.${tomorrow.getFullYear()}`;
@@ -289,40 +275,21 @@ app.post('/api/alstyle-order', async (req, res) => {
     const submitResponse = await cartApi.post('/submit', null, {
       params: {
         'access-token': ALSTYLE_TOKEN,
-        comments:       `Заказ с сайта sultantrade.vercel.app. ID: ${orderId || 'N/A'}. ${comment || ''}`,
-        shipping_date:  shippingDate,
-        attorney_json:  JSON.stringify(attorney),
-        delivery_json:  JSON.stringify(delivery),
-        external_id:    orderId || undefined,
+        comments:      `Заказ с сайта sultantrade.vercel.app. ID: ${orderId || 'N/A'}. ${comment || ''}`,
+        shipping_date: shippingDate,
+        attorney_json: JSON.stringify(attorney),
+        delivery_json: JSON.stringify(delivery),
+        external_id:   orderId || undefined,
       }
     });
 
     const alstyleOrderId = submitResponse.data?.data?.id;
     console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
-
-    // Шаг 5: Обновляем заказ в Supabase — добавляем alstyle_order_id
-    if (supabaseAdmin && orderId) {
-      await supabaseAdmin
-        .from('orders')
-        .update({ 
-          comment: `alstyle_order_id: ${alstyleOrderId}`,
-          status: 'confirmed'
-        })
-        .eq('comment', `%${orderId}%`);
-    }
-
-    res.json({ 
-      success: true, 
-      alstyleOrderId,
-      message: `Заказ #${alstyleOrderId} создан в al-style`
-    });
+    res.json({ success: true, alstyleOrderId, message: `Заказ #${alstyleOrderId} создан в al-style` });
 
   } catch (error) {
     console.error('❌ al-style order error:', error.response?.data || error.message);
-    res.status(500).json({ 
-      error: error.response?.data?.message || error.message,
-      details: error.response?.data
-    });
+    res.status(500).json({ error: error.response?.data?.message || error.message });
   }
 });
 
@@ -330,9 +297,7 @@ app.post('/api/alstyle-order', async (req, res) => {
 app.post('/api/orders', requireAuth, async (req, res) => {
   try {
     const { items, address_id, address_text, comment, total_price } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'items обязательны' });
-    }
+    if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items обязательны' });
     const { data, error } = await supabaseAdmin
       .from('orders')
       .insert({ user_id: req.user.id, items, total_price: total_price || 0, address_id: address_id || null, address_text: address_text || null, comment: comment || null, status: 'pending' })
@@ -382,10 +347,11 @@ app.delete('/api/favorites/:article', requireAuth, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log('\n🚀 LUXE Backend v4.0');
+  console.log('\n🚀 LUXE Backend v4.1');
   console.log('━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Port: ${PORT}`);
   console.log(`🔑 Token: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
   console.log(`🔐 Auth: ${supabaseAdmin ? '✅ Supabase' : '⚠️  Disabled'}`);
+  console.log('⏱️  Кеш: товары 10мин, категории 30мин');
   console.log('✨ Готово!\n');
 });
