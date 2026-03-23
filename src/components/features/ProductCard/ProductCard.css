@@ -182,19 +182,32 @@
   cursor: not-allowed;
 }
 
+
 /* ── Mobile tweaks ───────────────────────── */
+
+/* На мобилке 1 колонка — ограничиваем высоту изображения */
+@media (max-width: 768px) {
+  .product-image-wrapper {
+    max-height: 220px;
+  }
+}
+
 @media (max-width: 480px) {
   .product-card { border-radius: 10px; }
 
+  .product-image-wrapper {
+    max-height: 180px;
+  }
+
   .product-info { padding: 0.625rem; gap: 0.25rem; }
 
-  .product-title { font-size: 0.75rem; }
+  .product-title { font-size: 0.8125rem; }
 
-  .product-price { font-size: 0.875rem; }
+  .product-price { font-size: 0.9375rem; }
 
-  .add-to-cart-btn { width: 30px; height: 30px; border-radius: 6px; }
+  .add-to-cart-btn { width: 32px; height: 32px; border-radius: 6px; }
 
-  .add-to-cart-btn svg { width: 14px; height: 14px; }
+  .add-to-cart-btn svg { width: 15px; height: 15px; }
 
   .product-badge { font-size: 0.625rem; padding: 0.15rem 0.4rem; }
 }
