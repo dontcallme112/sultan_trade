@@ -4,15 +4,32 @@ import { BACKEND_URL } from '../../api/client';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
 import './Home.css';
 
-// Те же группы что и в CategorySidebar
+// Те же группы что в CategorySidebar
 const CATEGORY_GROUPS = [
-  { id: 'phones',      keywords: ['телефон', 'смартфон', 'планшет', 'tablet', 'iphone', 'ipad'] },
-  { id: 'computers',   keywords: ['ноутбук', 'laptop', 'компьютер', 'пк', 'моноблок', 'системн'] },
-  { id: 'accessories', keywords: ['наушник', 'headphone', 'колонк', 'speaker', 'клавиатур', 'keyboard', 'мыш', 'mouse', 'чехол', 'case', 'наклад', 'защит', 'кабел', 'провод', 'зарядн', 'адаптер', 'аудио', 'микрофон'] },
-  { id: 'tv_monitors', keywords: ['монитор', 'дисплей', 'тв', 'телевизор', 'проектор'] },
-  { id: 'photo_video', keywords: ['камер', 'фото', 'видео', 'объектив', 'штатив', 'экшн'] },
-  { id: 'wearables',   keywords: ['часы', 'watch', 'браслет', 'фитнес', 'умн', 'smart'] },
-  { id: 'gaming',      keywords: ['игров', 'game', 'консол', 'playstation', 'xbox', 'nintendo'] },
+  { id: 'phones',      keywords: ['мобильн', 'телефон', 'смартфон', 'планшет', 'iphone', 'ipad', 'защитн', 'стёкла', 'плёнк', 'чехол для планшет', 'портативн зарядн'] },
+  { id: 'computers',   keywords: ['ноутбук', 'laptop', 'системн блок', 'моноблок', 'мини пк', 'компьютер', 'комплектующ', 'процессор', 'cpu', 'материнск', 'mb', 'видеокарт', 'vga', 'оперативн памят', 'ddr3', 'ddr4', 'ddr5', 'озу', 'жёстк диск', 'hdd', 'твердотельн', 'ssd', 'портативн диск', 'корпус', 'блок питани', 'охлаждени', 'вентилятор', 'термопаст', 'программн обеспечени', 'охлаждающ подставк', 'сумк'] },
+  { id: 'peripherals', keywords: ['клавиатур', 'keyboard', 'мышь', 'мыши', 'mouse', 'беспроводн комплект', 'проводн комплект', 'монитор', 'дисплей', 'кронштейн для монитор', 'веб камер', 'расширител usb', 'адаптер', 'контроллер', 'устройств ввод', 'устройств чтени', 'принтер', 'сканер', 'мфу'] },
+  { id: 'network',     keywords: ['сетев', 'роутер', 'маршрутизатор', 'коммутатор', 'switch', 'wifi', 'wi-fi', 'беспроводн сет', 'сервер', 'nas', 'rack', 'патч', 'кабель rj', 'sfp'] },
+  { id: 'audio',       keywords: ['наушник', 'headphone', 'headset', 'колонк', 'акустик', 'speaker', 'микрофон', 'звуков', 'аудио', 'гарнитур'] },
+  { id: 'tv_media',    keywords: ['телевизор', 'тв', 'tv', 'проектор', 'медиаплеер', 'стриминг', 'кронштейн для тв', 'антенн'] },
+  { id: 'photo_video', keywords: ['камер', 'фотоаппарат', 'объектив', 'штатив', 'экшн', 'action', 'gopro', 'видеокамер', 'дрон', 'квадрокоптер'] },
+  { id: 'gaming',      keywords: ['игров', 'game', 'gaming', 'консол', 'playstation', 'xbox', 'nintendo', 'джойстик', 'геймпад', 'руль игров'] },
+  { id: 'wearables',   keywords: ['смарт час', 'smart watch', 'фитнес браслет', 'браслет', 'умн', 'smart home', 'умный дом'] },
+  { id: 'cables_power',keywords: ['кабел', 'провод', 'шнур', 'зарядн устройств', 'зарядк', 'сетевой фильтр', 'удлинитель', 'ибп', 'ups', 'переходник', 'разветвитель'] },
+  { id: 'office',      keywords: ['принтер', 'сканер', 'мфу', 'копир', 'картридж', 'тонер', 'чернил', 'бумаг', 'ламинатор', 'уничтожитель', 'офисн', 'канцелярск'] },
+  { id: 'storage',     keywords: ['флешк', 'flash', 'usb накопитель', 'карт памят', 'sd card', 'microsd', 'оптическ диск', 'dvd', 'blu-ray'] },
+];
+
+// Категории для главной страницы (8 самых популярных)
+const HOME_CATEGORIES = [
+  { groupId: 'phones',      icon: '📱', displayName: 'Телефоны и планшеты',          color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)' },
+  { groupId: 'computers',   icon: '💻', displayName: 'Компьютеры и ноутбуки',        color: '#1E6B9E', gradient: 'linear-gradient(135deg, #1E6B9E 0%, #2E9ED6 100%)' },
+  { groupId: 'peripherals', icon: '⌨️', displayName: 'Периферия',                    color: '#7B3FA0', gradient: 'linear-gradient(135deg, #7B3FA0 0%, #A855F7 100%)' },
+  { groupId: 'audio',       icon: '🎧', displayName: 'Аудио и акустика',             color: '#0F766E', gradient: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)' },
+  { groupId: 'gaming',      icon: '🎮', displayName: 'Игры и консоли',               color: '#B91C1C', gradient: 'linear-gradient(135deg, #B91C1C 0%, #EF4444 100%)' },
+  { groupId: 'tv_media',    icon: '📺', displayName: 'ТВ и медиа',                   color: '#92400E', gradient: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)' },
+  { groupId: 'network',     icon: '🌐', displayName: 'Сеть и серверы',               color: '#065F46', gradient: 'linear-gradient(135deg, #065F46 0%, #10B981 100%)' },
+  { groupId: 'wearables',   icon: '⌚', displayName: 'Умные устройства',             color: '#1E40AF', gradient: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)' },
 ];
 
 function getGroupId(categoryName) {
@@ -23,44 +40,10 @@ function getGroupId(categoryName) {
   return 'other';
 }
 
-// Отображение категорий на главной
-const HOME_CATEGORIES = [
-  {
-    groupId: 'phones',
-    icon: '📱',
-    displayName: 'Смартфоны',
-    color: '#B8860B',
-    gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)'
-  },
-  {
-    groupId: 'computers',
-    icon: '💻',
-    displayName: 'Ноутбуки',
-    color: '#8B4513',
-    gradient: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)'
-  },
-  {
-    groupId: 'accessories',
-    icon: '🎧',
-    displayName: 'Аксессуары',
-    color: '#4169E1',
-    gradient: 'linear-gradient(135deg, #4169E1 0%, #1E90FF 100%)'
-  },
-  {
-    groupId: 'gaming',
-    icon: '🎮',
-    displayName: 'Игры и консоли',
-    color: '#32CD32',
-    gradient: 'linear-gradient(135deg, #32CD32 0%, #00FA9A 100%)'
-  },
-];
-
 export default function Home() {
   const [categories, setCategories] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  // groupId → реальные ID категорий из API
-  const [groupCategoryIds, setGroupCategoryIds] = useState({});
 
   useEffect(() => {
     loadCategories();
@@ -78,27 +61,26 @@ export default function Home() {
         else data = [];
       }
 
-      // Строим карту groupId → [id1, id2, ...]
+      // Группируем реальные ID по groupId
       const grouped = {};
       data.filter(cat => cat.elements > 0).forEach(cat => {
         const groupId = getGroupId(cat.name);
-        if (!grouped[groupId]) grouped[groupId] = [];
-        grouped[groupId].push(cat.id.toString());
+        if (!grouped[groupId]) grouped[groupId] = { count: 0, categoryIds: [] };
+        grouped[groupId].count += cat.elements;
+        grouped[groupId].categoryIds.push(cat.id.toString());
       });
 
-      setGroupCategoryIds(grouped);
-
-      // Формируем категории для отображения
+      // Собираем категории для главной с реальными ID
       const mapped = HOME_CATEGORIES.map(cat => ({
         ...cat,
-        categoryIds: grouped[cat.groupId] || [],
-      }));
+        categoryIds: grouped[cat.groupId]?.categoryIds || [],
+        count: grouped[cat.groupId]?.count || 0,
+      })).filter(cat => cat.count > 0); // показываем только если есть товары
 
       setCategories(mapped);
-      console.log('✅ Категорий с ID:', grouped);
     } catch (error) {
       console.error('Error loading categories:', error);
-      setCategories(HOME_CATEGORIES.map(c => ({ ...c, categoryIds: [] })));
+      setCategories(HOME_CATEGORIES.map(c => ({ ...c, categoryIds: [], count: 0 })));
     }
   };
 
@@ -116,8 +98,6 @@ export default function Home() {
     }
   };
 
-  // Строим URL для каталога: передаём groupId и все реальные ID
-  // Например: /catalog?group=phones&category=3638&category=3641
   const buildCatalogUrl = (cat) => {
     if (!cat.categoryIds || cat.categoryIds.length === 0) return '/catalog';
     const params = new URLSearchParams();
@@ -193,7 +173,7 @@ export default function Home() {
 
             <div className="hero-stats">
               <div className="stat">
-                <div className="stat-value">1000+</div>
+                <div className="stat-value">6000+</div>
                 <div className="stat-label">Товаров</div>
               </div>
               <div className="stat">
@@ -238,8 +218,8 @@ export default function Home() {
                   <div className="category-icon">{category.icon}</div>
                 </div>
                 <h3 className="category-name">{category.displayName}</h3>
-                {category.categoryIds?.length > 0 && (
-                  <p className="category-description">{category.categoryIds.length} категор.</p>
+                {category.count > 0 && (
+                  <p className="category-description">{category.count.toLocaleString('ru-RU')} товаров</p>
                 )}
                 <div className="category-arrow">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -331,7 +311,7 @@ export default function Home() {
         <div className="container">
           <div className="cta-content">
             <h2 className="cta-title">Готовы начать покупки?</h2>
-            <p className="cta-subtitle">Более 1000 товаров от ведущих мировых брендов с доставкой по Казахстану</p>
+            <p className="cta-subtitle">Более 6000 товаров от ведущих мировых брендов с доставкой по Казахстану</p>
             <Link to="/catalog" className="btn btn-primary btn-lg">
               Перейти в каталог
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
