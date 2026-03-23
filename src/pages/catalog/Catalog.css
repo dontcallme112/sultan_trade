@@ -1,7 +1,9 @@
 /* ============================================
    CATALOG PAGE
    ============================================ */
-
+body {
+  padding-top: 100px; /* = высота header */
+}
 .catalog-page {
   min-height: 100vh;
   background: #0A0A0A;
