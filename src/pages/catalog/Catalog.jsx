@@ -4,7 +4,7 @@ import ProductCard from '../../components/features/ProductCard/ProductCard';
 import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
 import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
-import ProductCardSkeleton from './ProductCardSkeleton';
+import ProductCardSkeleton from '../../components/features/ProductCard/ProductCardSkeleton';
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
