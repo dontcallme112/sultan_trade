@@ -4,6 +4,7 @@ import ProductCard from '../../components/features/ProductCard/ProductCard';
 import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
 import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
+import ProductCardSkeleton from './ProductCardSkeleton';
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,11 +15,11 @@ export default function Catalog() {
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
+  // ── Bottom sheet состояние ──
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   const LIMIT = 12;
 
-  // Читаем из URL:
-  // group=phones — groupId для подсветки в сайдбаре
-  // category=3638&category=3641 — реальные ID для запроса
   const [activeCategory, setActiveCategory] = useState(
     searchParams.get('group') || null
   );
@@ -34,14 +35,22 @@ export default function Catalog() {
     loadProducts(true);
   }, [activeCategoryIds, searchQuery, sortBy]);
 
-  // Синхронизация при изменении URL извне (например, переход с Home)
   useEffect(() => {
     const groupFromUrl = searchParams.get('group') || null;
     const idsFromUrl = searchParams.getAll('category') || [];
-
     setActiveCategory(groupFromUrl);
     setActiveCategoryIds(idsFromUrl);
   }, [searchParams]);
+
+  // Закрываем sheet при скролле на мобилке
+  useEffect(() => {
+    if (filtersOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [filtersOpen]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -49,23 +58,15 @@ export default function Catalog() {
       setError(null);
 
       const currentOffset = reset ? 0 : offset;
-
       const params = new URLSearchParams();
       params.set('limit', LIMIT);
       params.set('offset', currentOffset);
-
-      // Передаём реальные числовые ID категорий
       activeCategoryIds.forEach(id => params.append('category', id));
-
       if (searchQuery) params.append('search', searchQuery);
       if (sortBy && sortBy !== 'default') params.append('sortBy', sortBy);
 
-      console.log('🔍 Loading products:', params.toString());
-
       const response = await fetch(`${BACKEND_URL}/api/products?${params}`);
       const data = await response.json();
-
-      console.log('📦 Received:', data);
 
       if (reset) {
         setProducts(data.elements || []);
@@ -77,16 +78,13 @@ export default function Catalog() {
 
       setTotalCount(data.pagination?.totalCount || data.pagination?.total || 0);
       setHasMore(data.pagination?.hasMore || false);
-
     } catch (err) {
-      console.error('❌ Error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Вызывается из CategorySidebar: (groupId, realIds[])
   const handleCategoryChange = (groupId, categoryIds) => {
     setActiveCategory(groupId);
     setActiveCategoryIds(categoryIds || []);
@@ -98,6 +96,9 @@ export default function Catalog() {
     if (searchQuery) params.set('search', searchQuery);
     if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
     setSearchParams(params);
+
+    // Закрываем sheet после выбора категории
+    setFiltersOpen(false);
   };
 
   const handleSortChange = (e) => {
@@ -110,24 +111,24 @@ export default function Catalog() {
     setSearchParams(params);
   };
 
-  const handleLoadMore = () => {
-    loadProducts(false);
-  };
+  const handleLoadMore = () => loadProducts(false);
 
   const handleClearFilters = () => {
     setActiveCategory(null);
     setActiveCategoryIds([]);
     setOffset(0);
     setSearchParams(new URLSearchParams());
+    setFiltersOpen(false);
   };
 
   if (loading && products.length === 0) {
     return (
       <div className="catalog-page">
         <div className="container">
-          <div className="catalog-loading">
-            <div className="loader"></div>
-            <p>Загрузка товаров...</p>
+          <div className="products-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </div>
         </div>
       </div>
@@ -154,49 +155,76 @@ export default function Catalog() {
   return (
     <div className="catalog-page">
       <div className="container">
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className="catalog-header">
-          <div>
-            <h1 className="catalog-title">Каталог товаров</h1>
+          <div className="catalog-header-left">
+            <h1 className="catalog-title">Каталог</h1>
             <p className="catalog-subtitle">
-              {totalCount > 0 ? `Найдено товаров: ${totalCount}` : 'Товары не найдены'}
+              {totalCount > 0 ? `${totalCount} товаров` : 'Товары не найдены'}
             </p>
           </div>
 
-          <div className="catalog-sort">
-            <label htmlFor="sort">Сортировка:</label>
-            <select
-              id="sort"
-              value={sortBy}
-              onChange={handleSortChange}
-              className="sort-select"
+          <div className="catalog-header-right">
+            {/* Кнопка фильтров — только на мобилке */}
+            <button
+              className="filter-btn"
+              onClick={() => setFiltersOpen(true)}
+              aria-label="Открыть фильтры"
             >
-              <option value="default">По умолчанию</option>
-              <option value="price_asc">Цена: по возрастанию</option>
-              <option value="price_desc">Цена: по убыванию</option>
-              <option value="name_asc">По названию (А-Я)</option>
-              <option value="newest">Сначала новинки</option>
-            </select>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2">
+                <line x1="4" y1="6" x2="20" y2="6"/>
+                <line x1="8" y1="12" x2="20" y2="12"/>
+                <line x1="12" y1="18" x2="20" y2="18"/>
+              </svg>
+              Категории
+              {activeCategory && <span className="filter-btn-dot" />}
+            </button>
+
+            <div className="catalog-sort">
+              <select
+                id="sort"
+                value={sortBy}
+                onChange={handleSortChange}
+                className="sort-select"
+                aria-label="Сортировка"
+              >
+                <option value="default">По умолчанию</option>
+                <option value="price_asc">Дешевле</option>
+                <option value="price_desc">Дороже</option>
+                <option value="name_asc">По названию</option>
+                <option value="newest">Новинки</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Active Filters */}
+        {/* ── Активные фильтры ── */}
         {(activeCategory || searchQuery) && (
           <div className="active-filters">
             {searchQuery && (
               <div className="filter-tag">
-                <span>Поиск: "{searchQuery}"</span>
+                <span>«{searchQuery}»</span>
+                <button onClick={handleClearFilters}>×</button>
+              </div>
+            )}
+            {activeCategory && (
+              <div className="filter-tag">
+                <span>Категория выбрана</span>
                 <button onClick={handleClearFilters}>×</button>
               </div>
             )}
             <button className="clear-all-btn" onClick={handleClearFilters}>
-              Сбросить все
+              Сбросить
             </button>
           </div>
         )}
 
-        {/* Main Content */}
+        {/* ── Основной контент ── */}
         <div className="catalog-content">
+
+          {/* Sidebar — только десктоп */}
           <aside className="catalog-sidebar">
             <CategorySidebar
               onCategoryChange={handleCategoryChange}
@@ -204,11 +232,13 @@ export default function Catalog() {
             />
           </aside>
 
+          {/* Товары */}
           <div className="catalog-main">
             {products.length === 0 ? (
               <div className="catalog-empty">
                 <div className="empty-icon">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="1.5">
                     <circle cx="11" cy="11" r="8"/>
                     <path d="m21 21-4.35-4.35"/>
                   </svg>
@@ -222,20 +252,24 @@ export default function Catalog() {
             ) : (
               <>
                 <div className="products-grid">
-                  {products.map((product) => (
-                    <ProductCard key={product.article} product={product} />
+                  {products.map((product, i) => (
+                    <ProductCard
+                      key={product.article}
+                      product={product}
+                      index={i}
+                    />
                   ))}
                 </div>
 
                 {hasMore && (
                   <div className="load-more-container">
                     <button
-                      className="btn btn-secondary load-more-btn"
+                      className="load-more-btn"
                       onClick={handleLoadMore}
                       disabled={loading}
                     >
                       {loading ? (
-                        <><span className="btn-loader"></span>Загрузка...</>
+                        <><span className="btn-loader" />Загрузка...</>
                       ) : (
                         `Показать ещё (${products.length} из ${totalCount})`
                       )}
@@ -252,6 +286,56 @@ export default function Catalog() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          BOTTOM SHEET — категории на мобилке
+          ══════════════════════════════════════ */}
+
+      {/* Оверлей */}
+      <div
+        className={`mobile-filters-overlay${filtersOpen ? ' open' : ''}`}
+        onClick={() => setFiltersOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Sheet */}
+      <div
+        className={`mobile-filters${filtersOpen ? ' open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Категории товаров"
+      >
+        {/* Ручка */}
+        <div className="mobile-filters-handle" />
+
+        {/* Заголовок */}
+        <div className="mobile-filters-header">
+          <h3>Категории</h3>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {activeCategory && (
+              <button
+                className="mobile-filters-reset"
+                onClick={handleClearFilters}
+              >
+                Сбросить
+              </button>
+            )}
+            <button
+              className="mobile-filters-close"
+              onClick={() => setFiltersOpen(false)}
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Сайдбар внутри шита */}
+        <CategorySidebar
+          onCategoryChange={handleCategoryChange}
+          activeCategory={activeCategory}
+        />
       </div>
     </div>
   );

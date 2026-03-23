@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://antrade.vercel.app/sitemap.xml

@@ -265,3 +265,77 @@
 
   .add-to-cart-btn svg { width: 13px; height: 13px; }
 }
+
+.skeleton-card {
+  pointer-events: none;
+}
+
+.skeleton-image-wrapper {
+  position: relative;
+  aspect-ratio: 1;
+  background: #141414;
+  overflow: hidden;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    #161616 0%,
+    #1F1F1F 40%,
+    #252525 50%,
+    #1F1F1F 60%,
+    #161616 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-line {
+  border-radius: 4px;
+  background: #1A1A1A;
+  display: block;
+  animation: shimmer 1.6s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    #161616 0%,
+    #1F1F1F 40%,
+    #252525 50%,
+    #1F1F1F 60%,
+    #161616 100%
+  );
+  background-size: 200% 100%;
+}
+
+.skeleton-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.skeleton-btn-placeholder {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    #161616 0%,
+    #1F1F1F 40%,
+    #252525 50%,
+    #1F1F1F 60%,
+    #161616 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
