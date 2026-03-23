@@ -1,272 +1,257 @@
 import { useState, useEffect } from 'react';
-import { BACKEND_URL } from '../../api/client'
-import './Categorysidebar.css';
+import { useSearchParams } from 'react-router-dom';
+import ProductCard from '../../components/features/ProductCard/ProductCard';
+import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
+import { BACKEND_URL } from '../../api/client';
+import './Catalog.css';
 
-// Группы на основе РЕАЛЬНЫХ названий категорий al-style
-const CATEGORY_GROUPS = [
-  {
-    id: 'phones',
-    name: 'Телефоны и планшеты',
-    icon: '📱',
-    keywords: [
-      'мобильн', 'телефон', 'смартфон', 'планшет', 'iphone', 'ipad',
-      'защитн', 'стёкла', 'плёнк', 'чехол для планшет',
-      'портативн зарядн', // power bank
-    ],
-  },
-  {
-    id: 'computers',
-    name: 'Компьютеры и ноутбуки',
-    icon: '💻',
-    keywords: [
-      'ноутбук', 'laptop', 'системн блок', 'моноблок', 'мини пк',
-      'компьютер', 'комплектующ', 'процессор', 'cpu',
-      'материнск', 'mb', 'видеокарт', 'vga',
-      'оперативн памят', 'ddr3', 'ddr4', 'ddr5', 'озу',
-      'жёстк диск', 'hdd', 'твердотельн', 'ssd',
-      'портативн диск', 'корпус', 'блок питани',
-      'охлаждени', 'вентилятор', 'термопаст',
-      'программн обеспечени', 'охлаждающ подставк',
-      'сумк', // сумки для ноутбука
-    ],
-  },
-  {
-    id: 'peripherals',
-    name: 'Периферия и устройства ввода',
-    icon: '⌨️',
-    keywords: [
-      'клавиатур', 'keyboard', 'мышь', 'мыши', 'mouse',
-      'беспроводн комплект', 'проводн комплект',
-      'монитор', 'дисплей', 'кронштейн для монитор',
-      'веб камер', 'расширител usb', 'адаптер', 'контроллер',
-      'устройств ввод', 'устройств чтени',
-      'принтер', 'сканер', 'мфу',
-    ],
-  },
-  {
-    id: 'network',
-    name: 'Сеть и серверы',
-    icon: '🌐',
-    keywords: [
-      'сетев', 'роутер', 'маршрутизатор', 'коммутатор', 'switch',
-      'wifi', 'wi-fi', 'беспроводн сет',
-      'сервер', 'nas', 'rack',
-      'патч', 'кабель rj', 'sfp',
-    ],
-  },
-  {
-    id: 'audio',
-    name: 'Аудио и акустика',
-    icon: '🎧',
-    keywords: [
-      'наушник', 'headphone', 'headset',
-      'колонк', 'акустик', 'speaker',
-      'микрофон', 'звуков', 'аудио',
-      'гарнитур',
-    ],
-  },
-  {
-    id: 'tv_media',
-    name: 'ТВ и медиа',
-    icon: '📺',
-    keywords: [
-      'телевизор', 'тв', 'tv',
-      'проектор', 'медиаплеер', 'стриминг',
-      'кронштейн для тв', 'антенн',
-    ],
-  },
-  {
-    id: 'photo_video',
-    name: 'Фото и видео',
-    icon: '📷',
-    keywords: [
-      'камер', 'фотоаппарат', 'объектив', 'штатив',
-      'экшн', 'action', 'gopro', 'видеокамер',
-      'дрон', 'квадрокоптер',
-    ],
-  },
-  {
-    id: 'gaming',
-    name: 'Игры и консоли',
-    icon: '🎮',
-    keywords: [
-      'игров', 'game', 'gaming',
-      'консол', 'playstation', 'xbox', 'nintendo',
-      'джойстик', 'геймпад', 'руль игров',
-      'игровой стул', 'игровой стол',
-    ],
-  },
-  {
-    id: 'wearables',
-    name: 'Умные устройства',
-    icon: '⌚',
-    keywords: [
-      'смарт час', 'smart watch',
-      'фитнес браслет', 'браслет',
-      'умн', 'smart home', 'умный дом',
-    ],
-  },
-  {
-    id: 'cables_power',
-    name: 'Кабели и зарядки',
-    icon: '🔌',
-    keywords: [
-      'кабел', 'провод', 'шнур',
-      'зарядн устройств', 'зарядк',
-      'сетевой фильтр', 'удлинитель', 'ибп', 'ups',
-      'переходник', 'разветвитель',
-    ],
-  },
-  {
-    id: 'office',
-    name: 'Офис и бизнес',
-    icon: '🖨️',
-    keywords: [
-      'принтер', 'сканер', 'мфу', 'копир',
-      'картридж', 'тонер', 'чернил',
-      'бумаг', 'ламинатор', 'уничтожитель',
-      'офисн', 'канцелярск',
-    ],
-  },
-  {
-    id: 'storage',
-    name: 'Носители информации',
-    icon: '💾',
-    keywords: [
-      'флешк', 'flash', 'usb накопитель',
-      'карт памят', 'sd card', 'microsd',
-      'оптическ диск', 'dvd', 'blu-ray',
-    ],
-  },
-];
-
-function getGroupId(categoryName) {
-  const name = categoryName.toLowerCase();
-  for (const group of CATEGORY_GROUPS) {
-    if (group.keywords.some(kw => name.includes(kw))) return group.id;
-  }
-  return 'other';
-}
-
-export default function CategorySidebar({ onCategoryChange, activeCategory }) {
-  const [groupedCategories, setGroupedCategories] = useState({});
+export default function Catalog() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const LIMIT = 12;
+
+  // Читаем из URL:
+  // group=phones — groupId для подсветки в сайдбаре
+  // category=3638&category=3641 — реальные ID для запроса
+  const [activeCategory, setActiveCategory] = useState(
+    searchParams.get('group') || null
+  );
+  const [activeCategoryIds, setActiveCategoryIds] = useState(
+    searchParams.getAll('category') || []
+  );
+
+  const searchQuery = searchParams.get('search') || null;
+  const sortBy = searchParams.get('sortBy') || 'default';
 
   useEffect(() => {
-    loadCategories();
-  }, []);
+    setOffset(0);
+    loadProducts(true);
+  }, [activeCategoryIds, searchQuery, sortBy]);
 
-  const loadCategories = async () => {
+  // Синхронизация при изменении URL извне (например, переход с Home)
+  useEffect(() => {
+    const groupFromUrl = searchParams.get('group') || null;
+    const idsFromUrl = searchParams.getAll('category') || [];
+
+    setActiveCategory(groupFromUrl);
+    setActiveCategoryIds(idsFromUrl);
+  }, [searchParams]);
+
+  const loadProducts = async (reset = false) => {
     try {
       setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/api/categories`);
-      let data = await response.json();
+      setError(null);
 
-      if (!Array.isArray(data)) {
-        if (data?.data && Array.isArray(data.data)) data = data.data;
-        else if (data && typeof data === 'object') data = Object.values(data);
-        else data = [];
+      const currentOffset = reset ? 0 : offset;
+
+      const params = new URLSearchParams();
+      params.set('limit', LIMIT);
+      params.set('offset', currentOffset);
+
+      // Передаём реальные числовые ID категорий
+      activeCategoryIds.forEach(id => params.append('category', id));
+
+      if (searchQuery) params.append('search', searchQuery);
+      if (sortBy && sortBy !== 'default') params.append('sortBy', sortBy);
+
+      console.log('🔍 Loading products:', params.toString());
+
+      const response = await fetch(`${BACKEND_URL}/api/products?${params}`);
+      const data = await response.json();
+
+      console.log('📦 Received:', data);
+
+      if (reset) {
+        setProducts(data.elements || []);
+        setOffset(LIMIT);
+      } else {
+        setProducts(prev => [...prev, ...(data.elements || [])]);
+        setOffset(prev => prev + LIMIT);
       }
 
-      const grouped = {};
-      let unmapped = [];
+      setTotalCount(data.pagination?.totalCount || data.pagination?.total || 0);
+      setHasMore(data.pagination?.hasMore || false);
 
-      data.filter(cat => cat.elements > 0).forEach(cat => {
-        const groupId = getGroupId(cat.name);
-        if (!grouped[groupId]) grouped[groupId] = { count: 0, categoryIds: [] };
-        grouped[groupId].count += cat.elements;
-        grouped[groupId].categoryIds.push(cat.id.toString());
-        if (groupId === 'other') unmapped.push(cat.name);
-      });
-
-      if (unmapped.length > 0) {
-        console.log('⚠️ Не распределены по группам:', unmapped);
-      }
-
-      setGroupedCategories(grouped);
-      console.log('✅ Группы категорий:', Object.fromEntries(
-        Object.entries(grouped).map(([k, v]) => [k, v.count])
-      ));
-    } catch (error) {
-      console.error('❌ Ошибка загрузки категорий:', error);
-      setGroupedCategories({});
+    } catch (err) {
+      console.error('❌ Error:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGroupClick = (groupId) => {
-    if (activeCategory === groupId) {
-      onCategoryChange(null, null);
-    } else {
-      const ids = groupedCategories[groupId]?.categoryIds || [];
-      onCategoryChange(groupId, ids);
-    }
+  // Вызывается из CategorySidebar: (groupId, realIds[])
+  const handleCategoryChange = (groupId, categoryIds) => {
+    setActiveCategory(groupId);
+    setActiveCategoryIds(categoryIds || []);
+    setOffset(0);
+
+    const params = new URLSearchParams();
+    if (groupId) params.set('group', groupId);
+    if (categoryIds?.length) categoryIds.forEach(id => params.append('category', id));
+    if (searchQuery) params.set('search', searchQuery);
+    if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
+    setSearchParams(params);
   };
 
-  if (loading) {
+  const handleSortChange = (e) => {
+    const newSort = e.target.value;
+    const params = new URLSearchParams();
+    if (activeCategory) params.set('group', activeCategory);
+    activeCategoryIds.forEach(id => params.append('category', id));
+    if (searchQuery) params.set('search', searchQuery);
+    if (newSort && newSort !== 'default') params.set('sortBy', newSort);
+    setSearchParams(params);
+  };
+
+  const handleLoadMore = () => {
+    loadProducts(false);
+  };
+
+  const handleClearFilters = () => {
+    setActiveCategory(null);
+    setActiveCategoryIds([]);
+    setOffset(0);
+    setSearchParams(new URLSearchParams());
+  };
+
+  if (loading && products.length === 0) {
     return (
-      <div className="category-sidebar">
-        <div className="sidebar-header"><h3>Категории</h3></div>
-        <div className="sidebar-loading">
-          <div className="loader-small"></div>
-          <p>Загрузка...</p>
+      <div className="catalog-page">
+        <div className="container">
+          <div className="catalog-loading">
+            <div className="loader"></div>
+            <p>Загрузка товаров...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  const visibleGroups = CATEGORY_GROUPS.filter(g => groupedCategories[g.id]);
-  const hasOther = !!groupedCategories['other'];
+  if (error) {
+    return (
+      <div className="catalog-page">
+        <div className="container">
+          <div className="catalog-error">
+            <div className="error-icon">⚠️</div>
+            <h3>Ошибка загрузки</h3>
+            <p>{error}</p>
+            <button className="btn btn-primary" onClick={() => loadProducts(true)}>
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="category-sidebar">
-      <div className="sidebar-header">
-        <h3>Категории</h3>
-        {activeCategory && (
-          <button className="reset-btn" onClick={() => onCategoryChange(null, null)}>
-            Сбросить
-          </button>
-        )}
-      </div>
-
-      <div className="categories-list">
-        <button
-          className={`category-item ${!activeCategory ? 'active' : ''}`}
-          onClick={() => onCategoryChange(null, null)}
-        >
-          <span className="category-icon">📦</span>
-          <div className="category-info">
-            <span className="category-name">Все товары</span>
+    <div className="catalog-page">
+      <div className="container">
+        {/* Header */}
+        <div className="catalog-header">
+          <div>
+            <h1 className="catalog-title">Каталог товаров</h1>
+            <p className="catalog-subtitle">
+              {totalCount > 0 ? `Найдено товаров: ${totalCount}` : 'Товары не найдены'}
+            </p>
           </div>
-        </button>
 
-        {visibleGroups.map((group) => (
-          <button
-            key={group.id}
-            className={`category-item ${activeCategory === group.id ? 'active' : ''}`}
-            onClick={() => handleGroupClick(group.id)}
-          >
-            <span className="category-icon">{group.icon}</span>
-            <div className="category-info">
-              <span className="category-name">{group.name}</span>
-              <span className="category-count">{groupedCategories[group.id].count} товаров</span>
-            </div>
-          </button>
-        ))}
+          <div className="catalog-sort">
+            <label htmlFor="sort">Сортировка:</label>
+            <select
+              id="sort"
+              value={sortBy}
+              onChange={handleSortChange}
+              className="sort-select"
+            >
+              <option value="default">По умолчанию</option>
+              <option value="price_asc">Цена: по возрастанию</option>
+              <option value="price_desc">Цена: по убыванию</option>
+              <option value="name_asc">По названию (А-Я)</option>
+              <option value="newest">Сначала новинки</option>
+            </select>
+          </div>
+        </div>
 
-        {hasOther && (
-          <button
-            className={`category-item ${activeCategory === 'other' ? 'active' : ''}`}
-            onClick={() => handleGroupClick('other')}
-          >
-            <span className="category-icon">📦</span>
-            <div className="category-info">
-              <span className="category-name">Прочее</span>
-              <span className="category-count">{groupedCategories['other'].count} товаров</span>
-            </div>
-          </button>
+        {/* Active Filters */}
+        {(activeCategory || searchQuery) && (
+          <div className="active-filters">
+            {searchQuery && (
+              <div className="filter-tag">
+                <span>Поиск: "{searchQuery}"</span>
+                <button onClick={handleClearFilters}>×</button>
+              </div>
+            )}
+            <button className="clear-all-btn" onClick={handleClearFilters}>
+              Сбросить все
+            </button>
+          </div>
         )}
+
+        {/* Main Content */}
+        <div className="catalog-content">
+          <aside className="catalog-sidebar">
+            <CategorySidebar
+              onCategoryChange={handleCategoryChange}
+              activeCategory={activeCategory}
+            />
+          </aside>
+
+          <div className="catalog-main">
+            {products.length === 0 ? (
+              <div className="catalog-empty">
+                <div className="empty-icon">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </div>
+                <h2>Товары не найдены</h2>
+                <p>Попробуйте выбрать другую категорию или изменить поисковый запрос</p>
+                <button className="btn btn-primary" onClick={handleClearFilters}>
+                  Показать все товары
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="products-grid">
+                  {products.map((product) => (
+                    <ProductCard key={product.article} product={product} />
+                  ))}
+                </div>
+
+                {hasMore && (
+                  <div className="load-more-container">
+                    <button
+                      className="btn btn-secondary load-more-btn"
+                      onClick={handleLoadMore}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <><span className="btn-loader"></span>Загрузка...</>
+                      ) : (
+                        `Показать ещё (${products.length} из ${totalCount})`
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {!hasMore && products.length > 0 && (
+                  <div className="end-of-list">
+                    <p>Показаны все товары ({totalCount})</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
