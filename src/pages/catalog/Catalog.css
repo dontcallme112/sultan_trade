@@ -253,7 +253,7 @@
   .sort-select { flex: 1; }
 
   .products-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 0.75rem;
   }
 
@@ -269,7 +269,7 @@
   .catalog-page .container { padding: 0 0.75rem; }
 
   .products-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
+    grid-template-columns: 1fr;
+    gap: 0.625rem;
   }
 }
