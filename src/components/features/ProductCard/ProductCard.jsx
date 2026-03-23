@@ -5,19 +5,16 @@ import './ProductCard.css';
 
 const ProductCard = memo(({ product, index = 0 }) => {
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { addToCart, buyNow } = useCart();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  // ── Первые 4 карточки грузим сразу (выше fold) → снижает LCP ──
   const isAboveFold = index < 4;
-
-  // ── Helpers ────────────────────────────────────────────────────
 
   const getProductImage = useCallback(() => {
     if (product.images?.length > 0) return product.images[0];
     if (product.image) return product.image;
-    return null; // null → показываем SVG-заглушку вместо запроса к placeholder.com
+    return null;
   }, [product.images, product.image]);
 
   const getProductPrice = useCallback(() => {
@@ -44,12 +41,11 @@ const ProductCard = memo(({ product, index = 0 }) => {
     return false;
   }, [product.quantity]);
 
-  // ── Handlers ───────────────────────────────────────────────────
-
   const handleClick = useCallback(() => {
     navigate(`/product/${product.article}`);
   }, [navigate, product.article]);
 
+  // Добавить в корзину
   const handleAddToCart = useCallback((e) => {
     e.stopPropagation();
     if (addedToCart || !isInStock()) return;
@@ -66,7 +62,23 @@ const ProductCard = memo(({ product, index = 0 }) => {
     setTimeout(() => setAddedToCart(false), 2000);
   }, [addedToCart, isInStock, addToCart, product, getProductPrice, getProductImage]);
 
-  // ── Derived values ─────────────────────────────────────────────
+  // Купить сейчас — очищает корзину и переходит на checkout
+  const handleBuyNow = useCallback((e) => {
+    e.stopPropagation();
+    if (!isInStock()) return;
+
+    buyNow(
+      {
+        id: product.article,
+        article: product.article,
+        name: product.name || 'Товар',
+        price: Math.round(getProductPrice() * 1.1),
+        image: getProductImage(),
+      },
+      navigate,
+      1
+    );
+  }, [isInStock, buyNow, navigate, product, getProductPrice, getProductImage]);
 
   const inStock      = isInStock();
   const currentPrice = getProductPrice();
@@ -88,8 +100,6 @@ const ProductCard = memo(({ product, index = 0 }) => {
 
       {/* ── Изображение ── */}
       <div className="product-image-wrapper">
-
-        {/* Skeleton пока картинка грузится */}
         {!imageLoaded && <div className="image-skeleton" aria-hidden="true" />}
 
         {imageSrc ? (
@@ -97,24 +107,15 @@ const ProductCard = memo(({ product, index = 0 }) => {
             src={imageSrc}
             alt={productName}
             className={`product-image${imageLoaded ? ' loaded' : ''}`}
-
-            // ↓ LCP-оптимизация: первые 4 — высокий приоритет, остальные — lazy
             loading={isAboveFold ? 'eager' : 'lazy'}
             fetchpriority={isAboveFold ? 'high' : 'auto'}
             decoding="async"
-
-            // Подсказка браузеру о размере → убирает layout shift (CLS)
             width="300"
             height="300"
-
             onLoad={() => setImageLoaded(true)}
-            onError={(e) => {
-              e.target.style.display = 'none';
-              setImageLoaded(true);
-            }}
+            onError={(e) => { e.target.style.display = 'none'; setImageLoaded(true); }}
           />
         ) : (
-          // SVG-заглушка — без лишнего сетевого запроса
           <div className="product-image-placeholder" aria-hidden="true">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="1" opacity="0.3">
@@ -126,17 +127,13 @@ const ProductCard = memo(({ product, index = 0 }) => {
         )}
       </div>
 
-      {/* ── Информация ── */}
+      {/* ── Инфо ── */}
       <div className="product-info">
-        {product.brand && (
-          <p className="product-brand">{product.brand}</p>
-        )}
+        {product.brand && <p className="product-brand">{product.brand}</p>}
 
-        <h3 className="product-title" title={productName}>
-          {productName}
-        </h3>
+        <h3 className="product-title" title={productName}>{productName}</h3>
 
-        {/* ── Footer ── */}
+        {/* ── Цена + кнопка корзины ── */}
         <div className="product-footer">
           <p className="product-price">{formatPrice(currentPrice)}</p>
 
@@ -144,11 +141,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
             className={`add-to-cart-btn${addedToCart ? ' added' : ''}`}
             onClick={handleAddToCart}
             disabled={!inStock}
-            aria-label={
-              !inStock    ? 'Нет в наличии' :
-              addedToCart ? 'Добавлено'     :
-                            'В корзину'
-            }
+            aria-label={!inStock ? 'Нет в наличии' : addedToCart ? 'Добавлено' : 'В корзину'}
           >
             {addedToCart ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -165,11 +158,19 @@ const ProductCard = memo(({ product, index = 0 }) => {
             )}
           </button>
         </div>
+
+        {/* ── Кнопка "Купить сейчас" ── */}
+        <button
+          className="buy-now-btn"
+          onClick={handleBuyNow}
+          disabled={!inStock}
+          aria-label="Купить сейчас"
+        >
+          {inStock ? 'Купить сейчас' : 'Нет в наличии'}
+        </button>
       </div>
     </div>
   );
-
-// Перерисовываем только если изменилась цена, наличие или article
 }, (prev, next) =>
   prev.product.article  === next.product.article  &&
   prev.product.price2   === next.product.price2   &&

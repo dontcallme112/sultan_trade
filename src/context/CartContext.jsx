@@ -31,6 +31,30 @@ export const CartProvider = ({ children }) => {
     showNotification('Товар добавлен в корзину');
   };
 
+  // ── НОВОЕ: добавить товар с нужным quantity ──────────────────
+  const addToCartWithQuantity = (product, quantity = 1) => {
+    setCartItems((prev) => {
+      const existingItem = prev.find((item) => item.id === product.id);
+      if (existingItem) {
+        return prev.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
+        );
+      }
+      return [...prev, { ...product, quantity }];
+    });
+  };
+
+  // ── НОВОЕ: buyNow — очищает корзину, добавляет 1 товар ───────
+  // navigate передаётся снаружи (из компонента)
+  const buyNow = (product, navigate, quantity = 1) => {
+    // Очищаем корзину — пользователь покупает только этот товар
+    setCartItems([{ ...product, quantity }]);
+    // Сразу переходим на оформление
+    navigate('/checkout');
+  };
+
   const removeFromCart = (productId) => {
     setCartItems((prev) => prev.filter((item) => item.id !== productId));
     showNotification('Товар удален из корзины');
@@ -48,7 +72,6 @@ export const CartProvider = ({ children }) => {
     showNotification('Корзина очищена');
   };
 
-  // БЕЗ наценки — цена как есть
   const getCartTotal = () => {
     return cartItems.reduce((total, item) => {
       const basePrice = item.discount
@@ -70,6 +93,8 @@ export const CartProvider = ({ children }) => {
   const value = {
     cartItems,
     addToCart,
+    addToCartWithQuantity,
+    buyNow,           // ← новое
     removeFromCart,
     updateQuantity,
     clearCart,
