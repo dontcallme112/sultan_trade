@@ -4,26 +4,23 @@ import { BACKEND_URL } from '../../../api/client';
 import './SearchBar.css';
 
 export default function SearchBar() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery]           = useState('');
   const [suggestions, setSuggestions] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen]         = useState(false);
+  const [loading, setLoading]       = useState(false);
   const searchRef = useRef(null);
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
 
-  // Закрытие при клике вне компонента
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
         setIsOpen(false);
       }
-    }
-
+    };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Автодополнение при вводе
   useEffect(() => {
     if (query.length < 2) {
       setSuggestions([]);
@@ -38,7 +35,10 @@ export default function SearchBar() {
           `${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}`
         );
         const data = await response.json();
-        setSuggestions(data.suggestions || []);
+
+        // Сервер возвращает массив напрямую — не объект с suggestions
+        const results = Array.isArray(data) ? data : (data.suggestions || []);
+        setSuggestions(results);
         setIsOpen(true);
       } catch (error) {
         console.error('Search error:', error);
@@ -46,7 +46,7 @@ export default function SearchBar() {
       } finally {
         setLoading(false);
       }
-    }, 300); // Debounce 300ms
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -68,8 +68,7 @@ export default function SearchBar() {
 
   const formatPrice = (price) => {
     if (!price) return '';
-    const priceWithMarkup = Math.round(price * 1.1);
-    return new Intl.NumberFormat('ru-RU').format(priceWithMarkup) + ' ₸';
+    return new Intl.NumberFormat('ru-RU').format(Math.round(price * 1.1)) + ' ₸';
   };
 
   return (
@@ -101,7 +100,7 @@ export default function SearchBar() {
 
           {!loading && suggestions.length === 0 && query.length >= 2 && (
             <div className="search-empty">
-              <p>Ничего не найдено</p>
+              <p>Ничего не найдено по запросу «{query}»</p>
             </div>
           )}
 
@@ -114,24 +113,35 @@ export default function SearchBar() {
                   onClick={() => handleSuggestionClick(item.article)}
                 >
                   {item.image && (
-                    <img 
-                      src={item.image} 
+                    <img
+                      src={item.image}
                       alt={item.name}
                       className="suggestion-image"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
                     />
                   )}
                   <div className="suggestion-info">
-                    {item.brand && (
-                      <span className="suggestion-brand">{item.brand}</span>
-                    )}
+                    {item.brand && <span className="suggestion-brand">{item.brand}</span>}
                     <p className="suggestion-name">{item.name}</p>
-                    <span className="suggestion-price">{formatPrice(item.price)}</span>
+                    {item.price && <span className="suggestion-price">{formatPrice(item.price)}</span>}
                   </div>
                 </button>
               ))}
+
+              {/* Кнопка "показать все результаты" */}
+              <button
+                className="search-show-all"
+                onClick={() => {
+                  navigate(`/catalog?search=${encodeURIComponent(query)}`);
+                  setIsOpen(false);
+                  setQuery('');
+                }}
+              >
+                Показать все результаты по «{query}»
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
             </div>
           )}
         </div>

@@ -20,7 +20,6 @@ console.log('SUPABASE_SERVICE_KEY:', SUPABASE_SERVICE_KEY ? '✅' : '❌');
 
 if (!ALSTYLE_TOKEN) { console.error('❌ ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
 
-// Supabase admin клиент
 const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   : null;
@@ -29,10 +28,10 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_KEY
 const cache = new Map();
 
 const CACHE_TIMES = {
-  products:   10 * 60 * 1000,  // 10 минут — товары меняются редко
-  categories: 30 * 60 * 1000,  // 30 минут — категории почти не меняются
-  filters:    30 * 60 * 1000,  // 30 минут
-  product:     5 * 60 * 1000,  // 5 минут — одиночный товар
+  products:   10 * 60 * 1000,
+  categories: 30 * 60 * 1000,
+  filters:    30 * 60 * 1000,
+  product:     5 * 60 * 1000,
 };
 
 function getCache(key, maxAge) {
@@ -78,11 +77,31 @@ const requireAuth = async (req, res, next) => {
   next();
 };
 
-// API клиент al-style
 const api     = axios.create({ baseURL: 'https://api.al-style.kz/api',      timeout: 30000 });
 const cartApi = axios.create({ baseURL: 'https://api.al-style.kz/cart-api', timeout: 30000 });
 
-// ─── Health ───────────────────────────────────────────────────
+// ─── Загрузка всех товаров (используется в поиске) ───────────
+async function loadAllProducts() {
+  let cached = getCache('products_cat_all', CACHE_TIMES.products);
+  if (cached) return cached.elements || [];
+
+  console.log('📦 Загрузка всех товаров для поиска...');
+  await waitForRateLimit();
+  const response = await api.get('/elements-pagination', {
+    params: {
+      'access-token': ALSTYLE_TOKEN,
+      exclude_missing: 'true',
+      limit: 250,
+      offset: 0,
+      additional_fields: 'brand,images',
+    }
+  });
+  const data = response.data;
+  setCache('products_cat_all', data);
+  console.log('✅ Загружено для поиска:', data.elements?.length || 0);
+  return data.elements || [];
+}
+
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', token: !!ALSTYLE_TOKEN, supabase: !!supabaseAdmin, cache: cache.size });
 });
@@ -103,7 +122,7 @@ app.get('/api/products', async (req, res) => {
     let cached = getCache(cacheKey, CACHE_TIMES.products);
 
     if (!cached) {
-      console.log(`📦 Загрузка товаров из API... категория: ${categoryParam || 'все'}`);
+      console.log(`📦 Загрузка товаров... категория: ${categoryParam || 'все'}`);
       await waitForRateLimit();
       const apiParams = {
         'access-token': ALSTYLE_TOKEN,
@@ -116,7 +135,9 @@ app.get('/api/products', async (req, res) => {
       const response = await api.get('/elements-pagination', { params: apiParams });
       cached = response.data;
       setCache(cacheKey, cached);
-      console.log('✅ Загружено и закешировано на 10 минут:', cached.elements?.length || 0);
+      // Если это запрос всех товаров — сохраняем и в общий кеш для поиска
+      if (!categoryParam) setCache('products_cat_all', cached);
+      console.log('✅ Загружено и закешировано:', cached.elements?.length || 0);
     }
 
     let products = cached.elements || [];
@@ -186,7 +207,7 @@ app.get('/api/categories', async (req, res) => {
       const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
       categories = Array.isArray(response.data) ? response.data : [];
       setCache('categories', categories);
-      console.log('✅ Категорий закешировано на 30 минут:', categories.length);
+      console.log('✅ Категорий:', categories.length);
     }
     res.json(categories);
   } catch (error) {
@@ -224,36 +245,55 @@ app.get('/api/filters', async (req, res) => {
   }
 });
 
-// ─── SEARCH ──────────────────────────────────────────────────
+// ─── SEARCH — теперь работает даже без кеша ──────────────────
 app.get('/api/search', async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json([]);
-    const products = getCache('products_cat_all', 999999);
-    if (!products?.elements) return res.json([]);
+
+    // Пробуем взять из кеша — если нет, загружаем
+    let products;
+    try {
+      products = await loadAllProducts();
+    } catch (e) {
+      console.error('❌ Не удалось загрузить товары для поиска:', e.message);
+      return res.json([]);
+    }
+
     const s = q.toLowerCase();
-    const results = products.elements
-      .filter(p => p.name?.toLowerCase().includes(s) || p.full_name?.toLowerCase().includes(s) || p.brand?.toLowerCase().includes(s))
+    const results = products
+      .filter(p =>
+        p.name?.toLowerCase().includes(s) ||
+        p.full_name?.toLowerCase().includes(s) ||
+        p.brand?.toLowerCase().includes(s)
+      )
       .slice(0, 10)
-      .map(p => ({ article: p.article, name: p.name || p.full_name, brand: p.brand, price: p.price2 || p.price1, image: p.images?.[0] || null }));
+      .map(p => ({
+        article: p.article,
+        name:    p.name || p.full_name,
+        brand:   p.brand,
+        price:   p.price2 || p.price1,
+        image:   p.images?.[0] || null,
+      }));
+
+    console.log(`🔍 Поиск "${q}": найдено ${results.length}`);
     res.json(results);
   } catch (error) {
+    console.error('❌ search:', error.message);
     res.json([]);
   }
 });
 
-// ─── AL-STYLE ORDER CREATION ──────────────────────────────────
+// ─── AL-STYLE ORDER ───────────────────────────────────────────
 app.post('/api/alstyle-order', async (req, res) => {
   try {
     const { items, comment, orderId } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'items обязательны' });
-    }
+    if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
 
     await waitForRateLimit();
     const userDataResponse = await api.get('/user-data', { params: { 'access-token': ALSTYLE_TOKEN } });
     const userData = userDataResponse.data?.data;
-    if (!userData) return res.status(500).json({ error: 'Не удалось получить данные пользователя al-style' });
+    if (!userData) return res.status(500).json({ error: 'Не удалось получить данные пользователя' });
 
     const attorney = userData['Доверенности']?.find(d => d['Основной'] && !d['empty']) || userData['Доверенности']?.[0];
     const delivery = userData['Транспортники']?.find(d => d['Основной']) || userData['Транспортники']?.[0];
@@ -262,10 +302,14 @@ app.post('/api/alstyle-order', async (req, res) => {
     await waitForRateLimit();
     await cartApi.get('/clear', { params: { 'access-token': ALSTYLE_TOKEN } });
 
-    const articles  = items.map(i => i.article).join(',');
-    const quantities = items.map(i => i.quantity).join(',');
     await waitForRateLimit();
-    await cartApi.get('/add', { params: { 'access-token': ALSTYLE_TOKEN, add: articles, quantity: quantities } });
+    await cartApi.get('/add', {
+      params: {
+        'access-token': ALSTYLE_TOKEN,
+        add:      items.map(i => i.article).join(','),
+        quantity: items.map(i => i.quantity).join(','),
+      }
+    });
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -285,7 +329,7 @@ app.post('/api/alstyle-order', async (req, res) => {
 
     const alstyleOrderId = submitResponse.data?.data?.id;
     console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
-    res.json({ success: true, alstyleOrderId, message: `Заказ #${alstyleOrderId} создан в al-style` });
+    res.json({ success: true, alstyleOrderId });
 
   } catch (error) {
     console.error('❌ al-style order error:', error.response?.data || error.message);
@@ -293,11 +337,11 @@ app.post('/api/alstyle-order', async (req, res) => {
   }
 });
 
-// ─── ORDERS (Supabase) ────────────────────────────────────────
+// ─── ORDERS ──────────────────────────────────────────────────
 app.post('/api/orders', requireAuth, async (req, res) => {
   try {
     const { items, address_id, address_text, comment, total_price } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items обязательны' });
+    if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
     const { data, error } = await supabaseAdmin
       .from('orders')
       .insert({ user_id: req.user.id, items, total_price: total_price || 0, address_id: address_id || null, address_text: address_text || null, comment: comment || null, status: 'pending' })
@@ -347,7 +391,7 @@ app.delete('/api/favorites/:article', requireAuth, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log('\n🚀 LUXE Backend v4.1');
+  console.log('\n🚀 LUXE Backend v4.2');
   console.log('━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Port: ${PORT}`);
   console.log(`🔑 Token: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
