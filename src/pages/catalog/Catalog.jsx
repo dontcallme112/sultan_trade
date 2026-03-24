@@ -142,6 +142,8 @@ export default function Catalog() {
           <div className="catalog-error">
             <div className="error-icon">⚠️</div>
             <h1 style={{color: 'red'}}>TEST VERSION 123</h1>
+                        <h1 style={{color: 'red'}}>TEST VERSION 123</h1>
+
             <h3>Ошибка загрузки</h3>
             <p>{error}</p>
             <button className="btn btn-primary" onClick={() => loadProducts(true)}>
