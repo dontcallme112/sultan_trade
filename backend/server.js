@@ -113,10 +113,15 @@ app.get('/api/products', async (req, res) => {
 
     let categoryParam = null;
     if (req.query.category) {
-      categoryParam = Array.isArray(req.query.category)
-        ? req.query.category.join(',')
-        : req.query.category;
-    }
+  const cats = Array.isArray(req.query.category)
+    ? req.query.category
+    : [req.query.category];
+  // Фильтруем — берём только строки и числа, отбрасываем объекты
+  const validCats = cats
+    .map(c => (typeof c === 'object' ? null : String(c)))
+    .filter(Boolean);
+  categoryParam = validCats.length > 0 ? validCats.join(',') : null;
+}
 
     const cacheKey = `products_cat_${categoryParam || 'all'}`;
     let cached = getCache(cacheKey, CACHE_TIMES.products);
