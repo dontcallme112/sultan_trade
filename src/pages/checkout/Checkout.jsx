@@ -13,7 +13,6 @@ export default function Checkout() {
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '', comment: '' });
-  const [paymentMethod, setPaymentMethod] = useState('kaspi');
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
 
@@ -24,7 +23,8 @@ export default function Checkout() {
     e.preventDefault();
     setLoading(true);
 
-    const orderId = 'ORD-' + Date.now();
+    const orderId      = 'ORD-' + Date.now();
+    const paymentMethod = 'kaspi'; // только Kaspi
 
     const items = (cart || []).map(item => ({
       article:   item.id || item.article,
@@ -50,7 +50,7 @@ export default function Checkout() {
         items,
         total_price:  totalPrice,
         address_text: formData.address,
-        comment:      `Имя: ${formData.name} | Тел: ${formData.phone} | Email: ${formData.email || '-'} | Оплата: ${paymentMethod} | Комментарий: ${formData.comment || '-'} | ID: ${orderId}`,
+        comment:      `Имя: ${formData.name} | Тел: ${formData.phone} | Email: ${formData.email || '-'} | Оплата: Kaspi | Комментарий: ${formData.comment || '-'} | ID: ${orderId}`,
       });
       if (error) console.error('❌ Supabase error:', error.message);
     } catch (err) { console.error('❌ Supabase save error:', err); }
@@ -133,27 +133,19 @@ export default function Checkout() {
                 </div>
               </div>
 
+              {/* Оплата — инфо блок без выбора */}
               <div className="form-section">
-                <h2 className="form-section-title">Способ оплаты</h2>
-                <div className="payment-methods">
-                  {[
-                    { value: 'kaspi', label: 'Kaspi Pay', desc: 'Оплата через Kaspi QR',
-                      icon: <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg> },
-                    { value: 'cash',  label: 'Наличными', desc: 'Оплата при получении',
-                      icon: <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> },
-                    { value: 'card',  label: 'Картой курьеру', desc: 'Терминал при доставке',
-                      icon: <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg> },
-                  ].map(m => (
-                    <label key={m.value} className="payment-method">
-                      <input type="radio" name="paymentMethod" value={m.value}
-                        checked={paymentMethod === m.value}
-                        onChange={e => setPaymentMethod(e.target.value)} />
-                      <div className="payment-method-content">
-                        <div className={`payment-method-icon ${m.value}`}>{m.icon}</div>
-                        <div className="payment-method-info"><h3>{m.label}</h3><p>{m.desc}</p></div>
-                      </div>
-                    </label>
-                  ))}
+                <h2 className="form-section-title">Оплата</h2>
+                <div className="kaspi-info">
+                  <div className="kaspi-info-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="kaspi-info-title">Kaspi Pay</p>
+                    <p className="kaspi-info-desc">После оформления заказа мы свяжемся с вами для оплаты через Kaspi QR</p>
+                  </div>
                 </div>
               </div>
 
@@ -176,47 +168,21 @@ export default function Checkout() {
             <div className="summary-items">
               {cart.map((item, index) => (
                 <div key={item.id || index} className="summary-item">
-
-                  {/* Картинка */}
                   <div className="summary-item-img">
-                    <img
-                      src={item.image || null}
-                      alt={item.title || item.name}
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+                    <img src={item.image || null} alt={item.title || item.name}
+                      onError={(e) => { e.target.style.display = 'none'; }} />
                   </div>
 
-                  {/* Инфо */}
                   <div className="summary-item-info">
                     <h4>{item.title || item.name || 'Товар'}</h4>
                     <p className="summary-item-price-unit">{formatNumber(item.price || 0)} ₸ / шт.</p>
 
-                    {/* ── Редактирование количества ── */}
                     <div className="summary-item-qty">
-                      <button
-                        className="qty-btn"
-                        onClick={() => updateQuantity(item.id, (item.quantity || 1) - 1)}
-                        aria-label="Уменьшить"
-                        type="button"
-                      >−</button>
-
+                      <button className="qty-btn" onClick={() => updateQuantity(item.id, (item.quantity || 1) - 1)} aria-label="Уменьшить" type="button">−</button>
                       <span className="qty-value">{item.quantity || 1}</span>
-
-                      <button
-                        className="qty-btn"
-                        onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)}
-                        aria-label="Увеличить"
-                        type="button"
-                      >+</button>
-
-                      <button
-                        className="qty-remove"
-                        onClick={() => removeFromCart(item.id)}
-                        aria-label="Удалить товар"
-                        type="button"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                          stroke="currentColor" strokeWidth="2">
+                      <button className="qty-btn" onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)} aria-label="Увеличить" type="button">+</button>
+                      <button className="qty-remove" onClick={() => removeFromCart(item.id)} aria-label="Удалить" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="3 6 5 6 21 6"/>
                           <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                           <path d="M10 11v6M14 11v6"/>
@@ -226,7 +192,6 @@ export default function Checkout() {
                     </div>
                   </div>
 
-                  {/* Итого по позиции */}
                   <div className="summary-item-total">
                     {formatNumber((item.price || 0) * (item.quantity || 1))} ₸
                   </div>
@@ -234,7 +199,6 @@ export default function Checkout() {
               ))}
             </div>
 
-            {/* Итоги */}
             <div className="summary-totals">
               <div className="summary-row">
                 <span>Товары ({itemCount} шт.)</span>
@@ -250,12 +214,7 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Кнопка "Продолжить покупки" */}
-            <button
-              className="continue-shopping-btn"
-              onClick={() => navigate('/catalog')}
-              type="button"
-            >
+            <button className="continue-shopping-btn" onClick={() => navigate('/catalog')} type="button">
               ← Продолжить покупки
             </button>
           </div>
@@ -264,4 +223,3 @@ export default function Checkout() {
     </div>
   );
 }
-
