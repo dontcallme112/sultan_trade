@@ -14,8 +14,6 @@ export default function Catalog() {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-
-  // ── Bottom sheet состояние ──
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const LIMIT = 12;
@@ -42,13 +40,8 @@ export default function Catalog() {
     setActiveCategoryIds(idsFromUrl);
   }, [searchParams]);
 
-  // Закрываем sheet при скролле на мобилке
   useEffect(() => {
-    if (filtersOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    document.body.style.overflow = filtersOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [filtersOpen]);
 
@@ -56,7 +49,6 @@ export default function Catalog() {
     try {
       setLoading(true);
       setError(null);
-
       const currentOffset = reset ? 0 : offset;
       const params = new URLSearchParams();
       params.set('limit', LIMIT);
@@ -89,15 +81,12 @@ export default function Catalog() {
     setActiveCategory(groupId);
     setActiveCategoryIds(categoryIds || []);
     setOffset(0);
-
     const params = new URLSearchParams();
     if (groupId) params.set('group', groupId);
     if (categoryIds?.length) categoryIds.forEach(id => params.append('category', id));
     if (searchQuery) params.set('search', searchQuery);
     if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
     setSearchParams(params);
-
-    // Закрываем sheet после выбора категории
     setFiltersOpen(false);
   };
 
@@ -141,9 +130,6 @@ export default function Catalog() {
         <div className="container">
           <div className="catalog-error">
             <div className="error-icon">⚠️</div>
-            <h1 style={{color: 'red'}}>TEST VERSION 123</h1>
-                        <h1 style={{color: 'red'}}>TEST VERSION 123</h1>
-
             <h3>Ошибка загрузки</h3>
             <p>{error}</p>
             <button className="btn btn-primary" onClick={() => loadProducts(true)}>
@@ -169,11 +155,11 @@ export default function Catalog() {
           </div>
 
           <div className="catalog-header-right">
-            {/* Кнопка фильтров — только на мобилке */}
+            {/* Кнопка категорий — только мобилка */}
             <button
               className="filter-btn"
               onClick={() => setFiltersOpen(true)}
-              aria-label="Открыть фильтры"
+              aria-label="Открыть категории"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2">
@@ -235,7 +221,6 @@ export default function Catalog() {
             />
           </aside>
 
-          {/* Товары */}
           <div className="catalog-main">
             {products.length === 0 ? (
               <div className="catalog-empty">
@@ -271,11 +256,10 @@ export default function Catalog() {
                       onClick={handleLoadMore}
                       disabled={loading}
                     >
-                      {loading ? (
-                        <><span className="btn-loader" />Загрузка...</>
-                      ) : (
-                        `Показать ещё (${products.length} из ${totalCount})`
-                      )}
+                      {loading
+                        ? <><span className="btn-loader" />Загрузка...</>
+                        : `Показать ещё (${products.length} из ${totalCount})`
+                      }
                     </button>
                   </div>
                 )}
@@ -291,36 +275,26 @@ export default function Catalog() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════
-          BOTTOM SHEET — категории на мобилке
-          ══════════════════════════════════════ */}
-
-      {/* Оверлей */}
+      {/* ── Bottom Sheet — категории на мобилке ── */}
       <div
         className={`mobile-filters-overlay${filtersOpen ? ' open' : ''}`}
         onClick={() => setFiltersOpen(false)}
         aria-hidden="true"
       />
 
-      {/* Sheet */}
       <div
         className={`mobile-filters${filtersOpen ? ' open' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label="Категории товаров"
       >
-        {/* Ручка */}
         <div className="mobile-filters-handle" />
 
-        {/* Заголовок */}
         <div className="mobile-filters-header">
           <h3>Категории</h3>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {activeCategory && (
-              <button
-                className="mobile-filters-reset"
-                onClick={handleClearFilters}
-              >
+              <button className="mobile-filters-reset" onClick={handleClearFilters}>
                 Сбросить
               </button>
             )}
@@ -334,7 +308,6 @@ export default function Catalog() {
           </div>
         </div>
 
-        {/* Сайдбар внутри шита */}
         <CategorySidebar
           onCategoryChange={handleCategoryChange}
           activeCategory={activeCategory}
