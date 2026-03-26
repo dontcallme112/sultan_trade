@@ -45,16 +45,36 @@ function setCache(key, data) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
-// ─── Rate limiting ────────────────────────────────────────────
-let lastApiCall = 0;
-const MIN_INTERVAL = 10000;
-async function waitForRateLimit() {
-  const wait = MIN_INTERVAL - (Date.now() - lastApiCall);
-  if (wait > 0) {
-    console.log(`⏳ Rate limit: ждем ${Math.round(wait/1000)}с`);
-    await new Promise(r => setTimeout(r, wait));
+// ─── In-flight дедупликация ───────────────────────────────────
+// Если два запроса хотят одни и те же данные — второй ждёт первого,
+// а не делает свой API-запрос.
+const inFlight = new Map();
+
+async function fetchOnce(key, fetchFn) {
+  if (inFlight.has(key)) {
+    console.log(`🔄 Дедупликация: ждём уже выполняющийся запрос ${key}`);
+    return inFlight.get(key);
   }
-  lastApiCall = Date.now();
+  const promise = fetchFn().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
+// ─── Rate limiting (очередь вместо sleep) ────────────────────
+// Вместо того чтобы блокировать каждый запрос на 10с,
+// ставим их в очередь — API дёргается строго по одному.
+const API_MIN_INTERVAL = 2000; // 2 секунды между вызовами — безопаснее и быстрее
+let apiQueue = Promise.resolve();
+
+function enqueueApiCall(fn) {
+  const next = apiQueue.then(async () => {
+    const result = await fn();
+    await new Promise(r => setTimeout(r, API_MIN_INTERVAL));
+    return result;
+  });
+  // Не даём ошибкам ломать очередь
+  apiQueue = next.catch(() => {});
+  return next;
 }
 
 // ─── Middleware ───────────────────────────────────────────────
@@ -80,55 +100,35 @@ const requireAuth = async (req, res, next) => {
 const api     = axios.create({ baseURL: 'https://api.al-style.kz/api',      timeout: 30000 });
 const cartApi = axios.create({ baseURL: 'https://api.al-style.kz/cart-api', timeout: 30000 });
 
-// ─── Загрузка всех товаров (используется в поиске) ───────────
-async function loadAllProducts() {
-  let cached = getCache('products_cat_all', CACHE_TIMES.products);
-  if (cached) return cached.elements || [];
+// ─── Утилита: парсим category из query ───────────────────────
+// FIX: ранее объект попадал как [object Object] и API возвращал 500
+function parseCategoryParam(rawCategory) {
+  if (!rawCategory) return null;
 
-  console.log('📦 Загрузка всех товаров для поиска...');
-  await waitForRateLimit();
-  const response = await api.get('/elements-pagination', {
-    params: {
-      'access-token': ALSTYLE_TOKEN,
-      exclude_missing: 'true',
-      limit: 250,
-      offset: 0,
-      additional_fields: 'brand,images',
-    }
-  });
-  const data = response.data;
-  setCache('products_cat_all', data);
-  console.log('✅ Загружено для поиска:', data.elements?.length || 0);
-  return data.elements || [];
-}
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', token: !!ALSTYLE_TOKEN, supabase: !!supabaseAdmin, cache: cache.size });
-});
-
-// ─── PRODUCTS ────────────────────────────────────────────────
-app.get('/api/products', async (req, res) => {
-  try {
-    const { limit = 12, offset = 0, minPrice, maxPrice, brand, onlyNew, search, sortBy } = req.query;
-
-    let categoryParam = null;
-    if (req.query.category) {
-  const cats = Array.isArray(req.query.category)
-    ? req.query.category
-    : [req.query.category];
-  // Фильтруем — берём только строки и числа, отбрасываем объекты
-  const validCats = cats
-    .map(c => (typeof c === 'object' ? null : String(c)))
+  const cats = Array.isArray(rawCategory) ? rawCategory : [rawCategory];
+  const valid = cats
+    .map(c => {
+      if (c === null || c === undefined) return null;
+      if (typeof c === 'object') return null; // выбрасываем объекты
+      const str = String(c).trim();
+      // Проверяем что это число или список чисел через запятую
+      if (!/^[\d,]+$/.test(str)) return null;
+      return str;
+    })
     .filter(Boolean);
-  categoryParam = validCats.length > 0 ? validCats.join(',') : null;
+
+  return valid.length > 0 ? valid.join(',') : null;
 }
 
-    const cacheKey = `products_cat_${categoryParam || 'all'}`;
-    let cached = getCache(cacheKey, CACHE_TIMES.products);
+// ─── Загрузка товаров через очередь + дедупликацию ───────────
+async function loadProducts(categoryParam) {
+  const cacheKey = `products_cat_${categoryParam || 'all'}`;
+  const cached = getCache(cacheKey, CACHE_TIMES.products);
+  if (cached) return cached;
 
-    if (!cached) {
-      console.log(`📦 Загрузка товаров... категория: ${categoryParam || 'все'}`);
-      await waitForRateLimit();
+  return fetchOnce(cacheKey, () =>
+    enqueueApiCall(async () => {
+      console.log(`📦 API: загрузка товаров, категория: ${categoryParam || 'все'}`);
       const apiParams = {
         'access-token': ALSTYLE_TOKEN,
         exclude_missing: 'true',
@@ -138,14 +138,47 @@ app.get('/api/products', async (req, res) => {
       };
       if (categoryParam) apiParams.category = categoryParam;
       const response = await api.get('/elements-pagination', { params: apiParams });
-      cached = response.data;
-      setCache(cacheKey, cached);
-      // Если это запрос всех товаров — сохраняем и в общий кеш для поиска
-      if (!categoryParam) setCache('products_cat_all', cached);
-      console.log('✅ Загружено и закешировано:', cached.elements?.length || 0);
+      const data = response.data;
+      setCache(cacheKey, data);
+      // Дополнительно кешируем как "все товары" если это запрос без категории
+      if (!categoryParam) setCache('products_cat_all', data);
+      console.log(`✅ Загружено: ${data.elements?.length || 0} товаров`);
+      return data;
+    })
+  );
+}
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    token: !!ALSTYLE_TOKEN,
+    supabase: !!supabaseAdmin,
+    cache: cache.size,
+    inFlight: inFlight.size,
+  });
+});
+
+// ─── PRODUCTS ────────────────────────────────────────────────
+app.get('/api/products', async (req, res) => {
+  try {
+    const { limit = 12, offset = 0, minPrice, maxPrice, brand, onlyNew, search, sortBy } = req.query;
+
+    // FIX: безопасный парсинг category
+    const categoryParam = parseCategoryParam(req.query.category);
+
+    let data;
+    try {
+      data = await loadProducts(categoryParam);
+    } catch (err) {
+      console.error('❌ Ошибка загрузки товаров:', err.message);
+      return res.status(502).json({
+        error: 'Не удалось загрузить товары с поставщика',
+        elements: [],
+        pagination: { totalCount: 0, hasMore: false },
+      });
     }
 
-    let products = cached.elements || [];
+    let products = data.elements || [];
 
     if (minPrice || maxPrice) {
       products = products.filter(p => {
@@ -164,21 +197,20 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    if (sortBy === 'price_asc') products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
+    if (sortBy === 'price_asc')  products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
     else if (sortBy === 'price_desc') products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    else if (sortBy === 'name_asc') products.sort((a, b) => (a.name||'').localeCompare(b.name||''));
-    else if (sortBy === 'newest') products.sort((a, b) => (b.isnew||0) - (a.isnew||0));
+    else if (sortBy === 'name_asc')  products.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+    else if (sortBy === 'newest')    products.sort((a, b) => (b.isnew||0) - (a.isnew||0));
 
     const start = Number(offset);
     const end   = start + Number(limit);
-    const paginated = products.slice(start, end);
 
     res.json({
-      elements: paginated,
+      elements: products.slice(start, end),
       pagination: { totalCount: products.length, total: products.length, offset: start, limit: Number(limit), hasMore: end < products.length }
     });
   } catch (error) {
-    console.error('❌ products:', error.message);
+    console.error('❌ /api/products:', error.message);
     res.status(500).json({ error: error.message, elements: [], pagination: { totalCount: 0, hasMore: false } });
   }
 });
@@ -187,15 +219,19 @@ app.get('/api/products', async (req, res) => {
 app.get('/api/product/:article', async (req, res) => {
   try {
     const key = `product_${req.params.article}`;
-    let product = getCache(key, CACHE_TIMES.product);
-    if (!product) {
-      await waitForRateLimit();
-      const response = await api.get('/element-info', {
-        params: { 'access-token': ALSTYLE_TOKEN, article: req.params.article, additional_fields: 'brand,images,description' }
-      });
-      product = Array.isArray(response.data) ? response.data[0] : response.data;
-      setCache(key, product);
-    }
+    const cached = getCache(key, CACHE_TIMES.product);
+    if (cached) return res.json(cached);
+
+    const product = await fetchOnce(key, () =>
+      enqueueApiCall(async () => {
+        const response = await api.get('/element-info', {
+          params: { 'access-token': ALSTYLE_TOKEN, article: req.params.article, additional_fields: 'brand,images,description' }
+        });
+        const data = Array.isArray(response.data) ? response.data[0] : response.data;
+        setCache(key, data);
+        return data;
+      })
+    );
     res.json(product);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -205,15 +241,19 @@ app.get('/api/product/:article', async (req, res) => {
 // ─── CATEGORIES ──────────────────────────────────────────────
 app.get('/api/categories', async (req, res) => {
   try {
-    let categories = getCache('categories', CACHE_TIMES.categories);
-    if (!categories) {
-      console.log('📦 Загрузка категорий из API...');
-      await waitForRateLimit();
-      const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
-      categories = Array.isArray(response.data) ? response.data : [];
-      setCache('categories', categories);
-      console.log('✅ Категорий:', categories.length);
-    }
+    const cached = getCache('categories', CACHE_TIMES.categories);
+    if (cached) return res.json(cached);
+
+    const categories = await fetchOnce('categories', () =>
+      enqueueApiCall(async () => {
+        console.log('📦 API: загрузка категорий...');
+        const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
+        const data = Array.isArray(response.data) ? response.data : [];
+        setCache('categories', data);
+        console.log('✅ Категорий:', data.length);
+        return data;
+      })
+    );
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -223,48 +263,60 @@ app.get('/api/categories', async (req, res) => {
 // ─── FILTERS ─────────────────────────────────────────────────
 app.get('/api/filters', async (req, res) => {
   try {
-    let filters = getCache('filters', CACHE_TIMES.filters);
-    if (filters) return res.json(filters);
-    let brands = [];
-    try {
-      await waitForRateLimit();
-      const response = await api.get('/brands', { params: { 'access-token': ALSTYLE_TOKEN } });
-      if (response.data.status && Array.isArray(response.data.data)) {
-        brands = response.data.data.filter(b => b.name?.trim()).map(b => b.name).sort();
-      }
-    } catch (e) {
-      const products = getCache('products_cat_all', 999999);
-      if (products?.elements) brands = [...new Set(products.elements.map(p => p.brand).filter(Boolean))].sort();
-    }
-    let priceRange = { min: 0, max: 1000000 };
-    const products = getCache('products_cat_all', 999999);
-    if (products?.elements) {
-      const prices = products.elements.map(p => p.price2 || p.price1 || 0).filter(p => p > 0);
-      if (prices.length) priceRange = { min: Math.min(...prices), max: Math.max(...prices) };
-    }
-    filters = { brands: brands.slice(0, 50), priceRange };
-    setCache('filters', filters);
+    const cached = getCache('filters', CACHE_TIMES.filters);
+    if (cached) return res.json(cached);
+
+    const filters = await fetchOnce('filters', () =>
+      enqueueApiCall(async () => {
+        let brands = [];
+        try {
+          const response = await api.get('/brands', { params: { 'access-token': ALSTYLE_TOKEN } });
+          if (response.data.status && Array.isArray(response.data.data)) {
+            brands = response.data.data.filter(b => b.name?.trim()).map(b => b.name).sort();
+          }
+        } catch (e) {
+          const allProducts = getCache('products_cat_all', 999999);
+          if (allProducts?.elements) {
+            brands = [...new Set(allProducts.elements.map(p => p.brand).filter(Boolean))].sort();
+          }
+        }
+
+        let priceRange = { min: 0, max: 1000000 };
+        const allProducts = getCache('products_cat_all', 999999);
+        if (allProducts?.elements) {
+          const prices = allProducts.elements.map(p => p.price2 || p.price1 || 0).filter(p => p > 0);
+          if (prices.length) priceRange = { min: Math.min(...prices), max: Math.max(...prices) };
+        }
+
+        const data = { brands: brands.slice(0, 50), priceRange };
+        setCache('filters', data);
+        return data;
+      })
+    );
     res.json(filters);
   } catch (error) {
     res.json({ brands: [], priceRange: { min: 0, max: 1000000 } });
   }
 });
 
-// ─── SEARCH — теперь работает даже без кеша ──────────────────
+// ─── SEARCH ──────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json([]);
 
-    // Пробуем взять из кеша — если нет, загружаем
-    let products;
-    try {
-      products = await loadAllProducts();
-    } catch (e) {
-      console.error('❌ Не удалось загрузить товары для поиска:', e.message);
-      return res.json([]);
+    // Берём из кеша если есть, иначе загружаем
+    let allData = getCache('products_cat_all', CACHE_TIMES.products);
+    if (!allData) {
+      try {
+        allData = await loadProducts(null);
+      } catch (e) {
+        console.error('❌ Не удалось загрузить товары для поиска:', e.message);
+        return res.json([]);
+      }
     }
 
+    const products = allData.elements || [];
     const s = q.toLowerCase();
     const results = products
       .filter(p =>
@@ -274,11 +326,11 @@ app.get('/api/search', async (req, res) => {
       )
       .slice(0, 10)
       .map(p => ({
-        article: p.article,
-        name:    p.name || p.full_name,
-        brand:   p.brand,
-        price:   p.price2 || p.price1,
-        image:   p.images?.[0] || null,
+        article:  p.article,
+        name:     p.name || p.full_name,
+        brand:    p.brand,
+        price:    p.price2 || p.price1,
+        image:    p.images?.[0] || null,
       }));
 
     console.log(`🔍 Поиск "${q}": найдено ${results.length}`);
@@ -295,7 +347,7 @@ app.post('/api/alstyle-order', async (req, res) => {
     const { items, comment, orderId } = req.body;
     if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
 
-    await waitForRateLimit();
+    // Заказы не ставим в очередь — они должны исполняться быстро
     const userDataResponse = await api.get('/user-data', { params: { 'access-token': ALSTYLE_TOKEN } });
     const userData = userDataResponse.data?.data;
     if (!userData) return res.status(500).json({ error: 'Не удалось получить данные пользователя' });
@@ -304,10 +356,8 @@ app.post('/api/alstyle-order', async (req, res) => {
     const delivery = userData['Транспортники']?.find(d => d['Основной']) || userData['Транспортники']?.[0];
     if (!attorney || !delivery) return res.status(500).json({ error: 'Не найдены доверенность или способ доставки' });
 
-    await waitForRateLimit();
     await cartApi.get('/clear', { params: { 'access-token': ALSTYLE_TOKEN } });
 
-    await waitForRateLimit();
     await cartApi.get('/add', {
       params: {
         'access-token': ALSTYLE_TOKEN,
@@ -320,7 +370,6 @@ app.post('/api/alstyle-order', async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const shippingDate = `${String(tomorrow.getDate()).padStart(2,'0')}.${String(tomorrow.getMonth()+1).padStart(2,'0')}.${tomorrow.getFullYear()}`;
 
-    await waitForRateLimit();
     const submitResponse = await cartApi.post('/submit', null, {
       params: {
         'access-token': ALSTYLE_TOKEN,
@@ -395,12 +444,32 @@ app.delete('/api/favorites/:article', requireAuth, async (req, res) => {
   }
 });
 
+// ─── Прогрев кеша при старте ──────────────────────────────────
+async function warmupCache() {
+  console.log('🔥 Прогрев кеша...');
+  try {
+    await loadProducts(null); // загружаем все товары
+    // Небольшая пауза перед следующим запросом
+    await new Promise(r => setTimeout(r, API_MIN_INTERVAL));
+    // Загружаем категории
+    const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
+    const cats = Array.isArray(response.data) ? response.data : [];
+    setCache('categories', cats);
+    console.log(`✅ Кеш прогрет: ${cats.length} категорий`);
+  } catch (e) {
+    console.warn('⚠️ Прогрев кеша не удался:', e.message);
+  }
+}
+
 app.listen(PORT, () => {
-  console.log('\n🚀 LUXE Backend v4.2');
+  console.log('\n🚀 LUXE Backend v4.3');
   console.log('━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Port: ${PORT}`);
   console.log(`🔑 Token: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
   console.log(`🔐 Auth: ${supabaseAdmin ? '✅ Supabase' : '⚠️  Disabled'}`);
   console.log('⏱️  Кеш: товары 10мин, категории 30мин');
   console.log('✨ Готово!\n');
+
+  // Прогрев через 1 секунду после старта
+  setTimeout(warmupCache, 1000);
 });
