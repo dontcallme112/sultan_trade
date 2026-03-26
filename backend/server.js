@@ -197,11 +197,18 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    if (sortBy === 'price_asc')  products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
-    else if (sortBy === 'price_desc') products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    else if (sortBy === 'name_asc')  products.sort((a, b) => (a.name||'').localeCompare(b.name||''));
-    else if (sortBy === 'newest')    products.sort((a, b) => (b.isnew||0) - (a.isnew||0));
-
+    if (!sortBy || sortBy === 'smart' || sortBy === 'default') {
+      // По умолчанию — дорогие первыми (телефоны, ноутбуки наверх)
+      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    } else if (sortBy === 'price_asc') {
+      products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
+    } else if (sortBy === 'price_desc') {
+      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    } else if (sortBy === 'name_asc') {
+      products.sort((a, b) => (a.name||'').localeCompare(b.name||'', 'ru'));
+    } else if (sortBy === 'newest') {
+      products.sort((a, b) => (b.isnew||0) - (a.isnew||0) || (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    }
     const start = Number(offset);
     const end   = start + Number(limit);
 
