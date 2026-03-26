@@ -4,13 +4,13 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../api/supabaseClient';
 import { BACKEND_URL } from '../../api/client';
-import { formatNumber } from '../../utils/priceUtils.js';
+import { formatPriceWithMarkup } from '../../utils/priceUtils.js';
 import './Product.css';
 
 export default function Product() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
+  const { addToCart, buyNow } = useCart();
   const { user } = useAuth();
 
   const [product, setProduct]             = useState(null);
@@ -71,7 +71,7 @@ export default function Product() {
         user_id:   user.id,
         article:   product.article,
         name:      product.name,
-        price:     getProductPrice(), // оригинальная цена без наценки
+        price:     Math.round(getProductPrice() * 1.1), // с наценкой
         image_url: getProductImages()[0],
       });
       setIsFavorite(true);
@@ -81,12 +81,13 @@ export default function Product() {
 
   const handleAddToCart = () => {
     if (!product) return;
+    const priceWithMarkup = Math.round(getProductPrice() * 1.1);
     const cartItem = {
       id:      product.article,
       article: product.article,
       title:   product.name,
       name:    product.name,
-      price:   getProductPrice(), // оригинальная цена БЕЗ наценки
+      price:   priceWithMarkup, // +10% наценка
       image:   getProductImages()[0],
     };
     for (let i = 0; i < quantity; i++) addToCart(cartItem);
@@ -95,11 +96,29 @@ export default function Product() {
     setTimeout(() => setAddedToCart(false), 3000);
   };
 
+  // Купить сейчас с наценкой
+  const handleBuyNow = () => {
+    if (!product || !inStock) return;
+    const priceWithMarkup = Math.round(getProductPrice() * 1.1);
+    buyNow(
+      {
+        id:      product.article,
+        article: product.article,
+        title:   product.name,
+        name:    product.name,
+        price:   priceWithMarkup,
+        image:   getProductImages()[0],
+      },
+      navigate,
+      quantity
+    );
+  };
+
   const getProductPrice  = () => product?.price2 || product?.price1 || product?.price || 0;
   const getProductImages = () => {
     if (product?.images?.length) return product.images;
     if (product?.image) return [product.image];
-    return ['https://via.placeholder.com/600x600?text=No+Image'];
+    return [];
   };
 
   const prevImage = () => setSelectedImage(i => (i - 1 + images.length) % images.length);
@@ -168,9 +187,20 @@ export default function Product() {
 
         <div className="product-content">
           <div className="product-gallery">
-            <div className="main-image" onClick={() => setLightbox(true)} title="Нажмите для увеличения">
-              <img src={images[selectedImage]} alt={productName}
-                onError={e => { e.target.src = 'https://via.placeholder.com/600x600?text=No+Image'; }} />
+            <div className="main-image" onClick={() => setLightbox(true)}>
+              {images.length > 0 ? (
+                <img src={images[selectedImage]} alt={productName}
+                  onError={e => { e.target.style.display = 'none'; }} />
+              ) : (
+                <div className="product-image-placeholder">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="1" opacity="0.3">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </div>
+              )}
               <div className="zoom-hint">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -188,7 +218,8 @@ export default function Product() {
               <div className="thumbnails">
                 {images.map((img, i) => (
                   <button key={i} className={`thumbnail ${selectedImage === i ? 'active' : ''}`} onClick={() => setSelectedImage(i)}>
-                    <img src={img} alt={`${productName} ${i + 1}`} onError={e => { e.target.src = 'https://via.placeholder.com/100x100?text=?'; }} />
+                    <img src={img} alt={`${productName} ${i + 1}`}
+                      onError={e => { e.target.style.display = 'none'; }} />
                   </button>
                 ))}
               </div>
@@ -209,13 +240,16 @@ export default function Product() {
 
             <p className="product-article">Артикул: {product.article}</p>
 
-            {/* Цена БЕЗ наценки — как в каталоге */}
+            {/* ── Цена С наценкой 10% ── */}
             <div className="product-price-block">
-              <span className="product-price">{formatNumber(currentPrice)} ₸</span>
+              <span className="product-price">{formatPriceWithMarkup(currentPrice)}</span>
             </div>
 
             <div className="product-stock">
-              {inStock ? <span className="in-stock">✓ В наличии</span> : <span className="out-of-stock">✕ Нет в наличии</span>}
+              {inStock
+                ? <span className="in-stock">✓ В наличии</span>
+                : <span className="out-of-stock">✕ Нет в наличии</span>
+              }
             </div>
 
             {product.description && (
@@ -246,14 +280,25 @@ export default function Product() {
             </div>
 
             <div className="product-actions">
-              <button className={`btn btn-primary btn-lg ${addedToCart ? 'added' : ''}`} onClick={handleAddToCart} disabled={!inStock}>
+              <button
+                className={`btn btn-primary btn-lg ${addedToCart ? 'added' : ''}`}
+                onClick={handleAddToCart}
+                disabled={!inStock}
+              >
                 {addedToCart ? (
                   <><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>Добавлено</>
                 ) : (
                   <><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>В корзину</>
                 )}
               </button>
-              <button className="btn btn-secondary btn-lg" onClick={() => navigate('/cart')}>Перейти в корзину</button>
+
+              <button
+                className="btn btn-secondary btn-lg"
+                onClick={handleBuyNow}
+                disabled={!inStock}
+              >
+                Купить сейчас
+              </button>
             </div>
 
             <div className="product-features">

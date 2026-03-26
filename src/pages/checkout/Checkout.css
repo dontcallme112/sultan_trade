@@ -622,3 +622,18 @@
 .checkout-empty h2   { color: #FFF; margin: 0; }
 .checkout-empty p    { color: #555; margin: 0; }
 
+.checkout-page {
+  padding-top: calc(80px + 2rem);
+}
+ 
+@media (max-width: 768px) {
+  .checkout-page {
+    padding-top: calc(72px + 1rem);
+  }
+}
+ 
+@media (max-width: 480px) {
+  .checkout-page {
+    padding-top: calc(68px + 0.75rem);
+  }
+}

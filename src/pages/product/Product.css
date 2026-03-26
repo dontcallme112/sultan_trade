@@ -640,3 +640,19 @@
   .specs-grid { padding: 0.75rem; }
   .spec-item { font-size: 0.8125rem; }
 }
+
+.product-page {
+  padding-top: calc(80px + 2rem);
+}
+ 
+@media (max-width: 768px) {
+  .product-page {
+    padding-top: calc(72px + 1rem);
+  }
+}
+ 
+@media (max-width: 480px) {
+  .product-page {
+    padding-top: calc(68px + 0.75rem);
+  }
+}
