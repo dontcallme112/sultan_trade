@@ -1,10 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
 import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
 import { BACKEND_URL } from '../../api/client';
 import './Catalog.css';
 import ProductCardSkeleton from '../../components/features/ProductCard/ProductCardSkeleton';
+
+// Категории для горизонтального скролла на мобилке
+const MOBILE_CATEGORIES = [
+  { id: 'phones',       icon: '📱', label: 'Телефоны',    keywords: ['мобильн', 'телефон', 'смартфон', 'планшет', 'iphone'] },
+  { id: 'computers',    icon: '💻', label: 'Компьютеры',  keywords: ['ноутбук', 'laptop', 'системн блок', 'компьютер', 'процессор'] },
+  { id: 'peripherals',  icon: '⌨️', label: 'Периферия',   keywords: ['клавиатур', 'мышь', 'монитор', 'принтер'] },
+  { id: 'audio',        icon: '🎧', label: 'Аудио',       keywords: ['наушник', 'колонк', 'микрофон', 'аудио'] },
+  { id: 'gaming',       icon: '🎮', label: 'Игры',        keywords: ['игров', 'консол', 'джойстик', 'геймпад'] },
+  { id: 'tv_media',     icon: '📺', label: 'ТВ',          keywords: ['телевизор', 'проектор', 'медиаплеер'] },
+  { id: 'network',      icon: '🌐', label: 'Сеть',        keywords: ['роутер', 'сетев', 'wifi', 'коммутатор'] },
+  { id: 'wearables',    icon: '⌚', label: 'Умные',       keywords: ['смарт час', 'фитнес', 'умный дом'] },
+  { id: 'cables_power', icon: '🔌', label: 'Кабели',      keywords: ['кабел', 'зарядн', 'переходник'] },
+  { id: 'storage',      icon: '💾', label: 'Память',      keywords: ['флешк', 'карт памят', 'ssd', 'накопитель'] },
+  { id: 'office',       icon: '🖨️', label: 'Офис',        keywords: ['принтер', 'сканер', 'картридж', 'офисн'] },
+  { id: 'photo_video',  icon: '📷', label: 'Фото/Видео',  keywords: ['камер', 'фотоаппарат', 'штатив', 'дрон'] },
+];
+
+function getGroupId(categoryName) {
+  const name = categoryName.toLowerCase();
+  for (const group of MOBILE_CATEGORIES) {
+    if (group.keywords.some(kw => name.includes(kw))) return group.id;
+  }
+  return null;
+}
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,7 +38,10 @@ export default function Catalog() {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Категории для горизонтального скролла
+  const [mobileCategories, setMobileCategories] = useState([]);
+  const [activeMobileChip, setActiveMobileChip] = useState(null);
 
   const LIMIT = 12;
 
@@ -28,6 +55,28 @@ export default function Catalog() {
   const searchQuery = searchParams.get('search') || null;
   const sortBy = searchParams.get('sortBy') || 'default';
 
+  // Загружаем категории для чипов
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/categories`)
+      .then(r => r.json())
+      .then(data => {
+        const arr = Array.isArray(data) ? data : (data?.data || []);
+        // Группируем по groupId
+        const grouped = {};
+        arr.filter(c => c.elements > 0).forEach(c => {
+          const gid = getGroupId(c.name);
+          if (!gid) return;
+          if (!grouped[gid]) grouped[gid] = { categoryIds: [] };
+          grouped[gid].categoryIds.push(c.id.toString());
+        });
+        // Собираем чипы только для тех групп где есть товары
+        const chips = MOBILE_CATEGORIES.filter(m => grouped[m.id]?.categoryIds.length > 0)
+          .map(m => ({ ...m, categoryIds: grouped[m.id].categoryIds }));
+        setMobileCategories(chips);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setOffset(0);
     loadProducts(true);
@@ -38,12 +87,8 @@ export default function Catalog() {
     const idsFromUrl = searchParams.getAll('category') || [];
     setActiveCategory(groupFromUrl);
     setActiveCategoryIds(idsFromUrl);
+    setActiveMobileChip(groupFromUrl);
   }, [searchParams]);
-
-  useEffect(() => {
-    document.body.style.overflow = filtersOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [filtersOpen]);
 
   const loadProducts = async (reset = false) => {
     try {
@@ -77,9 +122,31 @@ export default function Catalog() {
     }
   };
 
+  // Клик по чипу категории
+  const handleChipClick = (chip) => {
+    if (activeMobileChip === chip.id) {
+      // Снимаем фильтр
+      setActiveMobileChip(null);
+      setActiveCategory(null);
+      setActiveCategoryIds([]);
+      setOffset(0);
+      setSearchParams(new URLSearchParams());
+    } else {
+      setActiveMobileChip(chip.id);
+      setActiveCategory(chip.id);
+      setActiveCategoryIds(chip.categoryIds);
+      setOffset(0);
+      const params = new URLSearchParams();
+      params.set('group', chip.id);
+      chip.categoryIds.forEach(id => params.append('category', id));
+      setSearchParams(params);
+    }
+  };
+
   const handleCategoryChange = (groupId, categoryIds) => {
     setActiveCategory(groupId);
     setActiveCategoryIds(categoryIds || []);
+    setActiveMobileChip(groupId);
     setOffset(0);
     const params = new URLSearchParams();
     if (groupId) params.set('group', groupId);
@@ -87,7 +154,6 @@ export default function Catalog() {
     if (searchQuery) params.set('search', searchQuery);
     if (sortBy && sortBy !== 'default') params.set('sortBy', sortBy);
     setSearchParams(params);
-    setFiltersOpen(false);
   };
 
   const handleSortChange = (e) => {
@@ -105,9 +171,9 @@ export default function Catalog() {
   const handleClearFilters = () => {
     setActiveCategory(null);
     setActiveCategoryIds([]);
+    setActiveMobileChip(null);
     setOffset(0);
     setSearchParams(new URLSearchParams());
-    setFiltersOpen(false);
   };
 
   if (loading && products.length === 0) {
@@ -153,24 +219,7 @@ export default function Catalog() {
               {totalCount > 0 ? `${totalCount} товаров` : 'Товары не найдены'}
             </p>
           </div>
-
           <div className="catalog-header-right">
-            {/* Кнопка категорий — только мобилка */}
-            <button
-              className="filter-btn"
-              onClick={() => setFiltersOpen(true)}
-              aria-label="Открыть категории"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2">
-                <line x1="4" y1="6" x2="20" y2="6"/>
-                <line x1="8" y1="12" x2="20" y2="12"/>
-                <line x1="12" y1="18" x2="20" y2="18"/>
-              </svg>
-              Категории
-              {activeCategory && <span className="filter-btn-dot" />}
-            </button>
-
             <div className="catalog-sort">
               <select
                 id="sort"
@@ -189,21 +238,39 @@ export default function Catalog() {
           </div>
         </div>
 
+        {/* ── Горизонтальный скролл категорий (мобилка) ── */}
+        <div className="catalog-categories-scroll">
+          <div className="categories-scroll-wrapper">
+            <div className="categories-scroll-track">
+              {/* Чип "Все" */}
+              <button
+                className={`category-chip category-chip-all${!activeMobileChip ? ' active' : ''}`}
+                onClick={handleClearFilters}
+              >
+                🏠 Все
+              </button>
+
+              {mobileCategories.map(chip => (
+                <button
+                  key={chip.id}
+                  className={`category-chip${activeMobileChip === chip.id ? ' active' : ''}`}
+                  onClick={() => handleChipClick(chip)}
+                >
+                  <span className="category-chip-icon">{chip.icon}</span>
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* ── Активные фильтры ── */}
-        {(activeCategory || searchQuery) && (
+        {searchQuery && (
           <div className="active-filters">
-            {searchQuery && (
-              <div className="filter-tag">
-                <span>«{searchQuery}»</span>
-                <button onClick={handleClearFilters}>×</button>
-              </div>
-            )}
-            {activeCategory && (
-              <div className="filter-tag">
-                <span>Категория выбрана</span>
-                <button onClick={handleClearFilters}>×</button>
-              </div>
-            )}
+            <div className="filter-tag">
+              <span>«{searchQuery}»</span>
+              <button onClick={handleClearFilters}>×</button>
+            </div>
             <button className="clear-all-btn" onClick={handleClearFilters}>
               Сбросить
             </button>
@@ -232,7 +299,7 @@ export default function Catalog() {
                   </svg>
                 </div>
                 <h2>Товары не найдены</h2>
-                <p>Попробуйте выбрать другую категорию или изменить поисковый запрос</p>
+                <p>Попробуйте выбрать другую категорию</p>
                 <button className="btn btn-primary" onClick={handleClearFilters}>
                   Показать все товары
                 </button>
@@ -273,45 +340,6 @@ export default function Catalog() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* ── Bottom Sheet — категории на мобилке ── */}
-      <div
-        className={`mobile-filters-overlay${filtersOpen ? ' open' : ''}`}
-        onClick={() => setFiltersOpen(false)}
-        aria-hidden="true"
-      />
-
-      <div
-        className={`mobile-filters${filtersOpen ? ' open' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Категории товаров"
-      >
-        <div className="mobile-filters-handle" />
-
-        <div className="mobile-filters-header">
-          <h3>Категории</h3>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {activeCategory && (
-              <button className="mobile-filters-reset" onClick={handleClearFilters}>
-                Сбросить
-              </button>
-            )}
-            <button
-              className="mobile-filters-close"
-              onClick={() => setFiltersOpen(false)}
-              aria-label="Закрыть"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <CategorySidebar
-          onCategoryChange={handleCategoryChange}
-          activeCategory={activeCategory}
-        />
       </div>
     </div>
   );
