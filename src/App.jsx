@@ -14,6 +14,7 @@ import OrderConfirmation from './pages/OrderConfirmation/OrderConfirmation';
 import NewProducts from './pages/NewProducts/NewProducts';
 import Profile from './pages/Profile/Profile.jsx';
 import AuthCallback from './pages/AuthCallback/AuthCallback.jsx';
+import ProductGrid from './components/features/ProductGrid/ProductGrid.jsx';
 import './styles/globals.css';
 import './styles/variables.css';
 import './styles/animations.css';
@@ -28,6 +29,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/catalog" element={<Catalog />} />
+              <Route path="/products" element={<ProductGrid />} />
               <Route path="/product/:id" element={<Product />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />

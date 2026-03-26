@@ -1,0 +1,226 @@
+/* ─── ProductList page ───────────────────────────────────────── */
+.pl-page {
+  min-height: 100vh;
+  background: #0d0d0d;
+  padding-bottom: 80px;
+}
+
+/* Header */
+.pl-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  background: #0d0d0d;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.pl-back {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #ccc;
+  flex-shrink: 0;
+  transition: background .14s;
+}
+.pl-back:active { background: #222; }
+
+.pl-title {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-count {
+  background: #1e1e1e;
+  border: 1px solid #2a2a2a;
+  color: #666;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+/* Search */
+.pl-search-wrap {
+  padding: 10px 16px 6px;
+}
+.pl-search-box {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #1a1a1a;
+  border: 1.5px solid #242424;
+  border-radius: 11px;
+  padding: 9px 13px;
+  transition: border-color .16s;
+}
+.pl-search-box:focus-within { border-color: #d4a843; }
+.pl-search-box svg { color: #444; flex-shrink: 0; }
+.pl-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+.pl-search-input::placeholder { color: #3a3a3a; }
+.pl-search-clear {
+  background: none;
+  border: none;
+  color: #444;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+/* Sort chips */
+.pl-sort-row {
+  display: flex;
+  gap: 7px;
+  padding: 8px 16px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.pl-sort-row::-webkit-scrollbar { display: none; }
+
+.pl-sort-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid #242424;
+  background: #141414;
+  color: #777;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.pl-sort-btn:active { opacity: .75; }
+.pl-sort-btn.active {
+  background: #d4a843;
+  border-color: #d4a843;
+  color: #111;
+  font-weight: 700;
+}
+
+/* Products grid — 3 columns on mobile */
+.pl-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 10px;
+}
+
+@media (min-width: 600px) {
+  .pl-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 0 16px; }
+}
+@media (min-width: 768px) {
+  .pl-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 0 20px; }
+}
+@media (min-width: 1100px) {
+  .pl-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* Load more */
+.pl-load-more {
+  padding: 24px 16px 0;
+  text-align: center;
+}
+.pl-load-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 12px;
+  border: 1.5px solid #2a2a2a;
+  background: #141414;
+  color: #d4a843;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.pl-load-btn:hover { background: #1a1a1a; }
+.pl-load-btn:disabled { opacity: .5; cursor: default; }
+
+.pl-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #333;
+  border-top-color: #d4a843;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pl-end {
+  text-align: center;
+  color: #333;
+  font-size: 12px;
+  padding: 20px;
+  margin: 0;
+}
+
+/* Empty */
+.pl-empty {
+  text-align: center;
+  padding: 64px 24px;
+}
+.pl-empty-icon { font-size: 44px; margin-bottom: 12px; }
+.pl-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #555;
+  margin: 0 0 6px;
+}
+.pl-empty-sub {
+  font-size: 13px;
+  color: #333;
+  margin: 0 0 20px;
+}
+.pl-empty-btn {
+  background: none;
+  border: 1.5px solid #2a2a2a;
+  color: #d4a843;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Error */
+.pl-error {
+  text-align: center;
+  padding: 40px 24px;
+  color: #555;
+}
+.pl-error p { margin-bottom: 12px; }
+.pl-error button {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #d4a843;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
