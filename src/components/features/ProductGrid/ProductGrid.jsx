@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import ProductCard from '../../components/features/ProductCard/ProductCard';
+import ProductCard from '../ProductCard/ProductCard';
 import { BACKEND_URL } from '../../api/client';
 import ProductCardSkeleton from '../../components/features/ProductCard/ProductCardSkeleton';
 import './ProductGrid.css';
