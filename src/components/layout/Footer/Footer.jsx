@@ -47,7 +47,6 @@ const Footer = () => {
               <h4 className="footer-heading">Покупателям</h4>
               <ul className="footer-list">
                 <li><Link to="/catalog">Каталог</Link></li>
-                <li><Link to="/catalog?sale=true">Акции</Link></li>
                 <li><Link to="/catalog?category=new">Новинки</Link></li>
                 <li><Link to="/about">О нас</Link></li>
               </ul>
@@ -67,7 +66,7 @@ const Footer = () => {
               <h4 className="footer-heading">Контакты</h4>
               <ul className="footer-list">
                 <li>
-                  <a href="tel:+77001234567">+7 (700) 123-45-67</a>
+                  <a href="tel:+77001234567">+7 (708) 212-47-17</a>
                 </li>
                 <li>
                   <a href="mailto:info@luxe.com">info@luxe.com</a>
