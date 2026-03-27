@@ -102,7 +102,23 @@ export default function Profile() {
     </div></div>
   );
 
-  if (!isAuthenticated) return <Navigate to="/" replace />;
+  if (!isAuthenticated) return (
+  <div className="profile-page">
+    <div className="container">
+      <div className="profile-loading" style={{ flexDirection: 'column', gap: '1.5rem', minHeight: '60vh' }}>
+        <div style={{ fontSize: 48 }}>👤</div>
+        <h2 style={{ color: '#fff', margin: 0 }}>Войдите в аккаунт</h2>
+        <p style={{ color: '#666', margin: 0 }}>Чтобы видеть заказы, избранное и настройки</p>
+        <button
+          className="settings-save"
+          onClick={() => document.querySelector('.auth-login-btn')?.click()}
+        >
+          Войти
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
   const avatar = profile?.avatar_url || user?.user_metadata?.avatar_url;
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0];
