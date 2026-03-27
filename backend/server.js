@@ -113,6 +113,43 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Rate limiting ───────────────────────────────────────────
+// Простой in-memory rate limiter без внешних пакетов
+const rateLimitMap = new Map();
+
+function rateLimit({ windowMs = 60000, max = 100, message = 'Слишком много запросов' } = {}) {
+  return (req, res, next) => {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    if (!rateLimitMap.has(ip)) {
+      rateLimitMap.set(ip, []);
+    }
+
+    // Убираем старые запросы за пределами окна
+    const requests = rateLimitMap.get(ip).filter(t => t > windowStart);
+    requests.push(now);
+    rateLimitMap.set(ip, requests);
+
+    if (requests.length > max) {
+      console.log(`🚫 Rate limit: ${ip} (${requests.length} запросов за ${windowMs/1000}с)`);
+      return res.status(429).json({ error: message, retryAfter: Math.ceil(windowMs / 1000) });
+    }
+    next();
+  };
+}
+
+// Чистим старые IP каждые 5 минут
+setInterval(() => {
+  const cutoff = Date.now() - 60000;
+  for (const [ip, times] of rateLimitMap) {
+    const fresh = times.filter(t => t > cutoff);
+    if (fresh.length === 0) rateLimitMap.delete(ip);
+    else rateLimitMap.set(ip, fresh);
+  }
+}, 5 * 60 * 1000);
+
 // JWT Auth middleware
 const requireAuth = async (req, res, next) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Auth service not configured' });
@@ -187,7 +224,7 @@ app.get('/health', (req, res) => {
 });
 
 // ─── PRODUCTS ────────────────────────────────────────────────
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', rateLimit({ windowMs: 60000, max: 300 }), async (req, res) => {
   try {
     const { limit = 12, offset = 0, minPrice, maxPrice, brand, onlyNew, search, sortBy } = req.query;
 
@@ -434,7 +471,7 @@ async function loadAllProductsForSearch() {
 
 
 // ─── SEARCH ──────────────────────────────────────────────────
-app.get('/api/search', async (req, res) => {
+app.get('/api/search', rateLimit({ windowMs: 60000, max: 100 }), async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json([]);
@@ -475,7 +512,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 // ─── AL-STYLE ORDER ───────────────────────────────────────────
-app.post('/api/alstyle-order', async (req, res) => {
+app.post('/api/alstyle-order', rateLimit({ windowMs: 60000, max: 30, message: 'Подождите перед следующим заказом' }), async (req, res) => {
   try {
     const { items, comment, orderId } = req.body;
     if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
@@ -525,7 +562,7 @@ app.post('/api/alstyle-order', async (req, res) => {
 });
 
 // ─── ORDERS ──────────────────────────────────────────────────
-app.post('/api/orders', requireAuth, async (req, res) => {
+app.post('/api/orders', rateLimit({ windowMs: 60000, max: 60 }), requireAuth, async (req, res) => {
   try {
     const { items, address_id, address_text, comment, total_price } = req.body;
     if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
