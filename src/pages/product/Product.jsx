@@ -7,6 +7,23 @@ import { BACKEND_URL } from '../../api/client';
 import { formatPriceWithMarkup } from '../../utils/priceUtils.js';
 import './Product.css';
 
+function parseSpecs(fullName, name) {
+  if (!fullName || fullName === name) return [];
+
+  const parts = fullName.split(',').map(s => s.trim()).filter(Boolean);
+
+  return parts.map(part => {
+    const colonIdx = part.indexOf(':');
+    if (colonIdx > 0 && colonIdx < part.length - 1) {
+      return {
+        label: part.slice(0, colonIdx).trim(),
+        value: part.slice(colonIdx + 1).trim(),
+      };
+    }
+    return { label: null, value: part };
+  });
+}
+
 export default function Product() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -170,7 +187,7 @@ export default function Product() {
         <div className="lightbox" onClick={() => setLightbox(false)}>
           <button className="lightbox-close" onClick={() => setLightbox(false)}>×</button>
           <button className="lightbox-prev" onClick={(e) => { e.stopPropagation(); prevImage(); }}>‹</button>
-          <img src={images[selectedImage]} alt={productName} onClick={e => e.stopPropagation()} />
+          <img src={images[selectedImage]} alt={productName} loading="lazy" onClick={e => e.stopPropagation()} />
           <button className="lightbox-next" onClick={(e) => { e.stopPropagation(); nextImage(); }}>›</button>
           <div className="lightbox-counter">{selectedImage + 1} / {images.length}</div>
         </div>
@@ -189,7 +206,7 @@ export default function Product() {
           <div className="product-gallery">
             <div className="main-image" onClick={() => setLightbox(true)}>
               {images.length > 0 ? (
-                <img src={images[selectedImage]} alt={productName}
+                <img src={images[selectedImage]} alt={productName} loading="lazy"
                   onError={e => { e.target.style.display = 'none'; }} />
               ) : (
                 <div className="product-image-placeholder">
@@ -218,7 +235,7 @@ export default function Product() {
               <div className="thumbnails">
                 {images.map((img, i) => (
                   <button key={i} className={`thumbnail ${selectedImage === i ? 'active' : ''}`} onClick={() => setSelectedImage(i)}>
-                    <img src={img} alt={`${productName} ${i + 1}`}
+                    <img src={img} alt={`${productName} ${i + 1}`} loading="lazy"
                       onError={e => { e.target.style.display = 'none'; }} />
                   </button>
                 ))}
@@ -263,8 +280,13 @@ export default function Product() {
               <div className="product-specs">
                 <h3>Характеристики</h3>
                 <div className="specs-grid">
-                  {product.full_name.split(',').filter(s => s.trim()).map((spec, i) => (
-                    <div key={i} className="spec-item"><span>{spec.trim()}</span></div>
+                  {parseSpecs(product.full_name, productName).map((spec, i) => (
+                    <div key={i} className="spec-item">
+                      {spec.label && <span className="spec-label">{spec.label}</span>}
+                      <span className="spec-value" style={!spec.label ? { color: '#777' } : {}}>
+                        {spec.value}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>

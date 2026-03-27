@@ -1,200 +1,192 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
-import CategorySidebar from '../../components/features/Categorysidebar/Categorysidebar';
+import ProductCardSkeleton from '../../components/features/ProductCard/ProductCardSkeleton';
 import { BACKEND_URL } from '../../api/client';
 import './NewProducts.css';
 
+const LIMIT = 20;
+
+const SORT_OPTIONS = [
+  { value: 'newest',     label: 'Новинки' },
+  { value: 'price_desc', label: 'Дороже' },
+  { value: 'price_asc',  label: 'Дешевле' },
+  { value: 'name_asc',   label: 'А — Я' },
+];
+
 export default function NewProducts() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [offset, setOffset] = useState(0);
+  const navigate = useNavigate();
+  const [products, setProducts]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError]           = useState(null);
+  const [hasMore, setHasMore]       = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [offset, setOffset]         = useState(0);
+  const [sortBy, setSortBy]         = useState('newest');
 
-  const LIMIT = 12;
-
-  // activeCategory — groupId для подсветки в сайдбаре
-  // activeCategoryIds — реальные ID категорий из al-style (массив строк)
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [activeCategoryIds, setActiveCategoryIds] = useState([]);
+  // Локальный поиск внутри новинок
+  const [localSearch, setLocalSearch] = useState('');
+  const debounceRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    loadProducts(true);
-  }, [activeCategoryIds]);
+    setOffset(0);
+    setProducts([]);
+    load(true);
+  }, [sortBy, searchQuery]);
 
-  const loadProducts = async (reset = false) => {
+  const load = async (reset = false) => {
+    if (reset) setLoading(true);
+    else setLoadingMore(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
-
-      const currentOffset = reset ? 0 : offset;
-
-      // Строим URL вручную — категории передаём как ?category=3&category=7&category=12
-      // Это стандарт для express req.query (даёт массив)
       const params = new URLSearchParams();
       params.set('limit', LIMIT);
-      params.set('offset', currentOffset);
+      params.set('offset', reset ? 0 : offset);
       params.set('onlyNew', 'true');
+      if (sortBy && sortBy !== 'newest') params.set('sortBy', sortBy);
+      if (searchQuery) params.set('search', searchQuery);
 
-      activeCategoryIds.forEach(id => params.append('category', id));
-
-      console.log('🆕 Loading new products:', params.toString());
-
-      const response = await fetch(`${BACKEND_URL}/api/products?${params}`);
-      const data = await response.json();
-
-      console.log('📦 Received:', data);
+      const res = await fetch(`${BACKEND_URL}/api/products?${params}`);
+      const data = await res.json();
+      const els = data.elements || [];
 
       if (reset) {
-        setProducts(data.elements || []);
+        setProducts(els);
         setOffset(LIMIT);
       } else {
-        setProducts(prev => [...prev, ...(data.elements || [])]);
+        setProducts(prev => [...prev, ...els]);
         setOffset(prev => prev + LIMIT);
       }
 
-      setTotalCount(data.pagination?.totalCount || 0);
+      setTotalCount(data.pagination?.totalCount || data.pagination?.total || 0);
       setHasMore(data.pagination?.hasMore || false);
-
-    } catch (err) {
-      console.error('❌ Error:', err);
-      setError(err.message);
+    } catch (e) {
+      setError(e.message);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  // groupId — для подсветки, categoryIds — реальные ID для запроса
-  const handleCategoryChange = (groupId, categoryIds) => {
-    setActiveCategory(groupId);
-    setActiveCategoryIds(categoryIds || []);
-    setOffset(0);
-
-    const params = new URLSearchParams();
-    if (groupId) params.set('group', groupId);
-    setSearchParams(params);
+  const handleSearch = (val) => {
+    setLocalSearch(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearchQuery(val.trim()), 350);
   };
-
-  const handleLoadMore = () => {
-    loadProducts(false);
-  };
-
-  if (loading && products.length === 0) {
-    return (
-      <div className="new-products-page">
-        <div className="container">
-          <div className="catalog-loading">
-            <div className="loader"></div>
-            <p>Загрузка новинок...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="new-products-page">
-        <div className="container">
-          <div className="catalog-error">
-            <div className="error-icon">⚠️</div>
-            <h3>Ошибка загрузки</h3>
-            <p>{error}</p>
-            <button className="btn btn-primary" onClick={() => loadProducts(true)}>
-              Попробовать снова
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="new-products-page">
-      <div className="container">
-        {/* Header */}
-        <div className="new-products-header">
-          <div className="header-content">
-            <div className="new-badge-large">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-              NEW
-            </div>
-            <div>
-              <h1 className="new-products-title">Новинки</h1>
-              <p className="new-products-subtitle">
-                {totalCount > 0
-                  ? `Найдено новинок: ${totalCount}`
-                  : 'Новинки не найдены'}
-              </p>
-            </div>
-          </div>
+    <div className="np-page">
+
+      {/* ── Хедер ── */}
+      <div className="np-header">
+        <button className="np-back" onClick={() => navigate(-1)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <div className="np-header-title">
+          <span className="np-star">✦</span>
+          <h1>Новинки</h1>
         </div>
+        {totalCount > 0 && (
+          <span className="np-count">{totalCount}</span>
+        )}
+      </div>
 
-        {/* Main Content */}
-        <div className="catalog-content">
-          <aside className="catalog-sidebar">
-            <CategorySidebar
-              onCategoryChange={handleCategoryChange}
-              activeCategory={activeCategory}
-            />
-          </aside>
-
-          <div className="catalog-main">
-            {products.length === 0 && !loading ? (
-              <div className="catalog-empty">
-                <div className="empty-icon">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
-                </div>
-                <h2>Новинки не найдены</h2>
-                <p>Попробуйте выбрать другую категорию</p>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleCategoryChange(null, null)}
-                >
-                  Показать все новинки
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="products-grid">
-                  {products.map((product) => (
-                    <ProductCard key={product.article} product={product} />
-                  ))}
-                </div>
-
-                {hasMore && (
-                  <div className="load-more-container">
-                    <button
-                      className="btn btn-secondary load-more-btn"
-                      onClick={handleLoadMore}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <><span className="btn-loader"></span>Загрузка...</>
-                      ) : (
-                        `Показать ещё (${products.length} из ${totalCount})`
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {!hasMore && products.length > 0 && (
-                  <div className="end-of-list">
-                    <p>Показаны все новинки ({totalCount})</p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+      {/* ── Поиск ── */}
+      <div className="np-search-wrap">
+        <div className="np-search-box">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            className="np-search-input"
+            placeholder="Поиск среди новинок..."
+            value={localSearch}
+            onChange={e => handleSearch(e.target.value)}
+          />
+          {localSearch && (
+            <button className="np-search-clear" onClick={() => handleSearch('')}>×</button>
+          )}
         </div>
       </div>
+
+      {/* ── Сортировка ── */}
+      <div className="np-sort-row">
+        {SORT_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            className={`np-sort-btn ${sortBy === opt.value ? 'active' : ''}`}
+            onClick={() => setSortBy(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Ошибка ── */}
+      {error && !loading && (
+        <div className="np-error">
+          <p>⚠️ {error}</p>
+          <button onClick={() => load(true)}>Повторить</button>
+        </div>
+      )}
+
+      {/* ── Скелетон ── */}
+      {loading && (
+        <div className="np-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Товары ── */}
+      {!loading && !error && (
+        <>
+          {products.length === 0 ? (
+            <div className="np-empty">
+              <div className="np-empty-icon">✦</div>
+              <p className="np-empty-title">Новинок не найдено</p>
+              <p className="np-empty-sub">
+                {searchQuery ? `Нет результатов по «${searchQuery}»` : 'В этой категории пока нет новинок'}
+              </p>
+              {searchQuery && (
+                <button className="np-empty-btn" onClick={() => handleSearch('')}>
+                  Сбросить поиск
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="np-grid">
+              {products.map((product, i) => (
+                <ProductCard key={product.article} product={product} index={i} />
+              ))}
+            </div>
+          )}
+
+          {hasMore && products.length > 0 && (
+            <div className="np-load-more">
+              <button
+                className="np-load-btn"
+                onClick={() => load(false)}
+                disabled={loadingMore}
+              >
+                {loadingMore
+                  ? <span className="np-spinner" />
+                  : `Показать ещё · ${products.length} из ${totalCount}`}
+              </button>
+            </div>
+          )}
+
+          {!hasMore && products.length > 0 && (
+            <p className="np-end">Показаны все {totalCount} новинок</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -163,22 +163,33 @@ app.get('/api/products', async (req, res) => {
   try {
     const { limit = 12, offset = 0, minPrice, maxPrice, brand, onlyNew, search, sortBy } = req.query;
 
-    // FIX: безопасный парсинг category
     const categoryParam = parseCategoryParam(req.query.category);
 
-    let data;
-    try {
-      data = await loadProducts(categoryParam);
-    } catch (err) {
-      console.error('❌ Ошибка загрузки товаров:', err.message);
-      return res.status(502).json({
-        error: 'Не удалось загрузить товары с поставщика',
-        elements: [],
-        pagination: { totalCount: 0, hasMore: false },
-      });
-    }
+    let products;
 
-    let products = data.elements || [];
+    // onlyNew без категории — ищем по всему каталогу (полный кеш 6000+)
+    if (onlyNew === 'true' && !categoryParam) {
+      try {
+        const allProducts = await loadAllProductsForSearch();
+        products = allProducts;
+      } catch (err) {
+        console.error('❌ Ошибка загрузки всех товаров:', err.message);
+        products = [];
+      }
+    } else {
+      let data;
+      try {
+        data = await loadProducts(categoryParam);
+      } catch (err) {
+        console.error('❌ Ошибка загрузки товаров:', err.message);
+        return res.status(502).json({
+          error: 'Не удалось загрузить товары с поставщика',
+          elements: [],
+          pagination: { totalCount: 0, hasMore: false },
+        });
+      }
+      products = data.elements || [];
+    }
 
     if (minPrice || maxPrice) {
       products = products.filter(p => {

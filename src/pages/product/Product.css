@@ -656,3 +656,57 @@
     padding-top: calc(68px + 0.75rem);
   }
 }
+/* Добавь эти строки В КОНЕЦ своего Product.css */
+
+/* ── Скрываем лупу в хедере на мобилке (она в tab bar) ── */
+@media (max-width: 768px) {
+  .search-toggle {
+    display: none !important;
+  }
+}
+
+/* ── Toast поднимаем над tab bar ── */
+@media (max-width: 768px) {
+  .product-toast {
+    bottom: calc(60px + env(safe-area-inset-bottom) + 12px);
+  }
+}
+
+/* ── Характеристики — читаемые пары ключ/значение ── */
+.specs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: #0E0E0E;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.04);
+  overflow: hidden;
+  padding: 0;
+}
+
+.spec-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.spec-item:last-child {
+  border-bottom: none;
+}
+
+.spec-item .spec-label {
+  color: #555;
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+.spec-item .spec-value {
+  color: #ccc;
+  text-align: right;
+  word-break: break-word;
+}
