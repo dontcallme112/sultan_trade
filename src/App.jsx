@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext.jsx';
 import Header from './components/layout/Header/Header.jsx';
 import Footer from './components/layout/Footer/Footer.jsx';
+import TabBar from './components/layout/TabBar/TabBar.jsx';
 import Toast from './components/common/Toast/Toast.jsx';
 import Home from './pages/home/Home.jsx';
 import Catalog from './pages/catalog/Catalog.jsx';
@@ -25,7 +26,7 @@ function App() {
       <Router>
         <div className="App">
           <Header />
-          <main>
+          <main style={{ paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' }}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/catalog" element={<Catalog />} />
@@ -41,6 +42,7 @@ function App() {
             </Routes>
           </main>
           <Footer />
+          <TabBar />
         </div>
       </Router>
     </CartProvider>

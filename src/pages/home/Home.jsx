@@ -4,7 +4,6 @@ import { BACKEND_URL } from '../../api/client';
 import ProductCard from '../../components/features/ProductCard/ProductCard';
 import './Home.css';
 
-// Те же группы что в CategorySidebar
 const CATEGORY_GROUPS = [
   { id: 'phones',      keywords: ['мобильн', 'телефон', 'смартфон', 'планшет', 'iphone', 'ipad', 'защитн', 'стёкла', 'плёнк', 'чехол для планшет', 'портативн зарядн'] },
   { id: 'computers',   keywords: ['ноутбук', 'laptop', 'системн блок', 'моноблок', 'мини пк', 'компьютер', 'комплектующ', 'процессор', 'cpu', 'материнск', 'mb', 'видеокарт', 'vga', 'оперативн памят', 'ddr3', 'ddr4', 'ddr5', 'озу', 'жёстк диск', 'hdd', 'твердотельн', 'ssd', 'портативн диск', 'корпус', 'блок питани', 'охлаждени', 'вентилятор', 'термопаст', 'программн обеспечени', 'охлаждающ подставк', 'сумк'] },
@@ -20,16 +19,15 @@ const CATEGORY_GROUPS = [
   { id: 'storage',     keywords: ['флешк', 'flash', 'usb накопитель', 'карт памят', 'sd card', 'microsd', 'оптическ диск', 'dvd', 'blu-ray'] },
 ];
 
-// Категории для главной страницы (8 самых популярных)
 const HOME_CATEGORIES = [
-  { groupId: 'phones',      icon: '📱', displayName: 'Телефоны и планшеты',          color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)' },
-  { groupId: 'computers',   icon: '💻', displayName: 'Компьютеры и ноутбуки',        color: '#1E6B9E', gradient: 'linear-gradient(135deg, #1E6B9E 0%, #2E9ED6 100%)' },
-  { groupId: 'peripherals', icon: '⌨️', displayName: 'Периферия',                    color: '#7B3FA0', gradient: 'linear-gradient(135deg, #7B3FA0 0%, #A855F7 100%)' },
-  { groupId: 'audio',       icon: '🎧', displayName: 'Аудио и акустика',             color: '#0F766E', gradient: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)' },
-  { groupId: 'gaming',      icon: '🎮', displayName: 'Игры и консоли',               color: '#B91C1C', gradient: 'linear-gradient(135deg, #B91C1C 0%, #EF4444 100%)' },
-  { groupId: 'tv_media',    icon: '📺', displayName: 'ТВ и медиа',                   color: '#92400E', gradient: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)' },
-  { groupId: 'network',     icon: '🌐', displayName: 'Сеть и серверы',               color: '#065F46', gradient: 'linear-gradient(135deg, #065F46 0%, #10B981 100%)' },
-  { groupId: 'wearables',   icon: '⌚', displayName: 'Умные устройства',             color: '#1E40AF', gradient: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)' },
+  { groupId: 'phones',      icon: '📱', displayName: 'Телефоны и планшеты',    color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #DAA520 100%)' },
+  { groupId: 'computers',   icon: '💻', displayName: 'Компьютеры и ноутбуки',  color: '#1E6B9E', gradient: 'linear-gradient(135deg, #1E6B9E 0%, #2E9ED6 100%)' },
+  { groupId: 'peripherals', icon: '⌨️', displayName: 'Периферия',              color: '#7B3FA0', gradient: 'linear-gradient(135deg, #7B3FA0 0%, #A855F7 100%)' },
+  { groupId: 'audio',       icon: '🎧', displayName: 'Аудио и акустика',       color: '#0F766E', gradient: 'linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)' },
+  { groupId: 'gaming',      icon: '🎮', displayName: 'Игры и консоли',         color: '#B91C1C', gradient: 'linear-gradient(135deg, #B91C1C 0%, #EF4444 100%)' },
+  { groupId: 'tv_media',    icon: '📺', displayName: 'ТВ и медиа',             color: '#92400E', gradient: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)' },
+  { groupId: 'network',     icon: '🌐', displayName: 'Сеть и серверы',         color: '#065F46', gradient: 'linear-gradient(135deg, #065F46 0%, #10B981 100%)' },
+  { groupId: 'wearables',   icon: '⌚', displayName: 'Умные устройства',       color: '#1E40AF', gradient: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)' },
 ];
 
 function getGroupId(categoryName) {
@@ -41,27 +39,27 @@ function getGroupId(categoryName) {
 }
 
 export default function Home() {
-  const [categories, setCategories] = useState([]);
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories]         = useState([]);
+  const [popularProducts, setPopularProducts] = useState([]);
+  const [newProducts, setNewProducts]       = useState([]);
+  const [loadingPopular, setLoadingPopular] = useState(true);
+  const [loadingNew, setLoadingNew]         = useState(true);
 
   useEffect(() => {
     loadCategories();
-    loadFeaturedProducts();
+    // Грузим обе секции параллельно
+    loadPopularProducts();
+    loadNewProducts();
   }, []);
 
   const loadCategories = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/categories`);
       let data = await response.json();
-
       if (!Array.isArray(data)) {
         if (data?.data && Array.isArray(data.data)) data = data.data;
-        else if (data && typeof data === 'object') data = Object.values(data);
         else data = [];
       }
-
-      // Группируем реальные ID по groupId
       const grouped = {};
       data.filter(cat => cat.elements > 0).forEach(cat => {
         const groupId = getGroupId(cat.name);
@@ -69,32 +67,42 @@ export default function Home() {
         grouped[groupId].count += cat.elements;
         grouped[groupId].categoryIds.push(cat.id.toString());
       });
-
-      // Собираем категории для главной с реальными ID
       const mapped = HOME_CATEGORIES.map(cat => ({
         ...cat,
         categoryIds: grouped[cat.groupId]?.categoryIds || [],
         count: grouped[cat.groupId]?.count || 0,
-      })).filter(cat => cat.count > 0); // показываем только если есть товары
-
+      })).filter(cat => cat.count > 0);
       setCategories(mapped);
     } catch (error) {
-      console.error('Error loading categories:', error);
       setCategories(HOME_CATEGORIES.map(c => ({ ...c, categoryIds: [], count: 0 })));
     }
   };
 
-  const loadFeaturedProducts = async () => {
+  // Популярные — дорогие первыми (телефоны, ноутбуки)
+  const loadPopularProducts = async () => {
     try {
-      setLoading(true);
+      setLoadingPopular(true);
+      const response = await fetch(`${BACKEND_URL}/api/products?limit=8&offset=0&sortBy=price_desc`);
+      const data = await response.json();
+      setPopularProducts(data.elements || []);
+    } catch {
+      setPopularProducts([]);
+    } finally {
+      setLoadingPopular(false);
+    }
+  };
+
+  // Новинки — isnew=1
+  const loadNewProducts = async () => {
+    try {
+      setLoadingNew(true);
       const response = await fetch(`${BACKEND_URL}/api/products?limit=8&offset=0&onlyNew=true`);
       const data = await response.json();
-      setFeaturedProducts(data.elements || []);
-    } catch (error) {
-      console.error('Error loading products:', error);
-      setFeaturedProducts([]);
+      setNewProducts(data.elements || []);
+    } catch {
+      setNewProducts([]);
     } finally {
-      setLoading(false);
+      setLoadingNew(false);
     }
   };
 
@@ -103,12 +111,49 @@ export default function Home() {
     const params = new URLSearchParams();
     params.set('group', cat.groupId);
     cat.categoryIds.forEach(id => params.append('category', id));
-    return `/catalog?${params.toString()}`;
+    return `/products?${params.toString()}`;
   };
+
+  const ProductsSection = ({ title, subtitle, products, loading, linkTo, linkLabel }) => (
+    <section className="featured-products">
+      <div className="container">
+        <div className="section-header">
+          <h2 className="section-title">
+            <span className="title-decoration">━━</span>
+            {title}
+            <span className="title-decoration">━━</span>
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {subtitle && <span style={{ fontSize: 13, color: '#555' }}>{subtitle}</span>}
+            <Link to={linkTo} className="section-link">
+              {linkLabel}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </Link>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="products-loading">
+            <div className="loader"></div>
+            <p>Загрузка товаров...</p>
+          </div>
+        ) : (
+          <div className="products-grid">
+            {products.slice(0, 8).map((product) => (
+              <ProductCard key={product.article} product={product} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 
   return (
     <div className="home-page">
-      {/* Hero Section */}
+
+      {/* ── Hero ── */}
       <section className="hero">
         <div className="hero-background">
           <div className="hero-gradient"></div>
@@ -163,12 +208,6 @@ export default function Home() {
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
               </Link>
-              <Link to="/new" className="btn btn-secondary btn-hero">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                <span>Новинки</span>
-              </Link>
             </div>
 
             <div className="hero-stats">
@@ -189,7 +228,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Categories Section */}
+      {/* ── Категории ── */}
       <section className="categories">
         <div className="container">
           <div className="section-header">
@@ -232,39 +271,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products */}
-      <section className="featured-products">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">
-              <span className="title-decoration">━━</span>
-              Новинки
-              <span className="title-decoration">━━</span>
-            </h2>
-            <Link to="/new" className="section-link">
-              Все новинки
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </Link>
-          </div>
+      {/* ── Популярные товары ── */}
+      <ProductsSection
+        title="Популярные товары"
+        products={popularProducts}
+        loading={loadingPopular}
+        linkTo="/products?sortBy=price_desc"
+        linkLabel="Все товары"
+      />
 
-          {loading ? (
-            <div className="products-loading">
-              <div className="loader"></div>
-              <p>Загрузка товаров...</p>
-            </div>
-          ) : (
-            <div className="products-grid">
-              {featuredProducts.slice(0, 8).map((product) => (
-                <ProductCard key={product.article} product={product} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+      {/* ── Новинки ── */}
+      <ProductsSection
+        title="Новинки"
+        products={newProducts}
+        loading={loadingNew}
+        linkTo="/new"
+        linkLabel="Все новинки"
+      />
 
-      {/* Features */}
+      {/* ── Преимущества ── */}
       <section className="features">
         <div className="container">
           <div className="features-grid">
@@ -303,7 +328,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* ── CTA ── */}
       <section className="cta-section">
         <div className="cta-background">
           <div className="cta-gradient"></div>
@@ -321,6 +346,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+
     </div>
   );
 }

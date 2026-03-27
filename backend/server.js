@@ -197,18 +197,11 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    if (!sortBy || sortBy === 'smart' || sortBy === 'default') {
-      // По умолчанию — дорогие первыми (телефоны, ноутбуки наверх)
-      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    } else if (sortBy === 'price_asc') {
-      products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
-    } else if (sortBy === 'price_desc') {
-      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    } else if (sortBy === 'name_asc') {
-      products.sort((a, b) => (a.name||'').localeCompare(b.name||'', 'ru'));
-    } else if (sortBy === 'newest') {
-      products.sort((a, b) => (b.isnew||0) - (a.isnew||0) || (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    }
+    if (sortBy === 'price_asc')  products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
+    else if (sortBy === 'price_desc') products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    else if (sortBy === 'name_asc')  products.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+    else if (sortBy === 'newest')    products.sort((a, b) => (b.isnew||0) - (a.isnew||0));
+
     const start = Number(offset);
     const end   = start + Number(limit);
 
@@ -306,41 +299,95 @@ app.get('/api/filters', async (req, res) => {
   }
 });
 
+// ─── Загрузка ВСЕХ товаров постранично для поиска ────────────
+const ALL_PRODUCTS_CACHE_TIME = 30 * 60 * 1000;
+
+async function loadAllProductsForSearch() {
+  const cached = getCache('search_all_products', ALL_PRODUCTS_CACHE_TIME);
+  if (cached) return cached;
+
+  return fetchOnce('search_all_products_loading', async () => {
+    console.log('🔍 Загрузка всех товаров для поиска...');
+    const allProducts = [];
+    let offset = 0;
+    const limit = 250;
+    let totalCount = null;
+
+    do {
+      const data = await enqueueApiCall(async () => {
+        const response = await api.get('/elements-pagination', {
+          params: {
+            'access-token': ALSTYLE_TOKEN,
+            exclude_missing: 'true',
+            limit,
+            offset,
+            additional_fields: 'brand,images',
+          }
+        });
+        return response.data;
+      });
+
+      allProducts.push(...(data.elements || []));
+
+      if (totalCount === null && data.pagination?.totalCount) {
+        totalCount = data.pagination.totalCount;
+        console.log(`🔍 Всего товаров: ${totalCount}`);
+      }
+
+      offset += limit;
+      console.log(`🔍 Загружено: ${allProducts.length} / ${totalCount || '?'}`);
+
+    } while (totalCount && offset < totalCount);
+
+    const compact = allProducts.map(p => ({
+      article:   p.article,
+      name:      p.name || '',
+      full_name: p.full_name || '',
+      brand:     p.brand || '',
+      price:     p.price2 || p.price1 || 0,
+      image:     p.images?.[0] || null,
+    }));
+
+    setCache('search_all_products', compact);
+    console.log(`✅ Кеш поиска готов: ${compact.length} товаров`);
+    return compact;
+  });
+}
+
 // ─── SEARCH ──────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json([]);
 
-    // Берём из кеша если есть, иначе загружаем
-    let allData = getCache('products_cat_all', CACHE_TIMES.products);
-    if (!allData) {
-      try {
-        allData = await loadProducts(null);
-      } catch (e) {
-        console.error('❌ Не удалось загрузить товары для поиска:', e.message);
-        return res.json([]);
-      }
+    let products;
+    try {
+      products = await loadAllProductsForSearch();
+    } catch (e) {
+      console.error('❌ Поиск: не удалось загрузить товары:', e.message);
+      return res.json([]);
     }
 
-    const products = allData.elements || [];
     const s = q.toLowerCase();
-    const results = products
-      .filter(p =>
-        p.name?.toLowerCase().includes(s) ||
-        p.full_name?.toLowerCase().includes(s) ||
-        p.brand?.toLowerCase().includes(s)
-      )
-      .slice(0, 10)
-      .map(p => ({
-        article:  p.article,
-        name:     p.name || p.full_name,
-        brand:    p.brand,
-        price:    p.price2 || p.price1,
-        image:    p.images?.[0] || null,
-      }));
 
-    console.log(`🔍 Поиск "${q}": найдено ${results.length}`);
+    // Поиск с релевантностью: бренд > название > full_name
+    const results = products
+      .map(p => {
+        const name     = p.name.toLowerCase();
+        const fullName = p.full_name.toLowerCase();
+        const brand    = p.brand.toLowerCase();
+        let score = 0;
+        if (brand.includes(s))    score += 3;
+        if (name.includes(s))     score += 2;
+        if (fullName.includes(s)) score += 1;
+        return score > 0 ? { ...p, score } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(({ score, ...p }) => p);
+
+    console.log(`🔍 "${q}": ${results.length} из ${products.length}`);
     res.json(results);
   } catch (error) {
     console.error('❌ search:', error.message);
@@ -455,14 +502,21 @@ app.delete('/api/favorites/:article', requireAuth, async (req, res) => {
 async function warmupCache() {
   console.log('🔥 Прогрев кеша...');
   try {
-    await loadProducts(null); // загружаем все товары
-    // Небольшая пауза перед следующим запросом
-    await new Promise(r => setTimeout(r, API_MIN_INTERVAL));
-    // Загружаем категории
-    const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
-    const cats = Array.isArray(response.data) ? response.data : [];
+    // 1. Категории
+    const catResponse = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
+    const cats = Array.isArray(catResponse.data) ? catResponse.data : [];
     setCache('categories', cats);
-    console.log(`✅ Кеш прогрет: ${cats.length} категорий`);
+    console.log(`✅ Категорий: ${cats.length}`);
+
+    // 2. Первые 250 для каталога
+    await loadProducts(null);
+
+    // 3. Все товары для поиска — в фоне, не блокируем старт
+    // Займёт ~2-3 минуты из-за rate limit, но поиск заработает постепенно
+    loadAllProductsForSearch().catch(e =>
+      console.warn('⚠️ Фоновая загрузка поиска:', e.message)
+    );
+
   } catch (e) {
     console.warn('⚠️ Прогрев кеша не удался:', e.message);
   }

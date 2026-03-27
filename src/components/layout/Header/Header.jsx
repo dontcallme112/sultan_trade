@@ -30,7 +30,6 @@ const Header = () => {
   const handleLinkClick = () => setMobileMenu(false);
   const toggleSearch = () => setShowSearch(!showSearch);
 
-  // Первая буква имени или email для аватара
   const avatarLetter = (
     profile?.full_name?.[0] ||
     user?.user_metadata?.full_name?.[0] ||
@@ -54,7 +53,7 @@ const Header = () => {
               <div className="logo-glow"></div>
             </Link>
 
-            {/* Navigation */}
+            {/* Navigation — Sale убран */}
             <nav className={`nav ${mobileMenu ? 'active' : ''}`}>
               <Link to="/" className="nav-link" onClick={handleLinkClick}>
                 <span>Главная</span>
@@ -68,8 +67,8 @@ const Header = () => {
                 <span>Новинки</span>
                 <div className="nav-link-glow"></div>
               </Link>
-              <Link to="/catalog?sortBy=price_desc" className="nav-link" onClick={handleLinkClick}>
-                <span>Sale</span>
+              <Link to="/products" className="nav-link" onClick={handleLinkClick}>
+                <span>Товары</span>
                 <div className="nav-link-glow"></div>
               </Link>
             </nav>
@@ -81,7 +80,6 @@ const Header = () => {
 
             {/* Actions */}
             <div className="header-actions">
-              {/* Search Button - Mobile */}
               <button
                 className={`icon-btn search-toggle ${showSearch ? 'active' : ''}`}
                 onClick={toggleSearch}
@@ -93,9 +91,8 @@ const Header = () => {
                 </svg>
               </button>
 
-              {/* Auth Button */}
               {isAuthenticated ? (
-                <Link to="/profile" className="icon-btn auth-avatar-btn" onClick={handleLinkClick} title="Личный кабинет">
+                <Link to="/profile" className="icon-btn auth-avatar-btn hide-mobile" onClick={handleLinkClick} title="Личный кабинет">
                   {avatarUrl
                     ? <img src={avatarUrl} alt="avatar" className="header-avatar-img" />
                     : <span className="header-avatar-letter">{avatarLetter}</span>
@@ -103,7 +100,7 @@ const Header = () => {
                 </Link>
               ) : (
                 <button
-                  className="icon-btn auth-login-btn"
+                  className="icon-btn auth-login-btn hide-mobile"
                   onClick={() => setShowAuthModal(true)}
                   aria-label="Войти"
                   title="Войти"
@@ -115,8 +112,7 @@ const Header = () => {
                 </button>
               )}
 
-              {/* Cart */}
-              <Link to="/cart" className="icon-btn cart-btn" onClick={handleLinkClick}>
+              <Link to="/cart" className="icon-btn cart-btn hide-mobile" onClick={handleLinkClick}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="9" cy="21" r="1"/>
                   <circle cx="20" cy="21" r="1"/>
@@ -125,9 +121,8 @@ const Header = () => {
                 {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
               </Link>
 
-              {/* Mobile Menu */}
               <button
-                className="mobile-menu-btn"
+                className="mobile-menu-btn hide-mobile"
                 onClick={() => setMobileMenu(!mobileMenu)}
                 aria-label="Toggle menu"
               >
@@ -136,7 +131,6 @@ const Header = () => {
             </div>
           </div>
 
-          {/* Search Bar - Mobile Dropdown */}
           {showSearch && (
             <div className="header-search-mobile">
               <SearchBar />
@@ -145,7 +139,6 @@ const Header = () => {
         </div>
       </header>
 
-      {/* Auth Modal */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     </>
   );

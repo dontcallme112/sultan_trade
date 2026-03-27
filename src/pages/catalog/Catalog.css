@@ -8,6 +8,7 @@
 /* Search */
 .catalog-search-wrap {
   padding: 16px 16px 8px;
+  padding-top: 72px; /* отступ под фиксированный хедер */
   position: sticky;
   top: 0;
   background: #0d0d0d;
