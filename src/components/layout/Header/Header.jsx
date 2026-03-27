@@ -55,7 +55,9 @@ const Header = () => {
                         stroke="#DAA520" strokeWidth="2.5" strokeLinecap="round"/>
                 </svg>
               </div>
-              <span className="logo-text">Stockera</span>
+              <span className="logo-text">
+                <span>S</span>tockera
+              </span>
             </Link>
 
             {/* Navigation — Sale убран */}
