@@ -102,7 +102,7 @@ export default function Catalog() {
             placeholder="Начните вводить название категории..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            autoFocus
+
           />
           {search && (
             <button className="catalog-search-clear" onClick={() => setSearch('')}>×</button>
