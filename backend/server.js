@@ -3,8 +3,19 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { Redis } from '@upstash/redis';
 
 dotenv.config();
+
+// ─── Redis (Upstash) ──────────────────────────────────────────
+const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  ? new Redis({
+      url:   process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : null;
+
+console.log('Redis:', redis ? '✅ Upstash' : '⚠️  Disabled (no env vars)');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -38,11 +49,28 @@ function getCache(key, maxAge) {
   const item = cache.get(key);
   if (!item) return null;
   if (Date.now() - item.timestamp > maxAge) { cache.delete(key); return null; }
-  console.log(`💾 Кеш hit: ${key}`);
+  console.log(`💾 RAM кеш hit: ${key}`);
   return item.data;
 }
 function setCache(key, data) {
   cache.set(key, { data, timestamp: Date.now() });
+}
+
+// Redis-aware get/set для тяжёлых данных (товары для поиска)
+async function getRedisCacheOrNull(key) {
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    if (val) { console.log(`💾 Redis hit: ${key}`); return val; }
+  } catch(e) { console.warn('⚠️ Redis get error:', e.message); }
+  return null;
+}
+async function setRedisCache(key, data, ttlSeconds = 3600) {
+  if (!redis) return;
+  try {
+    await redis.set(key, data, { ex: ttlSeconds });
+    console.log(`💾 Redis set: ${key}`);
+  } catch(e) { console.warn('⚠️ Redis set error:', e.message); }
 }
 
 // ─── In-flight дедупликация ───────────────────────────────────
@@ -63,7 +91,7 @@ async function fetchOnce(key, fetchFn) {
 // ─── Rate limiting (очередь вместо sleep) ────────────────────
 // Вместо того чтобы блокировать каждый запрос на 10с,
 // ставим их в очередь — API дёргается строго по одному.
-const API_MIN_INTERVAL = 3500; // 2 секунды между вызовами — безопаснее и быстрее
+const API_MIN_INTERVAL = 5000; // 5 сек между запросами // 2 секунды между вызовами — безопаснее и быстрее
 let apiQueue = Promise.resolve();
 
 function enqueueApiCall(fn) {
@@ -330,29 +358,50 @@ app.get('/api/filters', async (req, res) => {
 const ALL_PRODUCTS_CACHE_TIME = 30 * 60 * 1000;
 
 async function loadAllProductsForSearch() {
-  const cached = getCache('search_all_products', ALL_PRODUCTS_CACHE_TIME);
-  if (cached) return cached;
+  const ramCached = getCache('search_all_products', ALL_PRODUCTS_CACHE_TIME);
+  if (ramCached) return ramCached;
+
+  const redisCached = await getRedisCacheOrNull('search_all_products');
+  if (redisCached) {
+    setCache('search_all_products', redisCached);
+    return redisCached;
+  }
 
   return fetchOnce('search_all_products_loading', async () => {
-    console.log('🔍 Загрузка всех товаров для поиска...');
+    console.log('🔍 Загрузка всех товаров из al-style...');
     const allProducts = [];
     let offset = 0;
     const limit = 250;
     let totalCount = null;
 
     do {
-      const data = await enqueueApiCall(async () => {
-        const response = await api.get('/elements-pagination', {
-          params: {
-            'access-token': ALSTYLE_TOKEN,
-            exclude_missing: 'true',
-            limit,
-            offset,
-            additional_fields: 'brand,images',
-          }
-        });
-        return response.data;
-      });
+      let data = null;
+      let retries = 0;
+      while (retries < 3) {
+        try {
+          data = await enqueueApiCall(async () => {
+            const response = await api.get('/elements-pagination', {
+              params: {
+                'access-token': ALSTYLE_TOKEN,
+                exclude_missing: 'true',
+                limit,
+                offset,
+                additional_fields: 'brand,images',
+              }
+            });
+            return response.data;
+          });
+          break;
+        } catch (e) {
+          if (e.response?.status === 403) {
+            retries++;
+            const wait = 10000 * retries;
+            console.log(`⚠️ 403, ждём ${wait/1000}с (попытка ${retries}/3)...`);
+            await new Promise(r => setTimeout(r, wait));
+          } else throw e;
+        }
+      }
+      if (!data) { console.log('❌ Пропускаем страницу'); break; }
 
       allProducts.push(...(data.elements || []));
 
@@ -372,14 +421,17 @@ async function loadAllProductsForSearch() {
       full_name: p.full_name || '',
       brand:     p.brand || '',
       price:     p.price2 || p.price1 || 0,
+      isnew:     p.isnew || 0,
       image:     p.images?.[0] || null,
     }));
 
     setCache('search_all_products', compact);
+    await setRedisCache('search_all_products', compact, 7200);
     console.log(`✅ Кеш поиска готов: ${compact.length} товаров`);
     return compact;
   });
 }
+
 
 // ─── SEARCH ──────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
@@ -558,6 +610,6 @@ app.listen(PORT, () => {
   console.log('⏱️  Кеш: товары 10мин, категории 30мин');
   console.log('✨ Готово!\n');
 
-  // Прогрев через 1 секунду после старта
-  setTimeout(warmupCache, 1000);
+  // Прогрев через 30 секунд — даём API время "остыть" после старта
+  setTimeout(warmupCache, 30000);
 });
