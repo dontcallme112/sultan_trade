@@ -8,8 +8,6 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
-    // Proxy — локально запросы /api/* уходят на Railway
-    // На проде (Vercel) этот блок не работает — там BACKEND_URL из .env
     proxy: {
       '/api': {
         target: 'https://sultantrade-production.up.railway.app',
@@ -23,16 +21,24 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
-    chunkSizeWarningLimit: 500,
+    // Уменьшаем размер бандла
+    target: 'es2015',
+    cssMinify: true,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
+        // Разбиваем на чанки — браузер кеширует отдельно
         manualChunks(id) {
-          if (id.includes('react-dom'))     return 'react-dom'
-          if (id.includes('react-router'))  return 'router'
-          if (id.includes('react'))         return 'react'
-          if (id.includes('lucide') || id.includes('heroicons')) return 'icons'
-          if (id.includes('node_modules'))  return 'vendor'
+          if (id.includes('react-dom'))    return 'react-dom'
+          if (id.includes('react-router')) return 'router'
+          if (id.includes('react'))        return 'react'
+          if (id.includes('@supabase'))    return 'supabase'
+          if (id.includes('node_modules')) return 'vendor'
         },
+        // Имена с хешем для долгого кеширования
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
   },
