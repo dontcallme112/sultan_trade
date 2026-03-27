@@ -63,7 +63,7 @@ async function fetchOnce(key, fetchFn) {
 // ─── Rate limiting (очередь вместо sleep) ────────────────────
 // Вместо того чтобы блокировать каждый запрос на 10с,
 // ставим их в очередь — API дёргается строго по одному.
-const API_MIN_INTERVAL = 2000; // 2 секунды между вызовами — безопаснее и быстрее
+const API_MIN_INTERVAL = 3500; // 2 секунды между вызовами — безопаснее и быстрее
 let apiQueue = Promise.resolve();
 
 function enqueueApiCall(fn) {

@@ -168,7 +168,7 @@ export default function Home() {
           <div className="hero-content">
             <div className="hero-badge">
               <span className="badge-dot"></span>
-              Premium Electronics
+              Официальный дилер
             </div>
 
             <h1 className="hero-title">
@@ -212,7 +212,7 @@ export default function Home() {
 
             <div className="hero-stats">
               <div className="stat">
-                <div className="stat-value">6000+</div>
+                <div className="stat-value">12 000+</div>
                 <div className="stat-label">Товаров</div>
               </div>
               <div className="stat">
@@ -336,7 +336,7 @@ export default function Home() {
         <div className="container">
           <div className="cta-content">
             <h2 className="cta-title">Готовы начать покупки?</h2>
-            <p className="cta-subtitle">Более 6000 товаров от ведущих мировых брендов с доставкой по Казахстану</p>
+            <p className="cta-subtitle">Более 12 000 товаров от официальных поставщиков с доставкой по Алматы</p>
             <Link to="/catalog" className="btn btn-primary btn-lg">
               Перейти в каталог
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
