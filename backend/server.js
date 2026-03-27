@@ -208,10 +208,26 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    if (sortBy === 'price_asc')  products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
-    else if (sortBy === 'price_desc') products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    else if (sortBy === 'name_asc')  products.sort((a, b) => (a.name||'').localeCompare(b.name||''));
-    else if (sortBy === 'newest')    products.sort((a, b) => (b.isnew||0) - (a.isnew||0));
+    if (sortBy === 'price_asc') {
+      products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
+    } else if (sortBy === 'price_desc') {
+      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    } else if (sortBy === 'name_asc') {
+      products.sort((a, b) => (a.name||'').localeCompare(b.name||'', 'ru'));
+    } else if (sortBy === 'newest') {
+      products.sort((a, b) => (b.isnew||0) - (a.isnew||0) || (b.price2||b.price1||0) - (a.price2||a.price1||0));
+    } else {
+      // По умолчанию: сначала товары 1к–500к по убыванию, потом промышленное оборудование
+      products.sort((a, b) => {
+        const pa = a.price2||a.price1||0;
+        const pb = b.price2||b.price1||0;
+        const aOk = pa > 1000 && pa <= 500000;
+        const bOk = pb > 1000 && pb <= 500000;
+        if (aOk && !bOk) return -1;
+        if (!aOk && bOk) return 1;
+        return pb - pa;
+      });
+    }
 
     const start = Number(offset);
     const end   = start + Number(limit);
