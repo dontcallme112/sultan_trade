@@ -695,6 +695,116 @@ async function warmupCache() {
   }
 }
 
+// ─── Синхронизация товаров из al-style → Supabase ────────────
+// Запускается автоматически раз в час
+async function syncProductsToSupabase(silent = false) {
+  if (!supabaseAdmin) return;
+  if (!silent) console.log('🔄 Синхронизация товаров с al-style...');
+
+  const startTime = Date.now();
+  let synced = 0;
+  let offset = 0;
+  const limit = 250;
+  let totalCount = null;
+
+  try {
+    do {
+      let data = null;
+      let retries = 0;
+      while (retries < 3) {
+        try {
+          data = await enqueueApiCall(async () => {
+            const response = await api.get('/elements-pagination', {
+              params: {
+                'access-token': ALSTYLE_TOKEN,
+                exclude_missing: 'true',
+                limit,
+                offset,
+                additional_fields: 'brand,images',
+              }
+            });
+            return response.data;
+          });
+          break;
+        } catch (e) {
+          if (e.response?.status === 403) {
+            retries++;
+            await new Promise(r => setTimeout(r, 10000 * retries));
+          } else throw e;
+        }
+      }
+      if (!data) break;
+
+      const elements = data.elements || [];
+      if (!elements.length) break;
+
+      if (totalCount === null) {
+        totalCount = data.pagination?.totalCount || 0;
+      }
+
+      // Upsert пачками по 100
+      const BATCH = 100;
+      for (let i = 0; i < elements.length; i += BATCH) {
+        const batch = elements.slice(i, i + BATCH).map(p => ({
+          article:    String(p.article),
+          name:       p.name || '',
+          full_name:  p.full_name || '',
+          brand:      p.brand || '',
+          price:      p.price2 || p.price1 || p.price || 0,
+          price1:     p.price1 || null,
+          price2:     p.price2 || null,
+          quantity:   String(p.quantity ?? '0'),
+          isnew:      p.isnew || 0,
+          image_url:  p.images?.[0] || p.image || null,
+          images:     JSON.stringify(p.images || []),
+          category_id: p.category_id ? String(p.category_id) : null,
+          raw_data:   JSON.stringify({}),
+          synced_at:  new Date().toISOString(),
+        }));
+
+        await supabaseAdmin.from('products').upsert(batch, { onConflict: 'article' });
+        synced += batch.length;
+      }
+
+      offset += limit;
+    } while (totalCount && offset < totalCount);
+
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.log(`✅ Синхронизация завершена: ${synced} товаров за ${elapsed}с`);
+
+    // Сбрасываем кеш поиска чтобы подтянуть свежие данные
+    cache.delete('search_all_products');
+    if (redis) {
+      try { await redis.del('search_all_products'); } catch(e) {}
+    }
+
+  } catch (e) {
+    console.error('❌ Ошибка синхронизации:', e.message);
+  }
+}
+
+// Cron: синхронизация каждый час
+const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 час
+function startSyncCron() {
+  console.log('⏰ Cron синхронизация запущена (каждый час)');
+  // Первый запуск — через 5 минут после старта (не мешает прогреву)
+  setTimeout(async () => {
+    await syncProductsToSupabase();
+    // Потом каждый час
+    setInterval(syncProductsToSupabase, SYNC_INTERVAL_MS);
+  }, 5 * 60 * 1000);
+}
+
+// Endpoint для ручного запуска синхронизации (Railway webhook / cron)
+app.post('/api/admin/sync', async (req, res) => {
+  const secret = req.headers['x-sync-secret'];
+  if (secret !== process.env.SYNC_SECRET && process.env.SYNC_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json({ message: 'Синхронизация запущена в фоне' });
+  syncProductsToSupabase(false);
+});
+
 app.listen(PORT, () => {
   console.log('\n🚀 LUXE Backend v4.3');
   console.log('━━━━━━━━━━━━━━━━━━━━━━');
@@ -706,4 +816,5 @@ app.listen(PORT, () => {
 
   // Прогрев через 30 секунд — даём API время "остыть" после старта
   setTimeout(warmupCache, 30000);
+  startSyncCron();
 });
