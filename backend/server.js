@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -106,6 +107,7 @@ function enqueueApiCall(fn) {
 }
 
 // ─── Middleware ───────────────────────────────────────────────
+app.use(compression());
 app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
 app.use(express.json());
 app.use((req, res, next) => {
@@ -297,6 +299,7 @@ app.get('/api/products', rateLimit({ windowMs: 60000, max: 300 }), async (req, r
     const start = Number(offset);
     const end   = start + Number(limit);
 
+    res.set('Cache-Control', 'public, max-age=60');
     res.json({
       elements: products.slice(start, end),
       pagination: { totalCount: products.length, total: products.length, offset: start, limit: Number(limit), hasMore: end < products.length }
