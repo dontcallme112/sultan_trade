@@ -7,6 +7,12 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
 .header-bg {
   position: absolute;
   top: 0;

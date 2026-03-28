@@ -48,16 +48,8 @@ const Header = () => {
           <div className="header-content">
             {/* Logo */}
             <Link to="/" className="logo" onClick={handleLinkClick}>
-              <div className="logo-icon">
-                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="40" height="40" rx="10" fill="#1a1a1a"/>
-                  <path d="M26 13H17a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H14"
-                        stroke="#DAA520" strokeWidth="2.5" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <span className="logo-text">
-                <span>S</span>tockera
-              </span>
+              <img src="/logo.png" alt="Stockera" className="logo-img" />
+              <span className="logo-text"><span>S</span>tockera</span>
             </Link>
 
             {/* Navigation — Sale убран */}
