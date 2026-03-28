@@ -62,16 +62,15 @@ export function AuthProvider({ children }) {
   };
 
   // Google OAuth
-  const signInWithGoogle = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      }
-    });
-    return { data, error };
-  };
-
+const signInWithGoogle = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'https://sultan-trade.vercel.app/auth/callback',
+    }
+  });
+  return { data, error };
+};
   // Телефон — отправить OTP
   const signInWithPhone = async (phone) => {
     // phone формат: +77001234567
