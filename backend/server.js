@@ -234,8 +234,35 @@ app.get('/api/products', rateLimit({ windowMs: 60000, max: 300 }), async (req, r
 
     let products;
 
-    // onlyNew без категории — ищем по всему каталогу (полный кеш 6000+)
+    // onlyNew без категории — берём из PostgreSQL
     if (onlyNew === 'true' && !categoryParam) {
+      if (supabaseAdmin) {
+        try {
+          const start = Number(offset);
+          const { data, error, count } = await supabaseAdmin
+            .from('products')
+            .select('*', { count: 'exact' })
+            .eq('isnew', 1)
+            .order('price', { ascending: false })
+            .range(start, start + Number(limit) - 1);
+
+          if (!error) {
+            const els = (data || []).map(p => ({
+              article:  p.article, name: p.name, brand: p.brand,
+              price2:   p.price, price1: p.price, price: p.price,
+              isnew:    p.isnew, quantity: p.quantity,
+              images:   p.image_url ? [p.image_url] : [],
+              image:    p.image_url,
+            }));
+            return res.set('Cache-Control', 'public, max-age=60').json({
+              elements: els,
+              pagination: { totalCount: count, total: count, offset: start, limit: Number(limit), hasMore: start + els.length < count }
+            });
+          }
+        } catch (pgErr) {
+          console.warn('⚠️ PG onlyNew fallback:', pgErr.message);
+        }
+      }
       try {
         const allProducts = await loadAllProductsForSearch();
         products = allProducts;
@@ -479,6 +506,37 @@ app.get('/api/search', rateLimit({ windowMs: 60000, max: 100 }), async (req, res
     const { q } = req.query;
     if (!q || q.length < 2) return res.json([]);
 
+    // Сначала пробуем PostgreSQL (быстро, точно)
+    if (supabaseAdmin) {
+      try {
+        const { data, error } = await supabaseAdmin
+          .from('products')
+          .select('article, name, brand, price, isnew, image_url, quantity')
+          .or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`)
+          .order('price', { ascending: false })
+          .limit(20);
+
+        if (!error && data?.length > 0) {
+          const results = data.map(p => ({
+            article:   p.article,
+            name:      p.name,
+            brand:     p.brand,
+            price:     p.price,
+            price2:    p.price,
+            isnew:     p.isnew,
+            image:     p.image_url,
+            images:    p.image_url ? [p.image_url] : [],
+            quantity:  p.quantity,
+          }));
+          console.log(`🔍 PG "${q}": ${results.length} результатов`);
+          return res.json(results);
+        }
+      } catch (pgErr) {
+        console.warn('⚠️ PG поиск недоступен, fallback на кеш:', pgErr.message);
+      }
+    }
+
+    // Fallback — RAM кеш
     let products;
     try {
       products = await loadAllProductsForSearch();
@@ -488,25 +546,21 @@ app.get('/api/search', rateLimit({ windowMs: 60000, max: 100 }), async (req, res
     }
 
     const s = q.toLowerCase();
-
-    // Поиск с релевантностью: бренд > название > full_name
     const results = products
       .map(p => {
-        const name     = p.name.toLowerCase();
-        const fullName = p.full_name.toLowerCase();
-        const brand    = p.brand.toLowerCase();
+        const name  = p.name.toLowerCase();
+        const brand = p.brand.toLowerCase();
         let score = 0;
-        if (brand.includes(s))    score += 3;
-        if (name.includes(s))     score += 2;
-        if (fullName.includes(s)) score += 1;
+        if (brand.includes(s)) score += 3;
+        if (name.includes(s))  score += 2;
         return score > 0 ? { ...p, score } : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
+      .slice(0, 20)
       .map(({ score, ...p }) => p);
 
-    console.log(`🔍 "${q}": ${results.length} из ${products.length}`);
+    console.log(`🔍 RAM "${q}": ${results.length} результатов`);
     res.json(results);
   } catch (error) {
     console.error('❌ search:', error.message);
