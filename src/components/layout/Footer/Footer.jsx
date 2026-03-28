@@ -69,6 +69,15 @@ const Footer = () => {
                   <a href="tel:+77001234567">+7 (708) 212-47-17</a>
                 </li>
                 <li>
+                  <a href="tel:+77754886211">+7 (775) 488-62-11</a>
+                </li>
+                <li>
+                  <a href="tel:+77017703905">+7 (701) 770-39-05</a>
+                </li>
+                <li>
+                  <a href="tel:+77084592131">+7 (708) 459-21-31</a>
+                </li>
+                <li>
                   <a href="mailto:info@luxe.com">info@luxe.com</a>
                 </li>
                 <li>Алматы, Казахстан</li>

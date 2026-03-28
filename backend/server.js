@@ -115,6 +115,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Telegram уведомления ────────────────────────────────────
+const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
+const TG_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+async function sendTelegramNotification(message) {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  try {
+    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      chat_id: TG_CHAT_ID,
+      text: message,
+      parse_mode: 'HTML',
+    });
+  } catch (e) {
+    console.warn('⚠️ Telegram уведомление не отправлено:', e.message);
+  }
+}
+
 // ─── Rate limiting ───────────────────────────────────────────
 // Простой in-memory rate limiter без внешних пакетов
 const rateLimitMap = new Map();
@@ -628,6 +645,32 @@ app.post('/api/orders', rateLimit({ windowMs: 60000, max: 60 }), requireAuth, as
       .insert({ user_id: req.user.id, items, total_price: total_price || 0, address_id: address_id || null, address_text: address_text || null, comment: comment || null, status: 'pending' })
       .select().single();
     if (error) return res.status(500).json({ error: error.message });
+
+    // Telegram уведомление о новом заказе
+    try {
+      const orderItems = (items || []).map(i =>
+        `• ${i.name || i.title || 'Товар'} × ${i.quantity} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`
+      ).join('\n');
+
+      const userName = req.user.user_metadata?.full_name || req.user.email || 'Неизвестно';
+      const userEmail = req.user.email || '';
+      const address = address_text || 'Не указан';
+      const total = (total_price || 0).toLocaleString('ru-RU');
+      const orderId = data.id?.slice(0, 8).toUpperCase();
+
+      const msg = `🛒 <b>Новый заказ #${orderId}</b>\n\n` +
+        `👤 ${userName}\n` +
+        `📧 ${userEmail}\n` +
+        `📍 ${address}\n` +
+        (comment ? `💬 ${comment}\n` : '') +
+        `\n📦 <b>Товары:</b>\n${orderItems}\n\n` +
+        `💰 <b>Итого: ${total} ₸</b>`;
+
+      await sendTelegramNotification(msg);
+    } catch (tgErr) {
+      console.warn('Telegram error:', tgErr.message);
+    }
+
     res.json({ success: true, order: data });
   } catch (error) {
     res.status(500).json({ error: error.message });
