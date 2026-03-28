@@ -493,7 +493,7 @@ async function loadAllProductsForSearch() {
     }));
 
     setCache('search_all_products', compact);
-    await setRedisCache('search_all_products', compact, 7200);
+    await setRedisCache('search_all_products', compact, 86400); // 24 часа
     console.log(`✅ Кеш поиска готов: ${compact.length} товаров`);
     return compact;
   });
@@ -684,8 +684,16 @@ async function warmupCache() {
     // 2. Первые 250 для каталога
     await loadProducts(null);
 
-    // 3. Все товары для поиска — в фоне, не блокируем старт
-    // Займёт ~2-3 минуты из-за rate limit, но поиск заработает постепенно
+    // 3. Сначала пробуем Redis — если данные есть, сразу готово
+    const redisData = await getRedisCacheOrNull('search_all_products');
+    if (redisData) {
+      setCache('search_all_products', redisData);
+      console.log(`✅ Кеш поиска из Redis: ${redisData.length} товаров — мгновенно!`);
+      return;
+    }
+
+    // 4. Redis пустой — грузим из al-style в фоне
+    console.log('📦 Redis пустой, загружаем товары из al-style...');
     loadAllProductsForSearch().catch(e =>
       console.warn('⚠️ Фоновая загрузка поиска:', e.message)
     );
