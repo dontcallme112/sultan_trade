@@ -8,61 +8,48 @@ import { Redis } from '@upstash/redis';
 
 dotenv.config();
 
-// ─── Redis (Upstash) ──────────────────────────────────────────
+const PORT          = process.env.PORT || 8080;
+const ALSTYLE_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
+const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
+const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
+const SYNC_SECRET   = process.env.SYNC_SECRET;
+
+if (!ALSTYLE_TOKEN) { console.error('ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
+
+const supabaseAdmin = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-  ? new Redis({
-      url:   process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    })
+  ? new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN })
   : null;
 
-console.log('Redis:', redis ? '✅ Upstash' : '⚠️  Disabled (no env vars)');
+console.log('\n🚀 Stockera Backend v5.0');
+console.log('━━━━━━━━━━━━━━━━━━━━━━');
+console.log(`Redis: ${redis ? '✅ Upstash' : '⚠️  Disabled'}`);
+console.log(`SUPABASE_URL: ${SUPABASE_URL ? '✅' : '❌'}`);
+console.log(`SUPABASE_SERVICE_KEY: ${SUPABASE_KEY ? '✅' : '❌'}`);
+console.log(`ALSTYLE_TOKEN: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
+console.log(`🔐 Auth: ${supabaseAdmin ? '✅ Supabase' : '⚠️  Disabled'}`);
+console.log('⏱️  Кеш: товары 10мин, категории 30мин\n');
 
 const app = express();
+app.use(compression());
+app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
+app.use(express.json());
+app.use((req, res, next) => { console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
 
-// ─── Telegram уведомления ─────────────────────────────────────
-const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
+// ─── Telegram ────────────────────────────────────────────────
 async function sendTelegramNotification(text) {
   if (!TG_TOKEN || !TG_CHAT_ID) return;
   try {
-    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      chat_id:    TG_CHAT_ID,
-      text,
-      parse_mode: 'HTML',
-    });
+    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { chat_id: TG_CHAT_ID, text, parse_mode: 'HTML' });
     console.log('📱 Telegram уведомление отправлено');
-  } catch (e) {
-    console.warn('⚠️ Telegram ошибка:', e.message);
-  }
+  } catch (e) { console.warn('⚠️ Telegram ошибка:', e.message); }
 }
-const PORT = process.env.PORT || 8080;
 
-const ALSTYLE_TOKEN        = process.env.ALSTYLE_ACCESS_TOKEN;
-const SUPABASE_URL         = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-console.log('\n🔧 Переменные окружения:');
-console.log('ALSTYLE_TOKEN:', ALSTYLE_TOKEN ? '✅' : '❌');
-console.log('SUPABASE_URL:', SUPABASE_URL ? '✅' : '❌');
-console.log('SUPABASE_SERVICE_KEY:', SUPABASE_SERVICE_KEY ? '✅' : '❌');
-
-if (!ALSTYLE_TOKEN) { console.error('❌ ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
-
-const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-  : null;
-
-// ─── Кеш ─────────────────────────────────────────────────────
+// ─── RAM кеш ─────────────────────────────────────────────────
 const cache = new Map();
-
-const CACHE_TIMES = {
-  products:   10 * 60 * 1000,
-  categories: 30 * 60 * 1000,
-  filters:    30 * 60 * 1000,
-  product:     5 * 60 * 1000,
-};
+const CACHE_TIMES = { products: 10*60*1000, categories: 30*60*1000, product: 5*60*1000 };
 
 function getCache(key, maxAge) {
   const item = cache.get(key);
@@ -71,817 +58,254 @@ function getCache(key, maxAge) {
   console.log(`💾 RAM кеш hit: ${key}`);
   return item.data;
 }
-function setCache(key, data) {
-  cache.set(key, { data, timestamp: Date.now() });
-}
+function setCache(key, data) { cache.set(key, { data, timestamp: Date.now() }); }
 
-// Redis-aware get/set для тяжёлых данных (товары для поиска)
 async function getRedisCacheOrNull(key) {
   if (!redis) return null;
-  try {
-    const val = await redis.get(key);
-    if (val) { console.log(`💾 Redis hit: ${key}`); return val; }
-  } catch(e) { console.warn('⚠️ Redis get error:', e.message); }
+  try { const val = await redis.get(key); if (val) { console.log(`💾 Redis hit: ${key}`); return val; } } catch(e) { console.warn('⚠️ Redis get:', e.message); }
   return null;
 }
-async function setRedisCache(key, data, ttlSeconds = 3600) {
+async function setRedisCache(key, data, ttl = 86400) {
   if (!redis) return;
-  try {
-    await redis.set(key, data, { ex: ttlSeconds });
-    console.log(`💾 Redis set: ${key}`);
-  } catch(e) { console.warn('⚠️ Redis set error:', e.message); }
+  try { await redis.set(key, data, { ex: ttl }); } catch(e) { console.warn('⚠️ Redis set:', e.message); }
 }
 
-// ─── In-flight дедупликация ───────────────────────────────────
-// Если два запроса хотят одни и те же данные — второй ждёт первого,
-// а не делает свой API-запрос.
+// ─── Дедупликация ────────────────────────────────────────────
 const inFlight = new Map();
-
-async function fetchOnce(key, fetchFn) {
-  if (inFlight.has(key)) {
-    console.log(`🔄 Дедупликация: ждём уже выполняющийся запрос ${key}`);
-    return inFlight.get(key);
-  }
-  const promise = fetchFn().finally(() => inFlight.delete(key));
-  inFlight.set(key, promise);
-  return promise;
+async function fetchOnce(key, fn) {
+  if (inFlight.has(key)) return inFlight.get(key);
+  const p = fn().finally(() => inFlight.delete(key));
+  inFlight.set(key, p); return p;
 }
 
-// ─── Rate limiting (очередь вместо sleep) ────────────────────
-// Вместо того чтобы блокировать каждый запрос на 10с,
-// ставим их в очередь — API дёргается строго по одному.
-const API_MIN_INTERVAL = 5000; // 5 сек между запросами // 2 секунды между вызовами — безопаснее и быстрее
+// ─── API очередь ─────────────────────────────────────────────
+const API_MIN_INTERVAL = 5000;
 let apiQueue = Promise.resolve();
-
 function enqueueApiCall(fn) {
-  const next = apiQueue.then(async () => {
-    const result = await fn();
-    await new Promise(r => setTimeout(r, API_MIN_INTERVAL));
-    return result;
-  });
-  // Не даём ошибкам ломать очередь
-  apiQueue = next.catch(() => {});
-  return next;
+  const next = apiQueue.then(async () => { const r = await fn(); await new Promise(r => setTimeout(r, API_MIN_INTERVAL)); return r; });
+  apiQueue = next.catch(() => {}); return next;
 }
 
-// ─── Middleware ───────────────────────────────────────────────
-app.use(compression());
-app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
-app.use(express.json());
-app.use((req, res, next) => {
-  console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`);
-  next();
-});
-
-
-
-async function sendTelegramNotification(message) {
-  if (!TG_TOKEN || !TG_CHAT_ID) return;
-  try {
-    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      chat_id: TG_CHAT_ID,
-      text: message,
-      parse_mode: 'HTML',
-    });
-  } catch (e) {
-    console.warn('⚠️ Telegram уведомление не отправлено:', e.message);
-  }
-}
-
-// ─── Rate limiting ───────────────────────────────────────────
-// Простой in-memory rate limiter без внешних пакетов
+// ─── Rate limiting ────────────────────────────────────────────
 const rateLimitMap = new Map();
-
-function rateLimit({ windowMs = 60000, max = 100, message = 'Слишком много запросов' } = {}) {
+function rateLimit({ windowMs=60000, max=100, message='Слишком много запросов' }={}) {
   return (req, res, next) => {
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
     const now = Date.now();
-    const windowStart = now - windowMs;
-
-    if (!rateLimitMap.has(ip)) {
-      rateLimitMap.set(ip, []);
-    }
-
-    // Убираем старые запросы за пределами окна
-    const requests = rateLimitMap.get(ip).filter(t => t > windowStart);
-    requests.push(now);
-    rateLimitMap.set(ip, requests);
-
-    if (requests.length > max) {
-      console.log(`🚫 Rate limit: ${ip} (${requests.length} запросов за ${windowMs/1000}с)`);
-      return res.status(429).json({ error: message, retryAfter: Math.ceil(windowMs / 1000) });
-    }
+    const reqs = (rateLimitMap.get(ip)||[]).filter(t => t > now-windowMs);
+    reqs.push(now); rateLimitMap.set(ip, reqs);
+    if (reqs.length > max) { console.log(`🚫 Rate limit: ${ip}`); return res.status(429).json({ error: message }); }
     next();
   };
 }
+setInterval(() => { const c=Date.now()-60000; for(const[ip,t]of rateLimitMap){const f=t.filter(x=>x>c);if(!f.length)rateLimitMap.delete(ip);else rateLimitMap.set(ip,f);} }, 5*60*1000);
 
-// Чистим старые IP каждые 5 минут
-setInterval(() => {
-  const cutoff = Date.now() - 60000;
-  for (const [ip, times] of rateLimitMap) {
-    const fresh = times.filter(t => t > cutoff);
-    if (fresh.length === 0) rateLimitMap.delete(ip);
-    else rateLimitMap.set(ip, fresh);
-  }
-}, 5 * 60 * 1000);
-
-// JWT Auth middleware
+// ─── Auth middleware ──────────────────────────────────────────
 const requireAuth = async (req, res, next) => {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Auth service not configured' });
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
-  const token = auth.slice(7);
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(auth.slice(7));
   if (error || !user) return res.status(401).json({ error: 'Invalid token' });
-  req.user = user;
-  next();
+  req.user = user; next();
 };
 
 const api     = axios.create({ baseURL: 'https://api.al-style.kz/api',      timeout: 30000 });
 const cartApi = axios.create({ baseURL: 'https://api.al-style.kz/cart-api', timeout: 30000 });
 
-// ─── Утилита: парсим category из query ───────────────────────
-// FIX: ранее объект попадал как [object Object] и API возвращал 500
-function parseCategoryParam(rawCategory) {
-  if (!rawCategory) return null;
-
-  const cats = Array.isArray(rawCategory) ? rawCategory : [rawCategory];
-  const valid = cats
-    .map(c => {
-      if (c === null || c === undefined) return null;
-      if (typeof c === 'object') return null; // выбрасываем объекты
-      const str = String(c).trim();
-      // Проверяем что это число или список чисел через запятую
-      if (!/^[\d,]+$/.test(str)) return null;
-      return str;
-    })
-    .filter(Boolean);
-
-  return valid.length > 0 ? valid.join(',') : null;
+function parseCategoryParam(raw) {
+  if (!raw) return null;
+  const valid = (Array.isArray(raw)?raw:[raw]).map(c => { if(!c||typeof c==='object') return null; const s=String(c).trim(); return /^[\d,]+$/.test(s)?s:null; }).filter(Boolean);
+  return valid.length ? valid.join(',') : null;
 }
 
-// ─── Загрузка товаров через очередь + дедупликацию ───────────
-async function loadProducts(categoryParam) {
-  const cacheKey = `products_cat_${categoryParam || 'all'}`;
-  const cached = getCache(cacheKey, CACHE_TIMES.products);
+async function loadProducts(cat) {
+  const key = `products_cat_${cat||'all'}`;
+  const cached = getCache(key, CACHE_TIMES.products);
   if (cached) return cached;
-
-  return fetchOnce(cacheKey, () =>
-    enqueueApiCall(async () => {
-      console.log(`📦 API: загрузка товаров, категория: ${categoryParam || 'все'}`);
-      const apiParams = {
-        'access-token': ALSTYLE_TOKEN,
-        exclude_missing: 'true',
-        limit: 250,
-        offset: 0,
-        additional_fields: 'brand,images',
-      };
-      if (categoryParam) apiParams.category = categoryParam;
-      const response = await api.get('/elements-pagination', { params: apiParams });
-      const data = response.data;
-      setCache(cacheKey, data);
-      // Дополнительно кешируем как "все товары" если это запрос без категории
-      if (!categoryParam) setCache('products_cat_all', data);
-      console.log(`✅ Загружено: ${data.elements?.length || 0} товаров`);
-      return data;
-    })
-  );
+  return fetchOnce(key, () => enqueueApiCall(async () => {
+    console.log(`📦 API: загрузка товаров, категория: ${cat||'все'}`);
+    const params = { 'access-token': ALSTYLE_TOKEN, exclude_missing: 'true', limit: 250, offset: 0, additional_fields: 'brand,images' };
+    if (cat) params.category = cat;
+    const { data } = await api.get('/elements-pagination', { params });
+    setCache(key, data); if (!cat) setCache('products_cat_all', data);
+    console.log(`✅ Загружено: ${data.elements?.length||0} товаров`);
+    return data;
+  }));
 }
 
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    token: !!ALSTYLE_TOKEN,
-    supabase: !!supabaseAdmin,
-    cache: cache.size,
-    inFlight: inFlight.size,
-  });
-});
-
-// ─── PRODUCTS ────────────────────────────────────────────────
-app.get('/api/products', rateLimit({ windowMs: 60000, max: 300 }), async (req, res) => {
-  try {
-    const { limit = 12, offset = 0, minPrice, maxPrice, brand, onlyNew, search, sortBy } = req.query;
-
-    const categoryParam = parseCategoryParam(req.query.category);
-
-    let products;
-
-    // onlyNew без категории — берём из PostgreSQL
-    if (onlyNew === 'true' && !categoryParam) {
-      if (supabaseAdmin) {
-        try {
-          const start = Number(offset);
-          const { data, error, count } = await supabaseAdmin
-            .from('products')
-            .select('*', { count: 'exact' })
-            .eq('isnew', 1)
-            .order('price', { ascending: false })
-            .range(start, start + Number(limit) - 1);
-
-          if (!error) {
-            const els = (data || []).map(p => ({
-              article:  p.article, name: p.name, brand: p.brand,
-              price2:   p.price, price1: p.price, price: p.price,
-              isnew:    p.isnew, quantity: p.quantity,
-              images:   p.image_url ? [p.image_url] : [],
-              image:    p.image_url,
-            }));
-            return res.set('Cache-Control', 'public, max-age=60').json({
-              elements: els,
-              pagination: { totalCount: count, total: count, offset: start, limit: Number(limit), hasMore: start + els.length < count }
-            });
-          }
-        } catch (pgErr) {
-          console.warn('⚠️ PG onlyNew fallback:', pgErr.message);
-        }
-      }
-      try {
-        const allProducts = await loadAllProductsForSearch();
-        products = allProducts;
-      } catch (err) {
-        console.error('❌ Ошибка загрузки всех товаров:', err.message);
-        products = [];
-      }
-    } else {
-      let data;
-      try {
-        data = await loadProducts(categoryParam);
-      } catch (err) {
-        console.error('❌ Ошибка загрузки товаров:', err.message);
-        return res.status(502).json({
-          error: 'Не удалось загрузить товары с поставщика',
-          elements: [],
-          pagination: { totalCount: 0, hasMore: false },
-        });
-      }
-      products = data.elements || [];
-    }
-
-    if (minPrice || maxPrice) {
-      products = products.filter(p => {
-        const price = p.price2 || p.price1 || 0;
-        return (!minPrice || price >= Number(minPrice)) && (!maxPrice || price <= Number(maxPrice));
-      });
-    }
-    if (brand) products = products.filter(p => p.brand?.toLowerCase() === brand.toLowerCase());
-    if (onlyNew === 'true') products = products.filter(p => p.isnew === 1);
-    if (search) {
-      const s = search.toLowerCase();
-      products = products.filter(p =>
-        p.name?.toLowerCase().includes(s) ||
-        p.full_name?.toLowerCase().includes(s) ||
-        p.brand?.toLowerCase().includes(s)
-      );
-    }
-
-    if (sortBy === 'price_asc') {
-      products.sort((a, b) => (a.price2||a.price1||0) - (b.price2||b.price1||0));
-    } else if (sortBy === 'price_desc') {
-      products.sort((a, b) => (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    } else if (sortBy === 'name_asc') {
-      products.sort((a, b) => (a.name||'').localeCompare(b.name||'', 'ru'));
-    } else if (sortBy === 'newest') {
-      products.sort((a, b) => (b.isnew||0) - (a.isnew||0) || (b.price2||b.price1||0) - (a.price2||a.price1||0));
-    } else {
-      // По умолчанию: сначала товары 1к–500к по убыванию, потом промышленное оборудование
-      products.sort((a, b) => {
-        const pa = a.price2||a.price1||0;
-        const pb = b.price2||b.price1||0;
-        const aOk = pa > 1000 && pa <= 500000;
-        const bOk = pb > 1000 && pb <= 500000;
-        if (aOk && !bOk) return -1;
-        if (!aOk && bOk) return 1;
-        return pb - pa;
-      });
-    }
-
-    const start = Number(offset);
-    const end   = start + Number(limit);
-
-    res.set('Cache-Control', 'public, max-age=60');
-    res.json({
-      elements: products.slice(start, end),
-      pagination: { totalCount: products.length, total: products.length, offset: start, limit: Number(limit), hasMore: end < products.length }
-    });
-  } catch (error) {
-    console.error('❌ /api/products:', error.message);
-    res.status(500).json({ error: error.message, elements: [], pagination: { totalCount: 0, hasMore: false } });
-  }
-});
-
-// ─── SINGLE PRODUCT ──────────────────────────────────────────
-app.get('/api/product/:article', async (req, res) => {
-  try {
-    const key = `product_${req.params.article}`;
-    const cached = getCache(key, CACHE_TIMES.product);
-    if (cached) return res.json(cached);
-
-    const product = await fetchOnce(key, () =>
-      enqueueApiCall(async () => {
-        const response = await api.get('/element-info', {
-          params: { 'access-token': ALSTYLE_TOKEN, article: req.params.article, additional_fields: 'brand,images,description' }
-        });
-        const data = Array.isArray(response.data) ? response.data[0] : response.data;
-        setCache(key, data);
-        return data;
-      })
-    );
-    res.json(product);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ─── CATEGORIES ──────────────────────────────────────────────
-app.get('/api/categories', async (req, res) => {
-  try {
-    const cached = getCache('categories', CACHE_TIMES.categories);
-    if (cached) return res.json(cached);
-
-    const categories = await fetchOnce('categories', () =>
-      enqueueApiCall(async () => {
-        console.log('📦 API: загрузка категорий...');
-        const response = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
-        const data = Array.isArray(response.data) ? response.data : [];
-        setCache('categories', data);
-        console.log('✅ Категорий:', data.length);
-        return data;
-      })
-    );
-    res.json(categories);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ─── FILTERS ─────────────────────────────────────────────────
-app.get('/api/filters', async (req, res) => {
-  try {
-    const cached = getCache('filters', CACHE_TIMES.filters);
-    if (cached) return res.json(cached);
-
-    const filters = await fetchOnce('filters', () =>
-      enqueueApiCall(async () => {
-        let brands = [];
-        try {
-          const response = await api.get('/brands', { params: { 'access-token': ALSTYLE_TOKEN } });
-          if (response.data.status && Array.isArray(response.data.data)) {
-            brands = response.data.data.filter(b => b.name?.trim()).map(b => b.name).sort();
-          }
-        } catch (e) {
-          const allProducts = getCache('products_cat_all', 999999);
-          if (allProducts?.elements) {
-            brands = [...new Set(allProducts.elements.map(p => p.brand).filter(Boolean))].sort();
-          }
-        }
-
-        let priceRange = { min: 0, max: 1000000 };
-        const allProducts = getCache('products_cat_all', 999999);
-        if (allProducts?.elements) {
-          const prices = allProducts.elements.map(p => p.price2 || p.price1 || 0).filter(p => p > 0);
-          if (prices.length) priceRange = { min: Math.min(...prices), max: Math.max(...prices) };
-        }
-
-        const data = { brands: brands.slice(0, 50), priceRange };
-        setCache('filters', data);
-        return data;
-      })
-    );
-    res.json(filters);
-  } catch (error) {
-    res.json({ brands: [], priceRange: { min: 0, max: 1000000 } });
-  }
-});
-
-// ─── Загрузка ВСЕХ товаров постранично для поиска ────────────
-const ALL_PRODUCTS_CACHE_TIME = 30 * 60 * 1000;
-
+const ALL_CACHE_TIME = 30*60*1000;
 async function loadAllProductsForSearch() {
-  const ramCached = getCache('search_all_products', ALL_PRODUCTS_CACHE_TIME);
-  if (ramCached) return ramCached;
-
-  const redisCached = await getRedisCacheOrNull('search_all_products');
-  if (redisCached) {
-    setCache('search_all_products', redisCached);
-    return redisCached;
-  }
-
-  return fetchOnce('search_all_products_loading', async () => {
+  const ram = getCache('search_all_products', ALL_CACHE_TIME); if (ram) return ram;
+  const rd = await getRedisCacheOrNull('search_all_products'); if (rd) { setCache('search_all_products', rd); return rd; }
+  return fetchOnce('search_all_loading', async () => {
     console.log('🔍 Загрузка всех товаров из al-style...');
-    const allProducts = [];
-    let offset = 0;
-    const limit = 250;
-    let totalCount = null;
-
+    const all=[]; let offset=0, total=null;
     do {
-      let data = null;
-      let retries = 0;
-      while (retries < 3) {
-        try {
-          data = await enqueueApiCall(async () => {
-            const response = await api.get('/elements-pagination', {
-              params: {
-                'access-token': ALSTYLE_TOKEN,
-                exclude_missing: 'true',
-                limit,
-                offset,
-                additional_fields: 'brand,images',
-              }
-            });
-            return response.data;
-          });
-          break;
-        } catch (e) {
-          if (e.response?.status === 403) {
-            retries++;
-            const wait = 10000 * retries;
-            console.log(`⚠️ 403, ждём ${wait/1000}с (попытка ${retries}/3)...`);
-            await new Promise(r => setTimeout(r, wait));
-          } else throw e;
-        }
-      }
-      if (!data) { console.log('❌ Пропускаем страницу'); break; }
-
-      allProducts.push(...(data.elements || []));
-
-      if (totalCount === null && data.pagination?.totalCount) {
-        totalCount = data.pagination.totalCount;
-        console.log(`🔍 Всего товаров: ${totalCount}`);
-      }
-
-      offset += limit;
-      console.log(`🔍 Загружено: ${allProducts.length} / ${totalCount || '?'}`);
-
-    } while (totalCount && offset < totalCount);
-
-    const compact = allProducts.map(p => ({
-      article:   p.article,
-      name:      p.name || '',
-      full_name: p.full_name || '',
-      brand:     p.brand || '',
-      price:     p.price2 || p.price1 || 0,
-      isnew:     p.isnew || 0,
-      image:     p.images?.[0] || null,
-    }));
-
-    setCache('search_all_products', compact);
-    await setRedisCache('search_all_products', compact, 86400); // 24 часа
-    console.log(`✅ Кеш поиска готов: ${compact.length} товаров`);
-    return compact;
+      let data=null, retries=0;
+      while(retries<3) { try { data=await enqueueApiCall(async()=>{ const{data:d}=await api.get('/elements-pagination',{params:{'access-token':ALSTYLE_TOKEN,exclude_missing:'true',limit:250,offset,additional_fields:'brand,images'}}); return d; }); break; } catch(e) { if(e.response?.status===403){retries++;await new Promise(r=>setTimeout(r,10000*retries));}else throw e; } }
+      if(!data){console.log('❌ Пропускаем страницу');break;}
+      all.push(...(data.elements||[]));
+      if(!total&&data.pagination?.totalCount){total=data.pagination.totalCount;console.log(`🔍 Всего: ${total}`);}
+      offset+=250; console.log(`🔍 Загружено: ${all.length}/${total||'?'}`);
+    } while(total&&offset<total);
+    const compact=all.map(p=>({article:p.article,name:p.name||'',full_name:p.full_name||'',brand:p.brand||'',price:p.price2||p.price1||0,isnew:p.isnew||0,image:p.images?.[0]||null}));
+    setCache('search_all_products',compact); await setRedisCache('search_all_products',compact,86400);
+    console.log(`✅ Кеш поиска готов: ${compact.length} товаров`); return compact;
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, cache:cache.size }));
 
-// ─── SEARCH ──────────────────────────────────────────────────
-app.get('/api/search', rateLimit({ windowMs: 60000, max: 100 }), async (req, res) => {
+app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) => {
   try {
-    const { q } = req.query;
-    if (!q || q.length < 2) return res.json([]);
-
-    // Сначала пробуем PostgreSQL (быстро, точно)
-    if (supabaseAdmin) {
-      try {
-        const { data, error } = await supabaseAdmin
-          .from('products')
-          .select('article, name, brand, price, isnew, image_url, quantity')
-          .or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`)
-          .order('price', { ascending: false })
-          .limit(20);
-
-        if (!error && data?.length > 0) {
-          const results = data.map(p => ({
-            article:   p.article,
-            name:      p.name,
-            brand:     p.brand,
-            price:     p.price,
-            price2:    p.price,
-            isnew:     p.isnew,
-            image:     p.image_url,
-            images:    p.image_url ? [p.image_url] : [],
-            quantity:  p.quantity,
-          }));
-          console.log(`🔍 PG "${q}": ${results.length} результатов`);
-          return res.json(results);
-        }
-      } catch (pgErr) {
-        console.warn('⚠️ PG поиск недоступен, fallback на кеш:', pgErr.message);
-      }
-    }
-
-    // Fallback — RAM кеш
+    const {limit=12,offset=0,minPrice,maxPrice,brand,onlyNew,search,sortBy}=req.query;
+    const cat = parseCategoryParam(req.query.category);
     let products;
-    try {
-      products = await loadAllProductsForSearch();
-    } catch (e) {
-      console.error('❌ Поиск: не удалось загрузить товары:', e.message);
-      return res.json([]);
+    if (onlyNew==='true'&&!cat&&supabaseAdmin) {
+      try {
+        const start=Number(offset);
+        const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).order('price',{ascending:false}).range(start,start+Number(limit)-1);
+        if (!error) { const els=(data||[]).map(p=>({article:p.article,name:p.name,brand:p.brand,price2:p.price,price1:p.price,price:p.price,isnew:p.isnew,quantity:p.quantity,images:p.image_url?[p.image_url]:[],image:p.image_url})); return res.set('Cache-Control','public, max-age=60').json({elements:els,pagination:{totalCount:count,total:count,offset:start,limit:Number(limit),hasMore:start+els.length<count}}); }
+      } catch(e){console.warn('⚠️ PG onlyNew fallback:',e.message);}
     }
-
-    const s = q.toLowerCase();
-    const results = products
-      .map(p => {
-        const name  = p.name.toLowerCase();
-        const brand = p.brand.toLowerCase();
-        let score = 0;
-        if (brand.includes(s)) score += 3;
-        if (name.includes(s))  score += 2;
-        return score > 0 ? { ...p, score } : null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 20)
-      .map(({ score, ...p }) => p);
-
-    console.log(`🔍 RAM "${q}": ${results.length} результатов`);
-    res.json(results);
-  } catch (error) {
-    console.error('❌ search:', error.message);
-    res.json([]);
-  }
+    if (onlyNew==='true'&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
+    else { const data=await loadProducts(cat).catch(()=>null); if(!data)return res.status(502).json({error:'Не удалось загрузить товары',elements:[],pagination:{totalCount:0,hasMore:false}}); products=data.elements||[]; }
+    if (minPrice||maxPrice) products=products.filter(p=>{const pr=p.price2||p.price1||0;return(!minPrice||pr>=+minPrice)&&(!maxPrice||pr<=+maxPrice);});
+    if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
+    if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
+    if (search){const s=search.toLowerCase();products=products.filter(p=>p.name?.toLowerCase().includes(s)||p.full_name?.toLowerCase().includes(s)||p.brand?.toLowerCase().includes(s));}
+    if(sortBy==='price_asc')products.sort((a,b)=>(a.price2||a.price1||0)-(b.price2||b.price1||0));
+    else if(sortBy==='price_desc')products.sort((a,b)=>(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    else if(sortBy==='name_asc')products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
+    else if(sortBy==='newest')products.sort((a,b)=>(b.isnew||0)-(a.isnew||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    else products.sort((a,b)=>{const pa=a.price2||a.price1||0,pb=b.price2||b.price1||0,aOk=pa>1000&&pa<=500000,bOk=pb>1000&&pb<=500000;if(aOk&&!bOk)return -1;if(!aOk&&bOk)return 1;return pb-pa;});
+    const start=Number(offset),end=start+Number(limit);
+    res.set('Cache-Control','public, max-age=60').json({elements:products.slice(start,end),pagination:{totalCount:products.length,total:products.length,offset:start,limit:Number(limit),hasMore:end<products.length}});
+  } catch(e){console.error('❌ /api/products:',e.message);res.status(500).json({error:e.message,elements:[],pagination:{totalCount:0,hasMore:false}});}
 });
 
-// ─── AL-STYLE ORDER ───────────────────────────────────────────
-app.post('/api/alstyle-order', rateLimit({ windowMs: 60000, max: 30, message: 'Подождите перед следующим заказом' }), async (req, res) => {
+app.get('/api/product/:article', async (req,res) => {
   try {
-    const { items, comment, orderId } = req.body;
-    if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
-
-    // Заказы не ставим в очередь — они должны исполняться быстро
-    const userDataResponse = await api.get('/user-data', { params: { 'access-token': ALSTYLE_TOKEN } });
-    const userData = userDataResponse.data?.data;
-    if (!userData) return res.status(500).json({ error: 'Не удалось получить данные пользователя' });
-
-    const attorney = userData['Доверенности']?.find(d => d['Основной'] && !d['empty']) || userData['Доверенности']?.[0];
-    const delivery = userData['Транспортники']?.find(d => d['Основной']) || userData['Транспортники']?.[0];
-    if (!attorney || !delivery) return res.status(500).json({ error: 'Не найдены доверенность или способ доставки' });
-
-    await cartApi.get('/clear', { params: { 'access-token': ALSTYLE_TOKEN } });
-
-    await cartApi.get('/add', {
-      params: {
-        'access-token': ALSTYLE_TOKEN,
-        add:      items.map(i => i.article).join(','),
-        quantity: items.map(i => i.quantity).join(','),
-      }
-    });
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const shippingDate = `${String(tomorrow.getDate()).padStart(2,'0')}.${String(tomorrow.getMonth()+1).padStart(2,'0')}.${tomorrow.getFullYear()}`;
-
-    const submitResponse = await cartApi.post('/submit', null, {
-      params: {
-        'access-token': ALSTYLE_TOKEN,
-        comments:      `Заказ с сайта sultantrade.vercel.app. ID: ${orderId || 'N/A'}. ${comment || ''}`,
-        shipping_date: shippingDate,
-        attorney_json: JSON.stringify(attorney),
-        delivery_json: JSON.stringify(delivery),
-        external_id:   orderId || undefined,
-      }
-    });
-
-    const alstyleOrderId = submitResponse.data?.data?.id;
-    console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
-    res.json({ success: true, alstyleOrderId });
-
-  } catch (error) {
-    console.error('❌ al-style order error:', error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data?.message || error.message });
-  }
+    const key=`product_${req.params.article}`;
+    const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(cached);
+    const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:req.params.article,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
+    res.json(product);
+  } catch(e){res.status(500).json({error:e.message});}
 });
 
-// ─── ORDERS ──────────────────────────────────────────────────
-app.post('/api/orders', rateLimit({ windowMs: 60000, max: 60 }), requireAuth, async (req, res) => {
+app.get('/api/categories', async (req,res) => {
   try {
-    const { items, address_id, address_text, comment, total_price } = req.body;
-    if (!items?.length) return res.status(400).json({ error: 'items обязательны' });
-    const { data, error } = await supabaseAdmin
-      .from('orders')
-      .insert({ user_id: req.user.id, items, total_price: total_price || 0, address_id: address_id || null, address_text: address_text || null, comment: comment || null, status: 'pending' })
-      .select().single();
-    if (error) return res.status(500).json({ error: error.message });
-
-    // Telegram уведомление о новом заказе
-    try {
-      const orderItems = (items || []).map(i =>
-        `• ${i.name || i.title || 'Товар'} × ${i.quantity} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`
-      ).join('\n');
-
-      const userName = req.user.user_metadata?.full_name || req.user.email || 'Неизвестно';
-      const userEmail = req.user.email || '';
-      const address = address_text || 'Не указан';
-      const total = (total_price || 0).toLocaleString('ru-RU');
-      const orderId = data.id?.slice(0, 8).toUpperCase();
-
-      const msg = `🛒 <b>Новый заказ #${orderId}</b>\n\n` +
-        `👤 ${userName}\n` +
-        `📧 ${userEmail}\n` +
-        `📍 ${address}\n` +
-        (comment ? `💬 ${comment}\n` : '') +
-        `\n📦 <b>Товары:</b>\n${orderItems}\n\n` +
-        `💰 <b>Итого: ${total} ₸</b>`;
-
-      await sendTelegramNotification(msg);
-    } catch (tgErr) {
-      console.warn('Telegram error:', tgErr.message);
-    }
-
-    res.json({ success: true, order: data });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const cached=getCache('categories',CACHE_TIMES.categories); if(cached)return res.json(cached);
+    const cats=await fetchOnce('categories',()=>enqueueApiCall(async()=>{console.log('📦 API: загрузка категорий...');const{data}=await api.get('/categories',{params:{'access-token':ALSTYLE_TOKEN}});const c=Array.isArray(data)?data:[];setCache('categories',c);console.log('✅ Категорий:',c.length);return c;}));
+    res.json(cats);
+  } catch(e){res.status(500).json({error:e.message});}
 });
 
-app.get('/api/orders', requireAuth, async (req, res) => {
+app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('orders').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const{q}=req.query; if(!q||q.length<2)return res.json([]);
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,isnew,image_url,quantity').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...p,price2:p.price,image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    const products=await loadAllProductsForSearch().catch(()=>[]);
+    const s=q.toLowerCase();
+    const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>p);
+    console.log(`🔍 RAM "${q}": ${results.length} результатов`); res.json(results);
+  } catch(e){console.error('❌ search:',e.message);res.json([]);}
 });
 
-// ─── FAVORITES ────────────────────────────────────────────────
-app.post('/api/favorites', requireAuth, async (req, res) => {
+app.post('/api/alstyle-order', rateLimit({windowMs:60000,max:30,message:'Подождите перед следующим заказом'}), async (req,res) => {
   try {
-    const { article, name, price, image_url } = req.body;
-    const { data, error } = await supabaseAdmin
-      .from('favorites')
-      .upsert({ user_id: req.user.id, article, name, price, image_url }, { onConflict: 'user_id,article' })
-      .select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, favorite: data });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const{items,comment,orderId}=req.body; if(!items?.length)return res.status(400).json({error:'items обязательны'});
+    const{data:ud}=await api.get('/user-data',{params:{'access-token':ALSTYLE_TOKEN}});
+    const userData=ud?.data; if(!userData)return res.status(500).json({error:'Не удалось получить данные пользователя'});
+    const attorney=userData['Доверенности']?.find(d=>d['Основной']&&!d['empty'])||userData['Доверенности']?.[0];
+    const delivery=userData['Транспортники']?.find(d=>d['Основной'])||userData['Транспортники']?.[0];
+    if(!attorney||!delivery)return res.status(500).json({error:'Не найдены доверенность или способ доставки'});
+    await cartApi.get('/clear',{params:{'access-token':ALSTYLE_TOKEN}});
+    await cartApi.get('/add',{params:{'access-token':ALSTYLE_TOKEN,add:items.map(i=>i.article).join(','),quantity:items.map(i=>i.quantity).join(',')}});
+    const d=new Date(); d.setDate(d.getDate()+1);
+    const ship=`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+    const{data:sr}=await cartApi.post('/submit',null,{params:{'access-token':ALSTYLE_TOKEN,comments:`Заказ с сайта stockeratrade.com. ID: ${orderId||'N/A'}. ${comment||''}`,shipping_date:ship,attorney_json:JSON.stringify(attorney),delivery_json:JSON.stringify(delivery),external_id:orderId||undefined}});
+    const alstyleOrderId=sr?.data?.id; console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
+    res.json({success:true,alstyleOrderId});
+  } catch(e){console.error('❌ al-style order:',e.response?.data||e.message);res.status(500).json({error:e.response?.data?.message||e.message});}
 });
 
-app.delete('/api/favorites/:article', requireAuth, async (req, res) => {
+app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (req,res) => {
   try {
-    const { error } = await supabaseAdmin
-      .from('favorites').delete().eq('user_id', req.user.id).eq('article', req.params.article);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    const{items,address_id,address_text,comment,total_price}=req.body;
+    if(!items?.length)return res.status(400).json({error:'items обязательны'});
+    const{data,error}=await supabaseAdmin.from('orders').insert({user_id:req.user.id,items,total_price:total_price||0,address_id:address_id||null,address_text:address_text||null,comment:comment||null,status:'pending'}).select().single();
+    if(error)return res.status(500).json({error:error.message});
+    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('\n');
+    const msg=`🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${req.user.user_metadata?.full_name||req.user.email||'Неизвестно'}\n📧 ${req.user.email||''}\n📍 ${address_text||'Не указан'}\n${comment?`💬 ${comment}\n`:''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
+    sendTelegramNotification(msg).catch(()=>{});
+    res.json({success:true,order:data});
+  } catch(e){res.status(500).json({error:e.message});}
 });
 
-// ─── Прогрев кеша при старте ──────────────────────────────────
+app.get('/api/orders', requireAuth, async (req,res) => {
+  try {
+    const{data,error}=await supabaseAdmin.from('orders').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false});
+    if(error)return res.status(500).json({error:error.message}); res.json(data||[]);
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/favorites', requireAuth, async (req,res) => {
+  try {
+    const{article,name,price,image_url}=req.body;
+    const{data,error}=await supabaseAdmin.from('favorites').upsert({user_id:req.user.id,article,name,price,image_url},{onConflict:'user_id,article'}).select().single();
+    if(error)return res.status(500).json({error:error.message}); res.json({success:true,favorite:data});
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.delete('/api/favorites/:article', requireAuth, async (req,res) => {
+  try {
+    const{error}=await supabaseAdmin.from('favorites').delete().eq('user_id',req.user.id).eq('article',req.params.article);
+    if(error)return res.status(500).json({error:error.message}); res.json({success:true});
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/sync', async (req,res) => {
+  if(req.headers['x-sync-secret']!==SYNC_SECRET&&SYNC_SECRET)return res.status(401).json({error:'Unauthorized'});
+  res.json({message:'Синхронизация запущена в фоне'}); syncProductsToSupabase().catch(console.error);
+});
+
+async function syncProductsToSupabase() {
+  if(!supabaseAdmin)return; console.log('🔄 Синхронизация товаров с al-style...');
+  const start=Date.now(); let synced=0,offset=0,total=null;
+  try {
+    do {
+      let data=null,retries=0;
+      while(retries<3){try{data=await enqueueApiCall(async()=>{const{data:d}=await api.get('/elements-pagination',{params:{'access-token':ALSTYLE_TOKEN,exclude_missing:'true',limit:250,offset,additional_fields:'brand,images'}});return d;});break;}catch(e){if(e.response?.status===403){retries++;await new Promise(r=>setTimeout(r,10000*retries));}else throw e;}}
+      if(!data)break; const els=data.elements||[]; if(!els.length)break;
+      if(!total)total=data.pagination?.totalCount||0;
+      for(let i=0;i<els.length;i+=100){const batch=els.slice(i,i+100).map(p=>({article:String(p.article),name:p.name||'',full_name:p.full_name||'',brand:p.brand||'',price:p.price2||p.price1||p.price||0,price1:p.price1||null,price2:p.price2||null,quantity:String(p.quantity??'0'),isnew:p.isnew||0,image_url:p.images?.[0]||null,images:JSON.stringify(p.images||[]),category_id:p.category_id?String(p.category_id):null,raw_data:'{}',synced_at:new Date().toISOString()}));await supabaseAdmin.from('products').upsert(batch,{onConflict:'article'});synced+=batch.length;}
+      offset+=250;
+    } while(total&&offset<total);
+    console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
+    cache.delete('search_all_products'); if(redis)await redis.del('search_all_products').catch(()=>{});
+  } catch(e){console.error('❌ Ошибка синхронизации:',e.message);}
+}
+
 async function warmupCache() {
   console.log('🔥 Прогрев кеша...');
   try {
-    // 1. Категории
-    const catResponse = await api.get('/categories', { params: { 'access-token': ALSTYLE_TOKEN } });
-    const cats = Array.isArray(catResponse.data) ? catResponse.data : [];
-    setCache('categories', cats);
-    console.log(`✅ Категорий: ${cats.length}`);
-
-    // 2. Первые 250 для каталога
+    const{data}=await api.get('/categories',{params:{'access-token':ALSTYLE_TOKEN}});
+    const cats=Array.isArray(data)?data:[];setCache('categories',cats);console.log(`✅ Категорий: ${cats.length}`);
     await loadProducts(null);
-
-    // 3. Сначала пробуем Redis — если данные есть, сразу готово
-    const redisData = await getRedisCacheOrNull('search_all_products');
-    if (redisData) {
-      setCache('search_all_products', redisData);
-      console.log(`✅ Кеш поиска из Redis: ${redisData.length} товаров — мгновенно!`);
-      return;
-    }
-
-    // 4. Redis пустой — грузим из al-style в фоне
-    console.log('📦 Redis пустой, загружаем товары из al-style...');
-    loadAllProductsForSearch().catch(e =>
-      console.warn('⚠️ Фоновая загрузка поиска:', e.message)
-    );
-
-  } catch (e) {
-    console.warn('⚠️ Прогрев кеша не удался:', e.message);
-  }
+    const rd=await getRedisCacheOrNull('search_all_products');
+    if(rd){setCache('search_all_products',rd);console.log(`✅ Кеш поиска из Redis: ${rd.length} товаров — мгновенно!`);return;}
+    console.log('ℹ️  Redis пустой — поиск будет читать из Supabase до следующей синхронизации');
+    loadAllProductsForSearch().catch(e=>console.warn('⚠️ Фоновая загрузка:',e.message));
+  } catch(e){console.warn('⚠️ Прогрев не удался:',e.message);}
 }
-
-// ─── Синхронизация товаров из al-style → Supabase ────────────
-// Запускается автоматически раз в час
-async function syncProductsToSupabase(silent = false) {
-  if (!supabaseAdmin) return;
-  if (!silent) console.log('🔄 Синхронизация товаров с al-style...');
-
-  const startTime = Date.now();
-  let synced = 0;
-  let offset = 0;
-  const limit = 250;
-  let totalCount = null;
-
-  try {
-    do {
-      let data = null;
-      let retries = 0;
-      while (retries < 3) {
-        try {
-          data = await enqueueApiCall(async () => {
-            const response = await api.get('/elements-pagination', {
-              params: {
-                'access-token': ALSTYLE_TOKEN,
-                exclude_missing: 'true',
-                limit,
-                offset,
-                additional_fields: 'brand,images',
-              }
-            });
-            return response.data;
-          });
-          break;
-        } catch (e) {
-          if (e.response?.status === 403) {
-            retries++;
-            await new Promise(r => setTimeout(r, 10000 * retries));
-          } else throw e;
-        }
-      }
-      if (!data) break;
-
-      const elements = data.elements || [];
-      if (!elements.length) break;
-
-      if (totalCount === null) {
-        totalCount = data.pagination?.totalCount || 0;
-      }
-
-      // Upsert пачками по 100
-      const BATCH = 100;
-      for (let i = 0; i < elements.length; i += BATCH) {
-        const batch = elements.slice(i, i + BATCH).map(p => ({
-          article:    String(p.article),
-          name:       p.name || '',
-          full_name:  p.full_name || '',
-          brand:      p.brand || '',
-          price:      p.price2 || p.price1 || p.price || 0,
-          price1:     p.price1 || null,
-          price2:     p.price2 || null,
-          quantity:   String(p.quantity ?? '0'),
-          isnew:      p.isnew || 0,
-          image_url:  p.images?.[0] || p.image || null,
-          images:     JSON.stringify(p.images || []),
-          category_id: p.category_id ? String(p.category_id) : null,
-          raw_data:   JSON.stringify({}),
-          synced_at:  new Date().toISOString(),
-        }));
-
-        await supabaseAdmin.from('products').upsert(batch, { onConflict: 'article' });
-        synced += batch.length;
-      }
-
-      offset += limit;
-    } while (totalCount && offset < totalCount);
-
-    const elapsed = Math.round((Date.now() - startTime) / 1000);
-    console.log(`✅ Синхронизация завершена: ${synced} товаров за ${elapsed}с`);
-
-    // Сбрасываем кеш поиска чтобы подтянуть свежие данные
-    cache.delete('search_all_products');
-    if (redis) {
-      try { await redis.del('search_all_products'); } catch(e) {}
-    }
-
-  } catch (e) {
-    console.error('❌ Ошибка синхронизации:', e.message);
-  }
-}
-
-// Cron: синхронизация каждый час
-const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 час
-function startSyncCron() {
-  console.log('⏰ Cron синхронизация запущена (каждый час)');
-  // Первый запуск — через 5 минут после старта (не мешает прогреву)
-  setTimeout(async () => {
-    await syncProductsToSupabase();
-    // Потом каждый час
-    setInterval(syncProductsToSupabase, SYNC_INTERVAL_MS);
-  }, 5 * 60 * 1000);
-}
-
-// Endpoint для ручного запуска синхронизации (Railway webhook / cron)
-app.post('/api/admin/sync', async (req, res) => {
-  const secret = req.headers['x-sync-secret'];
-  if (secret !== process.env.SYNC_SECRET && process.env.SYNC_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  res.json({ message: 'Синхронизация запущена в фоне' });
-  syncProductsToSupabase(false);
-});
 
 app.listen(PORT, () => {
-  console.log('\n🚀 LUXE Backend v4.3');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Port: ${PORT}`);
-  console.log(`🔑 Token: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
-  console.log(`🔐 Auth: ${supabaseAdmin ? '✅ Supabase' : '⚠️  Disabled'}`);
-  console.log('⏱️  Кеш: товары 10мин, категории 30мин');
-  console.log('✨ Готово!\n');
-
-  // Прогрев через 30 секунд — даём API время "остыть" после старта
   setTimeout(warmupCache, 30000);
-  startSyncCron();
+  setTimeout(async()=>{ await syncProductsToSupabase(); setInterval(syncProductsToSupabase,60*60*1000); }, 5*60*1000);
 });
