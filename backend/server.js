@@ -123,6 +123,34 @@ async function loadProducts(cat) {
   const key = `products_cat_${cat||'all'}`;
   const cached = getCache(key, CACHE_TIMES.products);
   if (cached) return cached;
+
+  // Берём из Supabase если доступен
+  if (supabaseAdmin) {
+    try {
+      let query = supabaseAdmin.from('products')
+        .select('article, name, full_name, brand, price, price1, price2, isnew, quantity, image_url, category_id')
+        .order('price', { ascending: false })
+        .limit(250);
+      if (cat) query = query.eq('category_id', cat);
+      const { data, error } = await query;
+      if (!error && data?.length > 0) {
+        const elements = data.map(p => ({
+          article: p.article, name: p.name, full_name: p.full_name,
+          brand: p.brand, price: p.price, price1: p.price1, price2: p.price2,
+          isnew: p.isnew, quantity: p.quantity,
+          images: p.image_url ? [p.image_url] : [], image: p.image_url,
+          category_id: p.category_id,
+        }));
+        const result = { elements, pagination: { totalCount: data.length } };
+        setCache(key, result);
+        if (!cat) setCache('products_cat_all', result);
+        console.log(`✅ Загружено из Supabase: ${elements.length} товаров`);
+        return result;
+      }
+    } catch (e) { console.warn('⚠️ Supabase loadProducts fallback:', e.message); }
+  }
+
+  // Fallback — al-style API
   return fetchOnce(key, () => enqueueApiCall(async () => {
     console.log(`📦 API: загрузка товаров, категория: ${cat||'все'}`);
     const params = { 'access-token': ALSTYLE_TOKEN, exclude_missing: 'true', limit: 250, offset: 0, additional_fields: 'brand,images' };
@@ -139,6 +167,33 @@ async function loadAllProductsForSearch() {
   const ram = getCache('search_all_products', ALL_CACHE_TIME); if (ram) return ram;
   const rd = await getRedisCacheOrNull('search_all_products'); if (rd) { setCache('search_all_products', rd); return rd; }
   return fetchOnce('search_all_loading', async () => {
+    // Берём из Supabase (быстро — все 12к товаров за 1 запрос)
+    if (supabaseAdmin) {
+      try {
+        let allData = [];
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabaseAdmin.from('products')
+            .select('article, name, full_name, brand, price, isnew, image_url')
+            .order('price', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (error || !data?.length) break;
+          allData.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+        if (allData.length > 0) {
+          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: p.price||0, isnew: p.isnew||0, image: p.image_url||null }));
+          setCache('search_all_products', compact);
+          await setRedisCache('search_all_products', compact, 86400);
+          console.log(`✅ Кеш поиска из Supabase: ${compact.length} товаров`);
+          return compact;
+        }
+      } catch (e) { console.warn('⚠️ Supabase search fallback на al-style:', e.message); }
+    }
+
+    // Fallback — al-style API
     console.log('🔍 Загрузка всех товаров из al-style...');
     const all=[]; let offset=0, total=null;
     do {
