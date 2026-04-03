@@ -8,12 +8,6 @@ export default function OrderConfirmation() {
   const navigate = useNavigate();
   const { clearCart } = useCart();
   const [order, setOrder] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [copiedComment, setCopiedComment] = useState(false);
-
-  // Замените на ваши реальные данные
-  const KASPI_PHONE = '+7 700 278 82 08';
-  const KASPI_NAME = 'ТОО "Султан Trade LD"';
 
   useEffect(() => {
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
@@ -23,18 +17,6 @@ export default function OrderConfirmation() {
       clearCart();
     }
   }, [orderId]);
-
-  const copyPhone = () => {
-    navigator.clipboard.writeText(KASPI_PHONE);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const copyComment = () => {
-    navigator.clipboard.writeText(`Заказ ${orderId}`);
-    setCopiedComment(true);
-    setTimeout(() => setCopiedComment(false), 2000);
-  };
 
   if (!order) {
     return (
@@ -63,86 +45,57 @@ export default function OrderConfirmation() {
             <p className="order-number">Номер заказа: <strong>{orderId}</strong></p>
           </div>
 
-          {/* Kaspi Payment */}
-          {order.paymentMethod === 'kaspi' && (
-            <div className="payment-section kaspi-payment">
-              <h2>Оплата через Kaspi</h2>
-
-              <div className="kaspi-instructions">
-                <div className="kaspi-step">
-                  <div className="step-number">1</div>
-                  <div className="step-content">
-                    <h3>Откройте приложение Kaspi</h3>
-                    <p>Перейдите в раздел "Платежи"</p>
-                  </div>
+          {/* Оплата через Kaspi Pay */}
+          <div className="payment-section kaspi-payment">
+            <div className="kaspi-pay-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <path d="M2 10h20"/>
+              </svg>
+            </div>
+            <h2>Оплата через Kaspi Pay</h2>
+            <p className="kaspi-pay-desc">
+              Мы свяжемся с вами по номеру <strong>{order.customer.phone}</strong> и вышлем счёт через Kaspi Pay.
+              Вам останется только подтвердить оплату в приложении Kaspi.
+            </p>
+            <div className="kaspi-pay-steps">
+              <div className="kaspi-pay-step">
+                <div className="kps-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16.92z"/>
+                  </svg>
                 </div>
-
-                <div className="kaspi-step">
-                  <div className="step-number">2</div>
-                  <div className="step-content">
-                    <h3>Переведите на номер</h3>
-                    <div className="kaspi-phone-block">
-                      <input type="text" value={KASPI_PHONE} readOnly className="kaspi-phone" />
-                      <button className="copy-btn" onClick={copyPhone}>
-                        {copied ? '✓' : 'Копировать'}
-                      </button>
-                    </div>
-                    <p className="kaspi-name">{KASPI_NAME}</p>
-                  </div>
-                </div>
-
-                <div className="kaspi-step">
-                  <div className="step-number">3</div>
-                  <div className="step-content">
-                    <h3>Сумма перевода</h3>
-                    <div className="kaspi-amount">
-                      {order.total.toLocaleString('ru-RU')} ₸
-                    </div>
-                  </div>
-                </div>
-
-                <div className="kaspi-step">
-                  <div className="step-number">4</div>
-                  <div className="step-content">
-                    <h3>В комментарии укажите</h3>
-                    <div className="kaspi-comment-block">
-                      <input type="text" value={`Заказ ${orderId}`} readOnly className="kaspi-comment" />
-                      <button className="copy-btn" onClick={copyComment}>
-                        {copiedComment ? '✓' : 'Копировать'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <span>Мы позвоним вам</span>
               </div>
-
-              <div className="kaspi-qr-section">
-                <h3>Или отсканируйте QR-код</h3>
-                <div className="kaspi-qr-image">
-                  <img src="/kaspi-qr.png" alt="Kaspi QR" />
+              <div className="kps-arrow">→</div>
+              <div className="kaspi-pay-step">
+                <div className="kps-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
                 </div>
+                <span>Вышлем счёт в Kaspi</span>
               </div>
-
-              <div className="payment-note">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="16" x2="12" y2="12"/>
-                  <line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-                <p>После оплаты мы свяжемся с вами для подтверждения заказа</p>
+              <div className="kps-arrow">→</div>
+              <div className="kaspi-pay-step">
+                <div className="kps-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                </div>
+                <span>Вы подтверждаете оплату</span>
               </div>
             </div>
-          )}
-
-          {/* Другие способы оплаты */}
-          {order.paymentMethod !== 'kaspi' && (
-            <div className="payment-section">
-              <h2>Способ оплаты</h2>
-              <p className="payment-method-text">
-                {order.paymentMethod === 'cash' && 'Оплата наличными при получении'}
-                {order.paymentMethod === 'card' && 'Оплата картой курьеру'}
-              </p>
+            <div className="payment-note">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <p>Обычно мы связываемся в течение 30 минут в рабочее время</p>
             </div>
-          )}
+          </div>
 
           {/* Детали заказа */}
           <div className="order-details">
@@ -174,7 +127,6 @@ export default function OrderConfirmation() {
                   <img src={item.image_url || item.image} alt={item.name} />
                   <div className="order-item-info">
                     <h5>{item.name}</h5>
-                    {/* item.price уже с наценкой — не применяем applyMarkup повторно */}
                     <p>{item.quantity} × {(item.price || 0).toLocaleString('ru-RU')} ₸</p>
                   </div>
                   <div className="order-item-total">
@@ -199,6 +151,7 @@ export default function OrderConfirmation() {
               Продолжить покупки
             </button>
           </div>
+
         </div>
       </div>
     </div>
