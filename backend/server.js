@@ -324,6 +324,30 @@ app.delete('/api/favorites/:article', requireAuth, async (req,res) => {
   } catch(e){res.status(500).json({error:e.message});}
 });
 
+// Уведомление для незалогиненных пользователей
+app.post('/api/notify-order', rateLimit({windowMs:60000,max:10}), async (req,res) => {
+  try {
+    const{items,total_price,address_text,comment,orderId}=req.body;
+    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('');
+    const nameMatch=comment?.match(/Имя:\s*([^|]+)/);
+    const phoneMatch=comment?.match(/Тел:\s*([^|]+)/);
+    const name=nameMatch?nameMatch[1].trim():'Гость';
+    const phone=phoneMatch?phoneMatch[1].trim():'Не указан';
+    const msg=`🛒 <b>Новый заказ #${orderId?.slice(-8)||'N/A'}</b>
+
+👤 ${name}
+📱 ${phone}
+📍 ${address_text||'Не указан'}
+
+📦 <b>Товары:</b>
+${orderItems}
+
+💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
+    await sendTelegramNotification(msg);
+    res.json({success:true});
+  } catch(e){console.error('❌ notify-order:',e.message);res.status(500).json({error:e.message});}
+});
+
 app.post('/api/admin/sync', async (req,res) => {
   if(req.headers['x-sync-secret']!==SYNC_SECRET&&SYNC_SECRET)return res.status(401).json({error:'Unauthorized'});
   res.json({message:'Синхронизация запущена в фоне'}); syncProductsToSupabase().catch(console.error);

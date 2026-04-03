@@ -14,7 +14,6 @@ export default function Checkout() {
 
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', address: '', comment: '' });
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState('');
 
   const totalPrice = getCartTotal ? getCartTotal() : 0;
   const itemCount  = cart ? cart.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
@@ -23,8 +22,7 @@ export default function Checkout() {
     e.preventDefault();
     setLoading(true);
 
-    const orderId      = 'ORD-' + Date.now();
-    const paymentMethod = 'kaspi'; // только Kaspi
+    const orderId = 'ORD-' + Date.now();
 
     const items = (cart || []).map(item => ({
       article:   item.id || item.article,
@@ -34,48 +32,52 @@ export default function Checkout() {
       image_url: item.image || null,
     }));
 
-    const orderData = { orderId, customer: formData, items, total: totalPrice, paymentMethod, status: 'pending', createdAt: new Date().toISOString() };
+    const comment = `Имя: ${formData.name} | Тел: ${formData.phone} | Email: ${formData.email || '-'} | Оплата: Kaspi | Комментарий: ${formData.comment || '-'} | ID: ${orderId}`;
 
+    // Сохраняем в localStorage (резерв)
     try {
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      orders.push(orderData);
+      orders.push({ orderId, customer: formData, items, total: totalPrice, status: 'pending', createdAt: new Date().toISOString() });
       localStorage.setItem('orders', JSON.stringify(orders));
     } catch (err) { console.error('localStorage error:', err); }
 
-    setLoadingStep('Сохраняем заказ...');
+    // Сохраняем в Supabase через backend (чтобы пришло Telegram уведомление)
     try {
-      const { error } = await supabase.from('orders').insert({
-        user_id:      user?.id || null,
-        status:       'pending',
-        items,
-        total_price:  totalPrice,
-        address_text: formData.address,
-        comment:      `Имя: ${formData.name} | Тел: ${formData.phone} | Email: ${formData.email || '-'} | Оплата: Kaspi | Комментарий: ${formData.comment || '-'} | ID: ${orderId}`,
-      });
-      if (error) console.error('❌ Supabase error:', error.message);
-    } catch (err) { console.error('❌ Supabase save error:', err); }
+      const session = await supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
 
-    setLoadingStep('Оформляем заказ у поставщика...');
-    try {
-      const alstyleItems = (cart || []).map(item => ({ article: item.id || item.article, quantity: item.quantity || 1 }));
-      const response = await fetch(`${BACKEND_URL}/api/alstyle-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: alstyleItems, comment: `${formData.name}, ${formData.phone}, ${formData.address}`, orderId }),
-      });
-      const result = await response.json();
-      if (result.success) {
+      if (token) {
+        // Залогинен — через backend (с Telegram уведомлением)
+        await fetch(`${BACKEND_URL}/api/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ items, total_price: totalPrice, address_text: formData.address, comment }),
+        });
+      } else {
+        // Не залогинен — напрямую в Supabase
+        const { error } = await supabase.from('orders').insert({
+          user_id:      null,
+          status:       'pending',
+          items,
+          total_price:  totalPrice,
+          address_text: formData.address,
+          comment,
+        });
+        if (error) console.error('❌ Supabase error:', error.message);
+
+        // Telegram уведомление через backend отдельным запросом
         try {
-          const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-          const idx = orders.findIndex(o => o.orderId === orderId);
-          if (idx !== -1) { orders[idx].alstyleOrderId = result.alstyleOrderId; localStorage.setItem('orders', JSON.stringify(orders)); }
-        } catch (e) {}
+          await fetch(`${BACKEND_URL}/api/notify-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, total_price: totalPrice, address_text: formData.address, comment, orderId }),
+          });
+        } catch (e) { console.warn('Telegram notify error:', e.message); }
       }
-    } catch (err) { console.error('❌ al-style order error:', err); }
+    } catch (err) { console.error('❌ Order save error:', err); }
 
     clearCart();
     setLoading(false);
-    setLoadingStep('');
     navigate(`/order-confirmation/${orderId}`);
   };
 
@@ -133,7 +135,6 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Оплата — инфо блок без выбора */}
               <div className="form-section">
                 <h2 className="form-section-title">Оплата</h2>
                 <div className="kaspi-info">
@@ -150,10 +151,7 @@ export default function Checkout() {
               </div>
 
               <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-                {loading
-                  ? <>{loadingStep || 'Оформление...'}</>
-                  : `Оформить заказ на ${formatNumber(totalPrice)} ₸`
-                }
+                {loading ? 'Оформление...' : `Оформить заказ на ${formatNumber(totalPrice)} ₸`}
               </button>
             </form>
           </div>
@@ -172,11 +170,9 @@ export default function Checkout() {
                     <img src={item.image || null} alt={item.title || item.name}
                       onError={(e) => { e.target.style.display = 'none'; }} />
                   </div>
-
                   <div className="summary-item-info">
                     <h4>{item.title || item.name || 'Товар'}</h4>
                     <p className="summary-item-price-unit">{formatNumber(item.price || 0)} ₸ / шт.</p>
-
                     <div className="summary-item-qty">
                       <button className="qty-btn" onClick={() => updateQuantity(item.id, (item.quantity || 1) - 1)} aria-label="Уменьшить" type="button">−</button>
                       <span className="qty-value">{item.quantity || 1}</span>
@@ -191,7 +187,6 @@ export default function Checkout() {
                       </button>
                     </div>
                   </div>
-
                   <div className="summary-item-total">
                     {formatNumber((item.price || 0) * (item.quantity || 1))} ₸
                   </div>
