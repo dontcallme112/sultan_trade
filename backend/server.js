@@ -23,7 +23,7 @@ const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_RE
   ? new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN })
   : null;
 
-console.log('\n🚀 Stockera Backend v5.0');
+console.log('\n🚀 Stockera Backend v5.1');
 console.log('━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`Redis: ${redis ? '✅ Upstash' : '⚠️  Disabled'}`);
 console.log(`SUPABASE_URL: ${SUPABASE_URL ? '✅' : '❌'}`);
@@ -124,7 +124,6 @@ async function loadProducts(cat) {
   const cached = getCache(key, CACHE_TIMES.products);
   if (cached) return cached;
 
-  // Берём из Supabase если доступен
   if (supabaseAdmin) {
     try {
       let query = supabaseAdmin.from('products')
@@ -150,7 +149,6 @@ async function loadProducts(cat) {
     } catch (e) { console.warn('⚠️ Supabase loadProducts fallback:', e.message); }
   }
 
-  // Fallback — al-style API
   return fetchOnce(key, () => enqueueApiCall(async () => {
     console.log(`📦 API: загрузка товаров, категория: ${cat||'все'}`);
     const params = { 'access-token': ALSTYLE_TOKEN, exclude_missing: 'true', limit: 250, offset: 0, additional_fields: 'brand,images' };
@@ -167,7 +165,6 @@ async function loadAllProductsForSearch() {
   const ram = getCache('search_all_products', ALL_CACHE_TIME); if (ram) return ram;
   const rd = await getRedisCacheOrNull('search_all_products'); if (rd) { setCache('search_all_products', rd); return rd; }
   return fetchOnce('search_all_loading', async () => {
-    // Берём из Supabase (быстро — все 12к товаров за 1 запрос)
     if (supabaseAdmin) {
       try {
         let allData = [];
@@ -193,7 +190,6 @@ async function loadAllProductsForSearch() {
       } catch (e) { console.warn('⚠️ Supabase search fallback на al-style:', e.message); }
     }
 
-    // Fallback — al-style API
     console.log('🔍 Загрузка всех товаров из al-style...');
     const all=[]; let offset=0, total=null;
     do {
@@ -233,11 +229,19 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
     if (search){const s=search.toLowerCase();products=products.filter(p=>p.name?.toLowerCase().includes(s)||p.full_name?.toLowerCase().includes(s)||p.brand?.toLowerCase().includes(s));}
-    if(sortBy==='price_asc')products.sort((a,b)=>(a.price2||a.price1||0)-(b.price2||b.price1||0));
-    else if(sortBy==='price_desc')products.sort((a,b)=>(b.price2||b.price1||0)-(a.price2||a.price1||0));
-    else if(sortBy==='name_asc')products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
-    else if(sortBy==='newest')products.sort((a,b)=>(b.isnew||0)-(a.isnew||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));
-    else products.sort((a,b)=>{const pa=a.price2||a.price1||0,pb=b.price2||b.price1||0,aOk=pa>1000&&pa<=500000,bOk=pb>1000&&pb<=500000;if(aOk&&!bOk)return -1;if(!aOk&&bOk)return 1;return pb-pa;});
+    if(sortBy==='price_asc') products.sort((a,b)=>(a.price2||a.price1||0)-(b.price2||b.price1||0));
+    else if(sortBy==='price_desc') products.sort((a,b)=>(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    else if(sortBy==='name_asc') products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
+    else if(sortBy==='newest') products.sort((a,b)=>(b.isnew||0)-(a.isnew||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    else {
+      // По умолчанию: убираем товары дороже 1М, новинки вперёд, потом по цене убыванию
+      products = products.filter(p => (p.price2||p.price1||0) <= 1000000);
+      products.sort((a, b) => {
+        const pa = a.price2||a.price1||0, pb = b.price2||b.price1||0;
+        if ((b.isnew||0) !== (a.isnew||0)) return (b.isnew||0) - (a.isnew||0);
+        return pb - pa;
+      });
+    }
     const start=Number(offset),end=start+Number(limit);
     res.set('Cache-Control','public, max-age=60').json({elements:products.slice(start,end),pagination:{totalCount:products.length,total:products.length,offset:start,limit:Number(limit),hasMore:end<products.length}});
   } catch(e){console.error('❌ /api/products:',e.message);res.status(500).json({error:e.message,elements:[],pagination:{totalCount:0,hasMore:false}});}
@@ -324,25 +328,15 @@ app.delete('/api/favorites/:article', requireAuth, async (req,res) => {
   } catch(e){res.status(500).json({error:e.message});}
 });
 
-// Уведомление для незалогиненных пользователей
 app.post('/api/notify-order', rateLimit({windowMs:60000,max:10}), async (req,res) => {
   try {
     const{items,total_price,address_text,comment,orderId}=req.body;
-    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('');
+    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('\n');
     const nameMatch=comment?.match(/Имя:\s*([^|]+)/);
     const phoneMatch=comment?.match(/Тел:\s*([^|]+)/);
     const name=nameMatch?nameMatch[1].trim():'Гость';
     const phone=phoneMatch?phoneMatch[1].trim():'Не указан';
-    const msg=`🛒 <b>Новый заказ #${orderId?.slice(-8)||'N/A'}</b>
-
-👤 ${name}
-📱 ${phone}
-📍 ${address_text||'Не указан'}
-
-📦 <b>Товары:</b>
-${orderItems}
-
-💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
+    const msg=`🛒 <b>Новый заказ #${orderId?.slice(-8)||'N/A'}</b>\n\n👤 ${name}\n📱 ${phone}\n📍 ${address_text||'Не указан'}\n\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
     await sendTelegramNotification(msg);
     res.json({success:true});
   } catch(e){console.error('❌ notify-order:',e.message);res.status(500).json({error:e.message});}
