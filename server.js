@@ -28,6 +28,18 @@ const normalizePrice = p => { const d = dealerPrice(p); return { ...p, retail_pr
 // Для сортировки: «по запросу» (1) уходит в конец
 const sortPrice = (p, asc = false) => (p.price2 > 1 ? p.price2 : (asc ? Number.MAX_SAFE_INTEGER : 0));
 
+// Остаток: число, "5" или ">10". Нулевой/пустой остаток = нет в наличии.
+const isInStock = p => {
+  const q = p?.quantity;
+  if (q === undefined || q === null) return true;
+  if (typeof q === 'number') return q > 0;
+  const str = String(q).trim();
+  if (!str || str === '0') return false;
+  if (str.startsWith('>')) return true;
+  const n = parseInt(str, 10);
+  return !Number.isNaN(n) && n > 0;
+};
+
 if (!ALSTYLE_TOKEN) { console.error('ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
 
 const supabaseAdmin = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
@@ -172,6 +184,7 @@ async function loadProducts(cat) {
     try {
       let query = supabaseAdmin.from('products')
         .select('article, name, full_name, brand, price, price1, price2, isnew, quantity, image_url, category_id')
+        .neq('quantity', '0')
         .order('price', { ascending: false })
         .limit(250);
       if (cat) query = query.eq('category_id', cat);
@@ -217,6 +230,7 @@ async function loadAllProductsForSearch() {
         while (true) {
           const { data, error } = await supabaseAdmin.from('products')
             .select('article, name, full_name, brand, price, price1, isnew, quantity, image_url')
+            .neq('quantity', '0')
             .order('price', { ascending: false })
             .range(from, from + pageSize - 1);
           if (error || !data?.length) break;
@@ -272,13 +286,13 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
     if (onlyNew==='true'&&!cat&&supabaseAdmin&&!search&&(!sortBy||sortBy==='smart')&&!minPrice&&!maxPrice&&!brand) {
       try {
         const start=Number(offset);
-        const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).order('price',{ascending:false}).range(start,start+Number(limit)-1);
+        const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).neq('quantity','0').order('price',{ascending:false}).range(start,start+Number(limit)-1);
         if (!error) { const els=(data||[]).map(p=>normalizePrice({article:p.article,name:p.name,brand:p.brand,price1:p.price1,price2:p.price2,price:p.price,isnew:p.isnew,quantity:p.quantity,images:p.image_url?[p.image_url]:[],image:p.image_url})); return res.set('Cache-Control','public, max-age=60').json({elements:els,pagination:{totalCount:count,total:count,offset:start,limit:Number(limit),hasMore:start+els.length<count}}); }
       } catch(e){console.warn('⚠️ PG onlyNew fallback:',e.message);}
     }
     if (onlyNew==='true'&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
     else { const data=await loadProducts(cat).catch(()=>null); if(!data)return res.status(502).json({error:'Не удалось загрузить товары',elements:[],pagination:{totalCount:0,hasMore:false}}); products=data.elements||[]; }
-    products = products.map(normalizePrice); // везде дилерская цена
+    products = products.map(normalizePrice).filter(isInStock); // везде дилерская цена, только товары в наличии
     if (minPrice||maxPrice) products=products.filter(p=>{const pr=p.price2||p.price1||0;return(!minPrice||pr>=+minPrice)&&(!maxPrice||pr<=+maxPrice);});
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
@@ -325,8 +339,8 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
     // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
     const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
     if (q.length < 2) return res.json([]);
-    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
-    const products=await loadAllProductsForSearch().catch(()=>[]);
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    const products=(await loadAllProductsForSearch().catch(()=>[])).filter(isInStock);
     const s=q.toLowerCase();
     const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>normalizePrice(p));
     console.log(`🔍 RAM "${q}": ${results.length} результатов`); res.json(results);
@@ -490,6 +504,15 @@ async function syncProductsToSupabase() {
       offset += 250;
     } while (total && offset < total);
     console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
+    // Товары, которых нет в свежей выдаче (закончились у поставщика), прячем: обнуляем остаток.
+    // Только если синк прошёл почти целиком, чтобы сбой API не скрыл весь каталог.
+    if (total && synced >= total * 0.9) {
+      const { error: staleErr } = await supabaseAdmin.from('products')
+        .update({ quantity: '0' })
+        .lt('synced_at', new Date(start).toISOString())
+        .neq('quantity', '0');
+      if (staleErr) console.warn('⚠️ Не удалось скрыть устаревшие товары:', staleErr.message);
+    }
     cache.delete('search_all_products_v3'); if (redis) await redis.del('search_all_products_v3').catch(()=>{});
   } catch (e) {
     console.error('❌ Ошибка синхронизации:', e.message);
