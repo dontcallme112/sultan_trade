@@ -136,7 +136,7 @@
 }
 
 .payment-method-info p {
-  font-size: 0.8125rem; color: #6A6A6A; margin: 0;
+  font-size: 0.8125rem; color: var(--text-muted); margin: 0;
 }
 
 .btn-block { width: 100%; }
@@ -214,7 +214,7 @@
 .summary-item-img {
   width: 60px; height: 60px;
   flex-shrink: 0;
-  background: #181818;
+  background: var(--bg-elevated);
   border-radius: 8px;
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
@@ -230,7 +230,7 @@
 
 .summary-item-info h4 {
   font-size: 0.875rem;
-  color: #DDD;
+  color: var(--text-primary);
   margin: 0 0 0.25rem;
   line-height: 1.4;
 }
@@ -293,8 +293,8 @@
 }
 
 .qty-remove:hover {
-  background: rgba(239,68,68,0.1);
-  border-color: rgba(239,68,68,0.3);
+  background: rgba(199, 101, 101, 0.1);
+  border-color: rgba(199, 101, 101, 0.3);
   color: var(--error);
 }
 

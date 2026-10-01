@@ -77,7 +77,7 @@
   border: none;
   outline: none;
   font-size: 14px;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 .pl-search-input::placeholder { color: var(--text-muted); }
 .pl-search-clear {
@@ -107,7 +107,7 @@
   border-radius: 20px;
   border: 1.5px solid var(--border-medium);
   background: var(--bg-secondary);
-  color: #777;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

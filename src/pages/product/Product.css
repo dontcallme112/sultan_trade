@@ -29,12 +29,12 @@
   box-shadow: 0 8px 32px rgba(31, 41, 51, 0.2);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9375rem;
-  color: #EEE;
+  color: var(--text-primary);
   max-width: 90vw;
   animation: toastIn 0.3s ease;
 }
 
-.product-toast--info { border-color: rgba(59, 130, 246, 0.3); }
+.product-toast--info { border-color: rgba(49, 90, 114, 0.3); }
 
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
@@ -323,15 +323,15 @@
 }
 
 .favorite-btn:hover {
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: rgba(199, 101, 101, 0.4);
   color: var(--error);
-  background: rgba(239, 68, 68, 0.08);
+  background: rgba(199, 101, 101, 0.08);
 }
 
 .favorite-btn--active {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: rgba(199, 101, 101, 0.5);
   color: var(--error);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(199, 101, 101, 0.1);
 }
 
 .product-article {
@@ -400,7 +400,7 @@
 .spec-item {
   font-family: 'DM Sans', sans-serif;
   font-size: 0.875rem;
-  color: #777;
+  color: var(--text-muted);
   padding: 0.3rem 0;
   border-bottom: 1px solid rgba(31, 41, 51, 0.04);
 }
@@ -494,7 +494,7 @@
 
 .btn-primary.added {
   background: linear-gradient(135deg, #059669, var(--success));
-  box-shadow: 0 4px 16px rgba(16,185,129,0.25);
+  box-shadow: 0 4px 16px rgba(79, 138, 104, 0.25);
 }
 
 .btn-primary:disabled {

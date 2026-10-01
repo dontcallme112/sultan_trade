@@ -28,7 +28,7 @@
   padding: 11px 90px 11px 38px;
   font-size: 0.9rem;
   color: var(--text-primary);
-  background: #161616;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-medium);
   border-radius: 12px;
   outline: none;
@@ -95,7 +95,7 @@
   left: 0;
   right: 0;
   background: var(--bg-secondary);
-  border: 1px solid #252525;
+  border: 1px solid var(--border-medium);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(31, 41, 51, 0.24);
   overflow: hidden;

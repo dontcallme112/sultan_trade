@@ -263,7 +263,7 @@
 
 .stat-label {
   font-size: 0.875rem;
-  color: #6A6A6A;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
@@ -418,7 +418,7 @@
 
 .category-description {
   font-size: 0.875rem;
-  color: #6A6A6A;
+  color: var(--text-muted);
   margin-bottom: var(--space-6);
   text-align: center;
 }

@@ -90,7 +90,7 @@
 }
 
 .category-item.active .category-name { color: var(--text-inverse); font-weight: 700; }
-.category-item.active .category-count { color: rgba(10,10,10,0.6); }
+.category-item.active .category-count { color: rgb(255 255 255 / 0.6); }
 
 .category-icon {
   font-size: 1.25rem;

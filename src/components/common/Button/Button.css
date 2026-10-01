@@ -22,7 +22,7 @@
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.3);
+  box-shadow: 0 10px 30px rgba(49, 90, 114, 0.3);
 }
 
 .btn-secondary {
@@ -43,7 +43,7 @@
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(212, 175, 55, 0.1);
+  background: rgba(49, 90, 114, 0.1);
 }
 
 .btn-ghost {
@@ -61,7 +61,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--error);
   transform: translateY(-2px);
 }
 

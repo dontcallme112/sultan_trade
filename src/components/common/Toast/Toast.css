@@ -44,7 +44,7 @@
 }
 
 .toast-info {
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--gold);
 }
 
 .toast-icon {
@@ -58,23 +58,23 @@
 }
 
 .toast-success .toast-icon {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(79, 138, 104, 0.1);
   color: var(--success);
 }
 
 .toast-error .toast-icon {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(199, 101, 101, 0.1);
   color: var(--error);
 }
 
 .toast-warning .toast-icon {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(214, 154, 58, 0.1);
   color: var(--warning);
 }
 
 .toast-info .toast-icon {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: rgba(49, 90, 114, 0.1);
+  color: var(--gold);
 }
 
 .toast-message {
