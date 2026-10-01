@@ -1,13 +1,20 @@
 /**
- * Утилита для форматирования цен с наценкой 10%
+ * Утилиты для цен.
+ * Бэкенд отдаёт ДИЛЕРСКУЮ цену (price1 из Al-Style); здесь к ней добавляется наценка.
+ * ВАЖНО: значение должно совпадать с MARKUP_PERCENT на бэкенде (server.js, по умолчанию 5),
+ * иначе цена на витрине и сумма заказа разойдутся.
  */
 
-const MARKUP_PERCENT = 5; // 5% наценка
+const MARKUP_PERCENT = 5; // наценка в процентах
+
+// Цена по запросу: Al-Style отдаёт price1 = 1; пустые и нулевые значения тоже считаем "по запросу"
+const isOnRequest = (price) => !Number.isFinite(Number(price)) || Number(price) <= 1;
+
 /**
- * Добавляет 10% наценку к цене
+ * Добавляет наценку к цене
  */
 export const applyMarkup = (price) => {
-  return Math.round(price * (1 + MARKUP_PERCENT / 100));
+  return Math.round(Number(price) * (1 + MARKUP_PERCENT / 100));
 };
 
 /**
@@ -23,17 +30,16 @@ export const formatNumber = (number) => {
  * Форматирует цену БЕЗ наценки (просто добавляет пробелы и ₸)
  */
 export const formatPriceSimple = (price) => {
-  if (price === 1) return 'Цена по запросу';
-  return `${formatNumber(price)} ₸`;
+  if (isOnRequest(price)) return 'Цена по запросу';
+  return `${formatNumber(Number(price))} ₸`;
 };
 
 /**
- * Форматирует цену С наценкой 10%
+ * Форматирует цену С наценкой
  */
 export const formatPriceWithMarkup = (price) => {
-  if (price === 1) return 'Цена по запросу';
-  const priceWithMarkup = applyMarkup(price);
-  return `${formatNumber(priceWithMarkup)} ₸`;
+  if (isOnRequest(price)) return 'Цена по запросу';
+  return `${formatNumber(applyMarkup(price))} ₸`;
 };
 
 /**
