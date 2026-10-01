@@ -16,6 +16,14 @@ const SORT_OPTIONS = [
   { value: 'name_asc',   label: 'А — Я' },
 ];
 
+// Для страницы «Новинки»: все товары и так новые, поэтому пункт «Новинки» — это сортировка по умолчанию
+const NEW_SORT_OPTIONS = [
+  { value: 'smart',      label: 'Новинки' },
+  { value: 'price_desc', label: 'Дороже' },
+  { value: 'price_asc',  label: 'Дешевле' },
+  { value: 'name_asc',   label: 'А — Я' },
+];
+
 const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
 
 // 1 товар, 2–4 товара, 5+ товаров
@@ -26,12 +34,14 @@ const plural = (n, [one, few, many]) => {
   return many;
 };
 
-export default function ProductGrid() {
+// onlyNew + title используются страницей «Новинки» (NewProducts.jsx)
+export default function ProductGrid({ onlyNew = false, title = '' }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const categoryId   = searchParams.get('category') || '';
-  const categoryName = searchParams.get('name') || 'Товары';
+  const categoryId   = onlyNew ? '' : (searchParams.get('category') || '');
+  const categoryName = title || searchParams.get('name') || 'Товары';
+  const sortOptions  = onlyNew ? NEW_SORT_OPTIONS : SORT_OPTIONS;
   const searchQuery  = searchParams.get('search') || '';
   const sortBy       = searchParams.get('sortBy') || 'smart';
 
@@ -76,6 +86,7 @@ export default function ProductGrid() {
       params.set('limit', LIMIT);
       params.set('offset', reset ? 0 : offset);
       if (categoryId) params.append('category', categoryId);
+      if (onlyNew) params.append('onlyNew', 'true');
       if (searchQuery) params.append('search', searchQuery);
       if (sortBy && sortBy !== 'smart') params.append('sortBy', sortBy);
       // smart = сортировка на сервере (новинки + дорогие)
@@ -130,11 +141,13 @@ export default function ProductGrid() {
       <div className="pl-inner">
         {/* ── Заголовок ── */}
         <div className="pl-heading">
-          <button type="button" className="pl-back" onClick={() => navigate(-1)} aria-label="Назад">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
+          {!onlyNew && (
+            <button type="button" className="pl-back" onClick={() => navigate(-1)} aria-label="Назад">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
           <div className="pl-heading-text">
             <h1 className="pl-title">{categoryName}</h1>
             {totalCount > 0 && !error && (
@@ -151,7 +164,7 @@ export default function ProductGrid() {
             </svg>
             <input
               className="pl-search-input"
-              placeholder={`Найти в «${categoryName}»`}
+              placeholder={onlyNew ? 'Найти среди новинок' : `Найти в «${categoryName}»`}
               value={localSearch}
               onChange={e => handleSearch(e.target.value)}
             />
@@ -161,7 +174,7 @@ export default function ProductGrid() {
           </div>
 
           <div className="pl-sort-row" role="group" aria-label="Сортировка">
-            {SORT_OPTIONS.map(opt => (
+            {sortOptions.map(opt => (
               <button
                 type="button"
                 key={opt.value}
@@ -207,7 +220,7 @@ export default function ProductGrid() {
             <div className="pl-empty-icon">🔍</div>
             <p className="pl-empty-title">Товары не найдены</p>
             <p className="pl-empty-sub">
-              {searchQuery ? `Нет результатов по «${searchQuery}»` : 'В этой категории пока нет товаров'}
+              {searchQuery ? `Нет результатов по «${searchQuery}»` : (onlyNew ? 'Новинок пока нет' : 'В этой категории пока нет товаров')}
             </p>
             {searchQuery && (
               <button type="button" className="pl-empty-btn" onClick={() => handleSearch('')}>
