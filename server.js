@@ -16,6 +16,17 @@ const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
 const SYNC_SECRET   = process.env.SYNC_SECRET;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+// Наценка должна совпадать с MARKUP_PERCENT во фронте (priceFormatter). Можно переопределить переменной MARKUP_PERCENT на Railway.
+const MARKUP_PERCENT = Number.isFinite(Number(process.env.MARKUP_PERCENT)) && process.env.MARKUP_PERCENT !== undefined && process.env.MARKUP_PERCENT !== '' ? Number(process.env.MARKUP_PERCENT) : 5;
+const applyMarkup = price => Math.round(price * (1 + MARKUP_PERCENT / 100));
+
+// Цена для клиента = ДИЛЕРСКАЯ (price1) + MARKUP_PERCENT, а не розничная price2.
+// По документации Al-Style: price1 = 1 означает «цена по запросу» (фронт показывает price === 1).
+const dealerPrice = p => { const v = Number(p?.price1); return v > 1 ? v : 1; };
+// Приводит товар к единой цене: price, price1 и price2 = дилерская. Что бы ни читал фронт, он увидит её.
+const normalizePrice = p => { const d = dealerPrice(p); return { ...p, retail_price: p.price2 ?? null, price: d, price1: d, price2: d }; };
+// Для сортировки: «по запросу» (1) уходит в конец
+const sortPrice = (p, asc = false) => (p.price2 > 1 ? p.price2 : (asc ? Number.MAX_SAFE_INTEGER : 0));
 
 if (!ALSTYLE_TOKEN) { console.error('ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
 
@@ -195,8 +206,8 @@ async function loadProducts(cat) {
 
 const ALL_CACHE_TIME = 30*60*1000;
 async function loadAllProductsForSearch() {
-  const ram = getCache('search_all_products', ALL_CACHE_TIME); if (ram) return ram;
-  const rd = await getRedisCacheOrNull('search_all_products'); if (rd) { setCache('search_all_products', rd); return rd; }
+  const ram = getCache('search_all_products_v2', ALL_CACHE_TIME); if (ram) return ram;
+  const rd = await getRedisCacheOrNull('search_all_products_v2'); if (rd) { setCache('search_all_products_v2', rd); return rd; }
   return fetchOnce('search_all_loading', async () => {
     if (supabaseAdmin) {
       try {
@@ -205,7 +216,7 @@ async function loadAllProductsForSearch() {
         const pageSize = 1000;
         while (true) {
           const { data, error } = await supabaseAdmin.from('products')
-            .select('article, name, full_name, brand, price, isnew, image_url')
+            .select('article, name, full_name, brand, price, price1, isnew, image_url')
             .order('price', { ascending: false })
             .range(from, from + pageSize - 1);
           if (error || !data?.length) break;
@@ -214,9 +225,9 @@ async function loadAllProductsForSearch() {
           from += pageSize;
         }
         if (allData.length > 0) {
-          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: p.price||0, isnew: p.isnew||0, image: p.image_url||null }));
-          setCache('search_all_products', compact);
-          await setRedisCache('search_all_products', compact, 86400);
+          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: dealerPrice(p), isnew: p.isnew||0, image: p.image_url||null }));
+          setCache('search_all_products_v2', compact);
+          await setRedisCache('search_all_products_v2', compact, 86400);
           console.log(`✅ Кеш поиска из Supabase: ${compact.length} товаров`);
           return compact;
         }
@@ -233,8 +244,8 @@ async function loadAllProductsForSearch() {
       if (!total && data.pagination?.totalCount) { total = data.pagination.totalCount; console.log(`🔍 Всего: ${total}`); }
       offset += 250; console.log(`🔍 Загружено: ${all.length}/${total||'?'}`);
     } while (total && offset < total);
-    const compact = all.map(p => ({ article:p.article, name:p.name||'', full_name:p.full_name||'', brand:p.brand||'', price:p.price2||p.price1||0, isnew:p.isnew||0, image:p.images?.[0]||null }));
-    setCache('search_all_products', compact); await setRedisCache('search_all_products', compact, 86400);
+    const compact = all.map(p => ({ article:p.article, name:p.name||'', full_name:p.full_name||'', brand:p.brand||'', price:dealerPrice(p), price1:dealerPrice(p), isnew:p.isnew||0, image:p.images?.[0]||null }));
+    setCache('search_all_products_v2', compact); await setRedisCache('search_all_products_v2', compact, 86400);
     console.log(`✅ Кеш поиска готов: ${compact.length} товаров`); return compact;
   });
 }
@@ -262,18 +273,19 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
       try {
         const start=Number(offset);
         const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).order('price',{ascending:false}).range(start,start+Number(limit)-1);
-        if (!error) { const els=(data||[]).map(p=>({article:p.article,name:p.name,brand:p.brand,price2:p.price,price1:p.price,price:p.price,isnew:p.isnew,quantity:p.quantity,images:p.image_url?[p.image_url]:[],image:p.image_url})); return res.set('Cache-Control','public, max-age=60').json({elements:els,pagination:{totalCount:count,total:count,offset:start,limit:Number(limit),hasMore:start+els.length<count}}); }
+        if (!error) { const els=(data||[]).map(p=>normalizePrice({article:p.article,name:p.name,brand:p.brand,price1:p.price1,price2:p.price2,price:p.price,isnew:p.isnew,quantity:p.quantity,images:p.image_url?[p.image_url]:[],image:p.image_url})); return res.set('Cache-Control','public, max-age=60').json({elements:els,pagination:{totalCount:count,total:count,offset:start,limit:Number(limit),hasMore:start+els.length<count}}); }
       } catch(e){console.warn('⚠️ PG onlyNew fallback:',e.message);}
     }
     if (onlyNew==='true'&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
     else { const data=await loadProducts(cat).catch(()=>null); if(!data)return res.status(502).json({error:'Не удалось загрузить товары',elements:[],pagination:{totalCount:0,hasMore:false}}); products=data.elements||[]; }
+    products = products.map(normalizePrice); // везде дилерская цена
     if (minPrice||maxPrice) products=products.filter(p=>{const pr=p.price2||p.price1||0;return(!minPrice||pr>=+minPrice)&&(!maxPrice||pr<=+maxPrice);});
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
     if (search){const s=search.toLowerCase();products=products.filter(p=>p.name?.toLowerCase().includes(s)||p.full_name?.toLowerCase().includes(s)||p.brand?.toLowerCase().includes(s));}
     products = [...products]; // копия: sort() ниже иначе сортирует закешированный массив на месте
-    if(sortBy==='price_asc') products.sort((a,b)=>(a.price2||a.price1||0)-(b.price2||b.price1||0));
-    else if(sortBy==='price_desc') products.sort((a,b)=>(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    if(sortBy==='price_asc') products.sort((a,b)=>sortPrice(a,true)-sortPrice(b,true));
+    else if(sortBy==='price_desc') products.sort((a,b)=>sortPrice(b)-sortPrice(a));
     else if(sortBy==='name_asc') products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
     else if(sortBy==='newest') products.sort((a,b)=>(b.isnew||0)-(a.isnew||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));
     else {
@@ -293,9 +305,9 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
 app.get('/api/product/:article', async (req,res) => {
   try {
     const key=`product_${req.params.article}`;
-    const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(cached);
+    const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(normalizePrice(cached));
     const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:req.params.article,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
-    res.json(product);
+    res.json(product ? normalizePrice(product) : product);
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -313,10 +325,10 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
     // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
     const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
     if (q.length < 2) return res.json([]);
-    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,isnew,image_url,quantity').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...p,price2:p.price,image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
     const products=await loadAllProductsForSearch().catch(()=>[]);
     const s=q.toLowerCase();
-    const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>p);
+    const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>normalizePrice(p));
     console.log(`🔍 RAM "${q}": ${results.length} результатов`); res.json(results);
   } catch(e){console.error('❌ search:',e.message);res.json([]);}
 });
@@ -379,12 +391,14 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
 
     // цены и названия берём из нашей базы, а не от клиента
     const articles = [...new Set(clean.map(i => i.article))];
-    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price').in('article', articles);
+    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price,price1').in('article', articles);
     if (pe) return res.status(500).json({ error: pe.message });
     const byArt = new Map((prods || []).map(p => [String(p.article), p]));
     const missing = articles.filter(a => !byArt.has(a));
     if (missing.length) return res.status(400).json({ error: 'Товары не найдены', missing });
-    const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, price: Number(p.price) || 0 }; });
+    const noPrice = articles.filter(a => dealerPrice(byArt.get(a)) <= 1);
+    if (noPrice.length) return res.status(400).json({ error: 'Цена по запросу, оформить через менеджера', articles: noPrice });
+    const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, price: applyMarkup(dealerPrice(p)) }; });
     const total_price = priced.reduce((s, i) => s + i.price * i.quantity, 0);
 
     const { data, error } = await supabaseAdmin.from('orders').insert({
@@ -464,7 +478,7 @@ async function syncProductsToSupabase() {
       for (let i = 0; i < els.length; i += 100) {
         const batch = els.slice(i, i + 100).map(p => ({
           article: String(p.article), name: p.name||'', full_name: p.full_name||'', brand: p.brand||'',
-          price: p.price2||p.price1||p.price||0, price1: p.price1||null, price2: p.price2||null,
+          price: dealerPrice(p), price1: p.price1||null, price2: p.price2||null,
           quantity: String(p.quantity ?? '0'), isnew: p.isnew||0, image_url: p.images?.[0]||null,
           images: JSON.stringify(p.images||[]), category_id: p.category_id ? String(p.category_id) : null,
           raw_data: '{}', synced_at: new Date().toISOString(),
@@ -476,7 +490,7 @@ async function syncProductsToSupabase() {
       offset += 250;
     } while (total && offset < total);
     console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
-    cache.delete('search_all_products'); if (redis) await redis.del('search_all_products').catch(()=>{});
+    cache.delete('search_all_products_v2'); if (redis) await redis.del('search_all_products_v2').catch(()=>{});
   } catch (e) {
     console.error('❌ Ошибка синхронизации:', e.message);
     await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации каталога</b>\n${esc(e.message)}\nЗаписано до сбоя: ${synced}${total ? ` из ${total}` : ''}`);
@@ -491,8 +505,8 @@ async function warmupCache() {
     const{data}=await api.get('/categories',{params:{'access-token':ALSTYLE_TOKEN}});
     const cats=Array.isArray(data)?data:[];setCache('categories',cats);console.log(`✅ Категорий: ${cats.length}`);
     await loadProducts(null);
-    const rd=await getRedisCacheOrNull('search_all_products');
-    if(rd){setCache('search_all_products',rd);console.log(`✅ Кеш поиска из Redis: ${rd.length} товаров — мгновенно!`);return;}
+    const rd=await getRedisCacheOrNull('search_all_products_v2');
+    if(rd){setCache('search_all_products_v2',rd);console.log(`✅ Кеш поиска из Redis: ${rd.length} товаров — мгновенно!`);return;}
     console.log('ℹ️  Redis пустой — поиск будет читать из Supabase до следующей синхронизации');
     loadAllProductsForSearch().catch(e=>console.warn('⚠️ Фоновая загрузка:',e.message));
   } catch(e){console.warn('⚠️ Прогрев не удался:',e.message);}
