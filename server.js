@@ -206,8 +206,8 @@ async function loadProducts(cat) {
 
 const ALL_CACHE_TIME = 30*60*1000;
 async function loadAllProductsForSearch() {
-  const ram = getCache('search_all_products_v2', ALL_CACHE_TIME); if (ram) return ram;
-  const rd = await getRedisCacheOrNull('search_all_products_v2'); if (rd) { setCache('search_all_products_v2', rd); return rd; }
+  const ram = getCache('search_all_products_v3', ALL_CACHE_TIME); if (ram) return ram;
+  const rd = await getRedisCacheOrNull('search_all_products_v3'); if (rd) { setCache('search_all_products_v3', rd); return rd; }
   return fetchOnce('search_all_loading', async () => {
     if (supabaseAdmin) {
       try {
@@ -216,7 +216,7 @@ async function loadAllProductsForSearch() {
         const pageSize = 1000;
         while (true) {
           const { data, error } = await supabaseAdmin.from('products')
-            .select('article, name, full_name, brand, price, price1, isnew, image_url')
+            .select('article, name, full_name, brand, price, price1, isnew, quantity, image_url')
             .order('price', { ascending: false })
             .range(from, from + pageSize - 1);
           if (error || !data?.length) break;
@@ -225,9 +225,9 @@ async function loadAllProductsForSearch() {
           from += pageSize;
         }
         if (allData.length > 0) {
-          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: dealerPrice(p), isnew: p.isnew||0, image: p.image_url||null }));
-          setCache('search_all_products_v2', compact);
-          await setRedisCache('search_all_products_v2', compact, 86400);
+          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: dealerPrice(p), isnew: p.isnew||0, quantity: p.quantity, image: p.image_url||null }));
+          setCache('search_all_products_v3', compact);
+          await setRedisCache('search_all_products_v3', compact, 86400);
           console.log(`✅ Кеш поиска из Supabase: ${compact.length} товаров`);
           return compact;
         }
@@ -244,8 +244,8 @@ async function loadAllProductsForSearch() {
       if (!total && data.pagination?.totalCount) { total = data.pagination.totalCount; console.log(`🔍 Всего: ${total}`); }
       offset += 250; console.log(`🔍 Загружено: ${all.length}/${total||'?'}`);
     } while (total && offset < total);
-    const compact = all.map(p => ({ article:p.article, name:p.name||'', full_name:p.full_name||'', brand:p.brand||'', price:dealerPrice(p), price1:dealerPrice(p), isnew:p.isnew||0, image:p.images?.[0]||null }));
-    setCache('search_all_products_v2', compact); await setRedisCache('search_all_products_v2', compact, 86400);
+    const compact = all.map(p => ({ article:p.article, name:p.name||'', full_name:p.full_name||'', brand:p.brand||'', price:dealerPrice(p), price1:dealerPrice(p), isnew:p.isnew||0, quantity:p.quantity, image:p.images?.[0]||null }));
+    setCache('search_all_products_v3', compact); await setRedisCache('search_all_products_v3', compact, 86400);
     console.log(`✅ Кеш поиска готов: ${compact.length} товаров`); return compact;
   });
 }
@@ -269,7 +269,7 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
     const {limit=12,offset=0,minPrice,maxPrice,brand,onlyNew,search,sortBy}=req.query;
     const cat = parseCategoryParam(req.query.category);
     let products;
-    if (onlyNew==='true'&&!cat&&supabaseAdmin) {
+    if (onlyNew==='true'&&!cat&&supabaseAdmin&&!search&&(!sortBy||sortBy==='smart')&&!minPrice&&!maxPrice&&!brand) {
       try {
         const start=Number(offset);
         const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).order('price',{ascending:false}).range(start,start+Number(limit)-1);
@@ -490,7 +490,7 @@ async function syncProductsToSupabase() {
       offset += 250;
     } while (total && offset < total);
     console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
-    cache.delete('search_all_products_v2'); if (redis) await redis.del('search_all_products_v2').catch(()=>{});
+    cache.delete('search_all_products_v3'); if (redis) await redis.del('search_all_products_v3').catch(()=>{});
   } catch (e) {
     console.error('❌ Ошибка синхронизации:', e.message);
     await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации каталога</b>\n${esc(e.message)}\nЗаписано до сбоя: ${synced}${total ? ` из ${total}` : ''}`);
@@ -505,8 +505,8 @@ async function warmupCache() {
     const{data}=await api.get('/categories',{params:{'access-token':ALSTYLE_TOKEN}});
     const cats=Array.isArray(data)?data:[];setCache('categories',cats);console.log(`✅ Категорий: ${cats.length}`);
     await loadProducts(null);
-    const rd=await getRedisCacheOrNull('search_all_products_v2');
-    if(rd){setCache('search_all_products_v2',rd);console.log(`✅ Кеш поиска из Redis: ${rd.length} товаров — мгновенно!`);return;}
+    const rd=await getRedisCacheOrNull('search_all_products_v3');
+    if(rd){setCache('search_all_products_v3',rd);console.log(`✅ Кеш поиска из Redis: ${rd.length} товаров — мгновенно!`);return;}
     console.log('ℹ️  Redis пустой — поиск будет читать из Supabase до следующей синхронизации');
     loadAllProductsForSearch().catch(e=>console.warn('⚠️ Фоновая загрузка:',e.message));
   } catch(e){console.warn('⚠️ Прогрев не удался:',e.message);}
