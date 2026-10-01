@@ -1,114 +1,164 @@
-/* ─── Catalog page (category browser) ───────────────────────── */
+/* ─── Catalog page (category browser) ─────────────────────────
+   Использует только переменные темы. Анимации раскрытия сделаны на CSS-переходах,
+   чтобы список разворачивался плавно, а не рывком. */
 .catalog-page {
+  --catalog-top: 104px;            /* высота фиксированной шапки + запас: подгони, если не совпадает */
   min-height: 100vh;
   background: var(--bg-primary);
-  padding-bottom: 80px;
+  padding: var(--catalog-top) var(--space-6) 80px;
+}
+@media (max-width: 768px) {
+  .catalog-page { --catalog-top: 84px; padding-inline: var(--space-3); }
 }
 
-/* Search */
-.catalog-search-wrap {
-  padding: 16px 16px 8px;
-  padding-top: 72px; /* отступ под фиксированный хедер */
-  position: sticky;
-  top: 0;
-  background: var(--bg-primary);
-  z-index: 10;
-  border-bottom: 1px solid var(--border);
+.catalog-inner {
+  max-width: 880px;
+  margin: 0 auto;
 }
 
+.catalog-title {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin-bottom: var(--space-4);
+}
+
+/* ── Поиск ── */
 .catalog-search-box {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--bg-elevated);
+  background: var(--bg-secondary);
   border: 1.5px solid var(--border-medium);
-  border-radius: 12px;
-  padding: 10px 14px;
-  transition: border-color .18s;
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow   var(--duration-base) var(--ease-out);
 }
 .catalog-search-box:focus-within {
-  border-color: var(--gold-light);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px var(--accent-glow);
 }
 .catalog-search-icon { color: var(--text-muted); flex-shrink: 0; }
 .catalog-search-input {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
+  font-family: inherit;
 }
 .catalog-search-input::placeholder { color: var(--text-muted); }
 .catalog-search-clear {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0;
+  font-size: 20px;
   line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color var(--duration-fast) var(--ease-out);
 }
+.catalog-search-clear:hover { color: var(--text-primary); }
 
-/* Tree */
+/* ── Список ── */
 .catalog-tree {
-  padding: 8px 0;
+  margin-top: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
-.catalog-group {
-  border-bottom: 1px solid var(--border);
-}
+.catalog-group { border-bottom: 1px solid var(--border); }
+.catalog-group:last-child { border-bottom: none; }
 
-/* Root category row */
+/* Родительская категория (это button, поэтому сбрасываем его вид) */
 .catalog-root-item {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 20px;
+  width: 100%;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background .14s;
   user-select: none;
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
-.catalog-root-item:hover,
-.catalog-root-item:active {
-  background: var(--bg-elevated);
-}
-.catalog-root-item.expanded {
-  background: var(--bg-secondary);
-}
+.catalog-root-item:hover { background-color: var(--bg-primary); }
+.catalog-root-item.expanded { background-color: var(--bg-primary); }
 
+/* Иконка на мягкой плашке: разные эмодзи выглядят одинаково аккуратно */
 .catalog-root-icon {
-  font-size: 22px;
-  width: 28px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
+  font-size: 20px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    transform        var(--duration-base) var(--ease-spring);
 }
+.catalog-root-item:hover .catalog-root-icon { transform: scale(1.06); }
+.catalog-root-item.expanded .catalog-root-icon { background: var(--accent-light); }
+
 .catalog-root-name {
   flex: 1;
-  font-size: 17px;
-  color: var(--text-primary);
+  min-width: 0;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.3;
+  color: var(--text-primary);
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.catalog-chevron {
-  color: var(--text-muted);
+.catalog-root-item:hover .catalog-root-name,
+.catalog-root-item.expanded .catalog-root-name { color: var(--gold); }
+
+.catalog-root-count {
   flex-shrink: 0;
-  transition: transform .2s;
-}
-.catalog-chevron.open {
-  transform: rotate(180deg);
-  color: var(--gold-light);
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Children */
+.catalog-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    color     var(--duration-fast) var(--ease-out);
+}
+.catalog-root-item:hover .catalog-chevron { color: var(--gold); }
+.catalog-chevron.open { transform: rotate(180deg); color: var(--gold); }
+
+/* ── Подкатегории: плавное раскрытие высоты (grid 0fr -> 1fr) ── */
+.catalog-children-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-base) var(--ease-out);
+}
+.catalog-children-wrap.open { grid-template-rows: 1fr; }
+
 .catalog-children {
-  background: var(--bg-secondary);
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;                              /* закрытые пункты не попадают в Tab-навигацию */
+  transition: visibility 0s linear var(--duration-base);
   border-top: 1px solid var(--border);
-  animation: slideDown .18s ease;
 }
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+.catalog-children-wrap.open .catalog-children {
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .catalog-child-item {
@@ -116,84 +166,96 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 13px 20px 13px 36px;
+  padding: 12px 20px 12px 76px;                    /* выравнивание под названием родителя */
   background: none;
   border: none;
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
+  font: inherit;
   text-align: left;
-  transition: background .12s;
+  cursor: pointer;
+  /* появление по очереди */
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity          var(--duration-base) var(--ease-out),
+    transform        var(--duration-base) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
-.catalog-child-item:hover,
-.catalog-child-item:active {
-  background: var(--bg-elevated);
+.catalog-children-wrap.open .catalog-child-item {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i, 0) * 25ms), calc(var(--i, 0) * 25ms), 0s;
 }
-.catalog-child-item:last-child {
-  border-bottom: none;
-}
+.catalog-child-item:last-child { border-bottom: none; }
+.catalog-child-item:hover { background-color: var(--bg-primary); }
 
 .catalog-child-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--bg-hover);
+  background: var(--border-medium);
   flex-shrink: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform        var(--duration-base) var(--ease-spring);
 }
-.catalog-child-dot-all {
-  background: var(--gold-light);
-}
+.catalog-child-item:hover .catalog-child-dot { background: var(--accent); transform: scale(1.5); }
 
 .catalog-child-name {
   flex: 1;
+  min-width: 0;
   font-size: 15px;
-  color: var(--text-secondary);
   line-height: 1.3;
+  color: var(--text-secondary);
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.catalog-child-all .catalog-child-name {
-  color: var(--gold-light);
-  font-weight: 500;
-}
-.catalog-child-all svg {
-  color: var(--gold-light);
-  flex-shrink: 0;
-}
+.catalog-child-item:hover .catalog-child-name { color: var(--gold); }
 
 .catalog-child-count {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--text-muted);
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Skeleton */
-.catalog-skeleton {
-  padding: 8px 0;
+.catalog-child-all .catalog-child-name { color: var(--gold); font-weight: 600; }
+.catalog-child-all svg {
+  flex-shrink: 0;
+  color: var(--gold);
+  transition: transform var(--duration-base) var(--ease-out);
 }
-.catalog-skeleton-item {
-  height: 56px;
-  margin: 0;
-  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-elevated) 50%, var(--bg-secondary) 75%);
-  background-size: 200%;
-  animation: shimmer 1.4s infinite;
+.catalog-child-all:hover svg { transform: translateX(4px); }
+
+/* ── Загрузка (общий класс .skeleton из animations.css) ── */
+.catalog-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border);
 }
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
+.catalog-skeleton-row:last-child { border-bottom: none; }
+.catalog-skeleton-icon { width: 42px; height: 42px; flex-shrink: 0; }
+.catalog-skeleton-line { height: 14px; }
 
-/* Empty */
+/* ── Пустой результат поиска ── */
 .catalog-empty {
   text-align: center;
-  padding: 60px 24px;
+  padding: 56px 24px;
   color: var(--text-muted);
 }
-.catalog-empty p { font-size: 15px; margin-bottom: 16px; }
+.catalog-empty p { font-size: 15px; margin-bottom: 16px; color: var(--text-secondary); }
 .catalog-empty button {
   background: none;
   border: 1px solid var(--border-medium);
-  color: var(--gold-light);
+  color: var(--gold);
   padding: 10px 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  font: inherit;
   font-size: 14px;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out);
 }
+.catalog-empty button:hover { background: var(--gold-pale); border-color: var(--gold); }

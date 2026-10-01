@@ -1,93 +1,321 @@
-/* ── Card hover ── */
-.product-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(49, 90, 114, 0.4);
-  box-shadow: 0 12px 32px rgba(31, 41, 51, 0.2), 0 0 0 1px rgba(49, 90, 114, 0.1);
-}
+/* ─── Карточка товара ───────────────────────────────────────────
+   Полный файл (раньше в нём остался только фрагмент с hover, поэтому кнопки были без стилей).
+   Включает стили ProductCardSkeleton. Только переменные темы. */
 
-/* ── Новый бейдж ХИТ ── */
-.hit-badge {
-  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
-  color: var(--text-primary);
-}
+.product-card {
+  /* тёмные оттенки для текста бейджей: основные цвета статусов на светлом фоне слишком бледные */
+  --badge-success-text: #3f7557;
+  --badge-warning-text: #8a5e12;
+  --badge-error-text:   #a64b4b;
 
-/* ── Бейдж мало осталось ── */
-.low-badge {
-  background: rgba(214, 154, 58, 0.15);
-  color: var(--warning);
-  border: 1px solid rgba(214, 154, 58, 0.3);
-}
-
-/* ── Hover-оверлей на картинке ── */
-.card-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(2px);
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  opacity: 0;
-  transition: opacity 0.22s ease;
-  z-index: 3;
+  height: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  cursor: pointer;
+
+  /* backwards, а не both: иначе финальный кадр анимации перебьёт hover-подъём (transform) */
+  animation: fadeIn var(--duration-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+
+  transition:
+    transform    var(--duration-base) var(--ease-out),
+    box-shadow   var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
 }
 
-.product-card:hover .card-overlay { opacity: 1; }
+/* подъём и подсветка только там, где есть мышь */
+@media (hover: hover) {
+  .product-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-lg);
+  }
+}
+.product-card:focus-visible { border-color: var(--gold); }
+
+/* ── Бейджи ── */
+.product-badges {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.product-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  backdrop-filter: blur(4px);
+}
+.new-badge   { color: var(--text-inverse); background: var(--gold); border-color: var(--gold); }
+.hit-badge   { color: var(--text-inverse); background: linear-gradient(135deg, var(--gold-dark), var(--gold)); border-color: transparent; }
+.stock-badge { color: var(--badge-success-text); background: rgba(79, 138, 104, 0.12); border-color: rgba(79, 138, 104, 0.25); }
+.low-badge   { color: var(--badge-warning-text); background: rgba(214, 154, 58, 0.15); border-color: rgba(214, 154, 58, 0.35); }
+.out-badge   { color: var(--badge-error-text);   background: rgba(199, 101, 101, 0.12); border-color: rgba(199, 101, 101, 0.3); }
+
+/* ── Изображение ── */
+.product-image-wrapper {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  padding: 14px;
+  object-fit: contain;
+  mix-blend-mode: multiply;   /* белый фон фото сливается с серой подложкой */
+  opacity: 0;
+  transition:
+    opacity   var(--duration-base) var(--ease-out),
+    transform var(--duration-slow) var(--ease-out);
+}
+.product-image.loaded { opacity: 1; }
+@media (hover: hover) {
+  .product-card:hover .product-image { transform: scale(1.05); }
+}
+
+.product-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-muted);
+}
+
+.image-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--bg-elevated) 0%, var(--bg-hover) 50%, var(--bg-elevated) 100%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s var(--ease-in-out) infinite;
+}
+
+/* ── Панель быстрых действий (только мышь) ── */
+.card-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 40px 12px 12px;
+  background: linear-gradient(to top, var(--bg-primary) 45%, transparent);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition:
+    opacity   var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-overlay { display: flex; }
+  .product-card:hover .card-overlay,
+  .product-card:focus-within .card-overlay {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
 
 .overlay-btn {
-  width: 100%;
-  max-width: 180px;
-  padding: 9px 0;
-  border-radius: 9px;
-  font-size: 12.5px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-  transform: translateY(6px);
+  width: 100%;
+  height: 38px;
+  font: 600 13px/1 var(--font-body);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out),
+    color            var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-out);
+}
+.overlay-btn:active:not(:disabled) { transform: scale(0.98); }
+.overlay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.overlay-cart { color: var(--text-inverse); background: var(--gold); border: 1px solid var(--gold); }
+.overlay-cart:hover:not(:disabled) { background: var(--gold-dark); border-color: var(--gold-dark); }
+.overlay-cart.added { background: var(--success); border-color: var(--success); }
+
+.overlay-buy { color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-medium); }
+.overlay-buy:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+
+/* ── Информация ── */
+.product-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 6px;
+  padding: 14px 16px 16px;
 }
 
-.product-card:hover .overlay-btn {
-  transform: translateY(0);
+.product-brand {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.product-card:hover .overlay-btn:nth-child(2) {
-  transition-delay: 0.04s;
-}
-
-.overlay-cart {
-  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
-  color: var(--text-inverse);
-}
-
-.overlay-cart:hover:not(:disabled) {
-  transform: scale(1.03);
-}
-
-.overlay-buy {
-  background: rgba(31, 41, 51, 0.08);
-  border: 1px solid rgba(31, 41, 51, 0.15) !important;
+.product-title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
   color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.35em * 2);   /* карточки в ряду одной высоты */
+  transition: color var(--duration-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .product-card:hover .product-title { color: var(--gold); }
 }
 
-.overlay-buy:hover:not(:disabled) {
-  background: rgba(31, 41, 51, 0.14);
-  transform: scale(1.03);
+.product-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 
-.overlay-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.product-price {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--gold);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.product-price.on-request {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-secondary);
 }
 
-/* На мобиле оверлей не нужен — там нет hover */
-@media (max-width: 768px) {
-  .card-overlay { display: none; }
+/* Кнопка-корзина рядом с ценой (видна всегда, в том числе на телефоне) */
+.add-to-cart-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  color: var(--gold);
+  background: var(--accent-light);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color            var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-spring);
 }
+.add-to-cart-btn:hover:not(:disabled) { color: var(--text-inverse); background: var(--gold); transform: scale(1.06); }
+.add-to-cart-btn:active:not(:disabled) { transform: scale(0.94); }
+.add-to-cart-btn.added { color: var(--text-inverse); background: var(--success); }
+.add-to-cart-btn:disabled { color: var(--text-muted); background: var(--bg-elevated); cursor: not-allowed; }
+
+/* «Купить сейчас» под ценой: только на сенсорных экранах (на ПК это делает панель на фото) */
+.buy-now-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  margin-top: 10px;
+  font: 600 13px/1 var(--font-body);
+  color: var(--text-primary);
+  background: transparent;
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out),
+    color            var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-out);
+}
+.buy-now-btn:active:not(:disabled) { transform: scale(0.98); }
+.buy-now-btn:disabled { color: var(--text-muted); border-color: var(--border); cursor: not-allowed; }
+@media (hover: none), (pointer: coarse) {
+  .buy-now-btn { display: flex; }
+}
+
+/* ── Мобильная компоновка ── */
+@media (max-width: 640px) {
+  .product-info { padding: 12px; }
+  .product-title { font-size: 14px; }
+  .product-price { font-size: 16px; }
+  .product-badges { top: 8px; left: 8px; right: 8px; }
+}
+
+/* ── Скелетон (ProductCardSkeleton) ── */
+.skeleton-card { pointer-events: none; animation: none; }
+.skeleton-card:hover { transform: none; box-shadow: var(--shadow-sm); border-color: var(--border); }
+
+.skeleton-image-wrapper {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.skeleton-shimmer,
+.skeleton-line,
+.skeleton-btn-placeholder {
+  background: linear-gradient(90deg, var(--bg-elevated) 0%, var(--bg-hover) 50%, var(--bg-elevated) 100%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s var(--ease-in-out) infinite;
+}
+.skeleton-shimmer { position: absolute; inset: 0; }
+.skeleton-line { border-radius: 6px; }
+.skeleton-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+.skeleton-btn-placeholder { width: 40px; height: 40px; border-radius: var(--radius-md); flex-shrink: 0; }

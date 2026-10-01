@@ -1,7 +1,36 @@
 import { useState, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
+import { formatPriceWithMarkup, getPriceWithMarkup } from '../../../utils/priceUtils';
 import './ProductCard.css';
+
+const HIT_PRICE = 150000; // дилерская цена, от которой товар получает бейдж «ХИТ»
+
+// Остаток: число, строка "5" или ">10" (много)
+const parseQty = (qty) => {
+  if (typeof qty === 'number') return qty;
+  if (typeof qty === 'string') {
+    if (!qty || qty === '0') return 0;
+    if (qty.startsWith('>')) return Infinity;
+    const n = parseInt(qty, 10);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  return 0;
+};
+
+const CartIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="21" r="1" />
+    <circle cx="20" cy="21" r="1" />
+    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 
 const ProductCard = memo(({ product, index = 0 }) => {
   const navigate = useNavigate();
@@ -10,103 +39,64 @@ const ProductCard = memo(({ product, index = 0 }) => {
   const [addedToCart, setAddedToCart] = useState(false);
 
   const isAboveFold = index < 4;
+  const imageSrc = product.images?.[0] || product.image || null;
+  const productName = product.name || product.full_name || 'Товар';
 
-  const getProductImage = useCallback(() => {
-    if (product.images?.length > 0) return product.images[0];
-    if (product.image) return product.image;
-    return null;
-  }, [product.images, product.image]);
+  // Дилерская цена (price1). Бэкенд отдаёт её во всех полях; наценку добавляет priceUtils.
+  const rawPrice = Number(product.price1 ?? product.price ?? product.price2);
+  const dealerPrice = Number.isFinite(rawPrice) ? rawPrice : 0;
+  const onRequest = dealerPrice <= 1; // Al-Style: price1 = 1 → «цена по запросу»
 
-  const getProductPrice = useCallback(() => {
-    const raw = product.price2 || product.price1 || product.price || 0;
-    const num = typeof raw === 'number' ? raw : parseFloat(raw);
-    return isNaN(num) ? 0 : num;
-  }, [product.price2, product.price1, product.price]);
+  const qty = parseQty(product.quantity);
+  const inStock = qty > 0;
+  const lowStock = inStock && qty <= 5 ? qty : null;
+  const canBuy = inStock && !onRequest;
 
-  const formatPrice = useCallback((price) => {
-    if (!price || price === 0) return 'Цена по запросу';
-    const withMarkup = Math.round(price * 1.1);
-    return new Intl.NumberFormat('ru-RU').format(withMarkup) + ' ₸';
-  }, []);
-
-  const isInStock = useCallback(() => {
-    const qty = product.quantity;
-    if (typeof qty === 'number') return qty > 0;
-    if (typeof qty === 'string') {
-      if (!qty || qty === '0') return false;
-      if (qty.startsWith('>')) return true;
-      const n = parseInt(qty);
-      return !isNaN(n) && n > 0;
-    }
-    return false;
-  }, [product.quantity]);
-
-  // Сколько осталось — для бейджа "Осталось N шт."
-  const getLowStock = useCallback(() => {
-    const qty = product.quantity;
-    if (typeof qty === 'number' && qty > 0 && qty <= 5) return qty;
-    if (typeof qty === 'string') {
-      const n = parseInt(qty);
-      if (!isNaN(n) && n > 0 && n <= 5) return n;
-    }
-    return null;
-  }, [product.quantity]);
-
-  // "Хит" — дорогой товар (телефоны, ноутбуки)
-  const isHit = useCallback(() => {
-    const price = getProductPrice();
-    return price >= 150000;
-  }, [getProductPrice]);
+  const cartItem = () => ({
+    id: product.article,
+    article: product.article,
+    name: productName,
+    price: getPriceWithMarkup(dealerPrice),
+    image: imageSrc,
+  });
 
   const handleClick = useCallback(() => {
     navigate(`/product/${product.article}`);
   }, [navigate, product.article]);
 
-  const handleAddToCart = useCallback((e) => {
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target === e.currentTarget) handleClick();
+  };
+
+  const handleAddToCart = (e) => {
     e.stopPropagation();
-    if (addedToCart || !isInStock()) return;
-    addToCart({
-      id: product.article,
-      article: product.article,
-      name: product.name || 'Товар',
-      price: Math.round(getProductPrice() * 1.1),
-      image: getProductImage(),
-    });
+    if (addedToCart || !canBuy) return;
+    addToCart(cartItem());
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
-  }, [addedToCart, isInStock, addToCart, product, getProductPrice, getProductImage]);
+  };
 
-  const handleBuyNow = useCallback((e) => {
+  const handleBuyNow = (e) => {
     e.stopPropagation();
-    if (!isInStock()) return;
-    buyNow(
-      {
-        id: product.article,
-        article: product.article,
-        name: product.name || 'Товар',
-        price: Math.round(getProductPrice() * 1.1),
-        image: getProductImage(),
-      },
-      navigate,
-      1
-    );
-  }, [isInStock, buyNow, navigate, product, getProductPrice, getProductImage]);
+    if (!canBuy) return;
+    buyNow(cartItem(), navigate, 1);
+  };
 
-  const inStock     = isInStock();
-  const lowStock    = getLowStock();
-  const currentPrice = getProductPrice();
-  const imageSrc    = getProductImage();
-  const productName = product.name || product.full_name || 'Товар';
+  const cartLabel = onRequest ? 'Цена по запросу' : !inStock ? 'Нет в наличии' : addedToCart ? 'Добавлено' : 'В корзину';
 
   return (
-    <div className="product-card" onClick={handleClick}>
-
+    <div
+      className="product-card"
+      style={{ '--i': index % 12 }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role="link"
+      tabIndex={0}
+    >
       {/* ── Бейджи ── */}
       <div className="product-badges">
-        {product.isnew === 1 && (
-          <span className="product-badge new-badge">NEW</span>
-        )}
-        {isHit() && product.isnew !== 1 && (
+        {product.isnew === 1 && <span className="product-badge new-badge">NEW</span>}
+        {!onRequest && dealerPrice >= HIT_PRICE && product.isnew !== 1 && (
           <span className="product-badge hit-badge">ХИТ</span>
         )}
         {inStock ? (
@@ -116,13 +106,13 @@ const ProductCard = memo(({ product, index = 0 }) => {
             <span className="product-badge stock-badge">В наличии</span>
           )
         ) : (
-          <span className="product-badge out-badge">Нет</span>
+          <span className="product-badge out-badge">Нет в наличии</span>
         )}
       </div>
 
-      {/* ── Изображение + hover-оверлей ── */}
+      {/* ── Изображение + hover-панель действий ── */}
       <div className="product-image-wrapper">
-        {!imageLoaded && <div className="image-skeleton" aria-hidden="true" />}
+        {!imageLoaded && imageSrc && <div className="image-skeleton" aria-hidden="true" />}
 
         {imageSrc ? (
           <img
@@ -139,49 +129,25 @@ const ProductCard = memo(({ product, index = 0 }) => {
           />
         ) : (
           <div className="product-image-placeholder" aria-hidden="true">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="1" opacity="0.3">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.4">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
           </div>
         )}
 
-        {/* Hover-оверлей — быстрые действия */}
+        {/* Только для мыши (на телефонах скрыта, там кнопки под ценой) */}
         <div className="card-overlay">
           <button
-            className="overlay-btn overlay-cart"
+            type="button"
+            className={`overlay-btn overlay-cart${addedToCart ? ' added' : ''}`}
             onClick={handleAddToCart}
-            disabled={!inStock}
-            aria-label="В корзину"
+            disabled={!canBuy}
           >
-            {addedToCart ? (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Добавлено
-              </>
-            ) : (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2">
-                  <circle cx="9" cy="21" r="1"/>
-                  <circle cx="20" cy="21" r="1"/>
-                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-                </svg>
-                В корзину
-              </>
-            )}
+            {addedToCart ? <><CheckIcon /> Добавлено</> : <><CartIcon /> В корзину</>}
           </button>
-          <button
-            className="overlay-btn overlay-buy"
-            onClick={handleBuyNow}
-            disabled={!inStock}
-            aria-label="Купить сейчас"
-          >
+          <button type="button" className="overlay-btn overlay-buy" onClick={handleBuyNow} disabled={!canBuy}>
             Купить сейчас
           </button>
         </div>
@@ -192,46 +158,29 @@ const ProductCard = memo(({ product, index = 0 }) => {
         {product.brand && <p className="product-brand">{product.brand}</p>}
         <h3 className="product-title" title={productName}>{productName}</h3>
 
-        {/* ── Цена + кнопка корзины ── */}
         <div className="product-footer">
-          <p className="product-price">{formatPrice(currentPrice)}</p>
+          <p className={`product-price${onRequest ? ' on-request' : ''}`}>{formatPriceWithMarkup(dealerPrice)}</p>
           <button
+            type="button"
             className={`add-to-cart-btn${addedToCart ? ' added' : ''}`}
             onClick={handleAddToCart}
-            disabled={!inStock}
-            aria-label={!inStock ? 'Нет в наличии' : addedToCart ? 'Добавлено' : 'В корзину'}
+            disabled={!canBuy}
+            aria-label={cartLabel}
           >
-            {addedToCart ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2">
-                <circle cx="9" cy="21" r="1"/>
-                <circle cx="20" cy="21" r="1"/>
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-              </svg>
-            )}
+            {addedToCart ? <CheckIcon /> : <CartIcon />}
           </button>
         </div>
 
-        {/* ── Купить сейчас (десктоп — под футером) ── */}
-        <button
-          className="buy-now-btn"
-          onClick={handleBuyNow}
-          disabled={!inStock}
-          aria-label="Купить сейчас"
-        >
-          {inStock ? 'Купить сейчас' : 'Нет в наличии'}
+        {/* Показывается только на сенсорных экранах */}
+        <button type="button" className="buy-now-btn" onClick={handleBuyNow} disabled={!canBuy}>
+          {onRequest ? 'Цена по запросу' : inStock ? 'Купить сейчас' : 'Нет в наличии'}
         </button>
       </div>
     </div>
   );
 }, (prev, next) =>
   prev.product.article  === next.product.article  &&
-  prev.product.price2   === next.product.price2   &&
+  prev.product.price    === next.product.price    &&
   prev.product.price1   === next.product.price1   &&
   prev.product.quantity === next.product.quantity &&
   prev.index            === next.index
