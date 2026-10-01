@@ -11,10 +11,14 @@ dotenv.config();
 const PORT          = process.env.PORT || 8080;
 const ALSTYLE_TOKEN = process.env.ALSTYLE_ACCESS_TOKEN;
 const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
 const SYNC_SECRET   = process.env.SYNC_SECRET;
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+// Наценка должна совпадать с MARKUP_PERCENT во фронте (priceFormatter). Можно переопределить переменной MARKUP_PERCENT на Railway.
+const MARKUP_PERCENT = Number.isFinite(Number(process.env.MARKUP_PERCENT)) && process.env.MARKUP_PERCENT !== undefined && process.env.MARKUP_PERCENT !== '' ? Number(process.env.MARKUP_PERCENT) : 5;
+const applyMarkup = price => Math.round(price * (1 + MARKUP_PERCENT / 100));
 
 if (!ALSTYLE_TOKEN) { console.error('ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
 
@@ -23,20 +27,29 @@ const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_RE
   ? new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN })
   : null;
 
-console.log('\n🚀 Stockera Backend v5.1');
+console.log('\n🚀 Stockera Backend v5.2');
 console.log('━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`Redis: ${redis ? '✅ Upstash' : '⚠️  Disabled'}`);
 console.log(`SUPABASE_URL: ${SUPABASE_URL ? '✅' : '❌'}`);
 console.log(`SUPABASE_SERVICE_KEY: ${SUPABASE_KEY ? '✅' : '❌'}`);
 console.log(`ALSTYLE_TOKEN: ${ALSTYLE_TOKEN ? '✅' : '❌'}`);
 console.log(`🔐 Auth: ${supabaseAdmin ? '✅ Supabase' : '⚠️  Disabled'}`);
+console.log(`SYNC_SECRET: ${SYNC_SECRET ? '✅' : '⚠️  не задан — /api/admin/sync отключён'}`);
+console.log(`CORS: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : '⚠️  ALLOWED_ORIGINS не задан — разрешены все origin'}`);
 console.log('⏱️  Кеш: товары 10мин, категории 30мин\n');
 
 const app = express();
+app.set('trust proxy', 1); // 1 прокси перед приложением (Railway/Render/Fly и т.п.); req.ip станет настоящим IP клиента
 app.use(compression());
-app.use(cors({ origin: (origin, cb) => cb(null, true), credentials: true }));
-app.use(express.json());
+app.use(cors({
+  origin: (origin, cb) => cb(null, !origin || !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)),
+  credentials: true,
+}));
+app.use(express.json({ limit: '200kb' }));
 app.use((req, res, next) => { console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // ─── Telegram ────────────────────────────────────────────────
 async function sendTelegramNotification(text) {
@@ -78,19 +91,27 @@ async function fetchOnce(key, fn) {
   inFlight.set(key, p); return p;
 }
 
-// ─── API очередь ─────────────────────────────────────────────
+// ─── API очередь (каталог/синк) ──────────────────────────────
 const API_MIN_INTERVAL = 5000;
 let apiQueue = Promise.resolve();
 function enqueueApiCall(fn) {
-  const next = apiQueue.then(async () => { const r = await fn(); await new Promise(r => setTimeout(r, API_MIN_INTERVAL)); return r; });
+  const next = apiQueue.then(async () => { const r = await fn(); await sleep(API_MIN_INTERVAL); return r; });
   apiQueue = next.catch(() => {}); return next;
+}
+
+// ─── Отдельный mutex для заказов (корзина al-style общая на весь токен) ──
+let orderLock = Promise.resolve();
+function withOrderLock(fn) {
+  const run = orderLock.then(fn);
+  orderLock = run.catch(() => {});
+  return run;
 }
 
 // ─── Rate limiting ────────────────────────────────────────────
 const rateLimitMap = new Map();
 function rateLimit({ windowMs=60000, max=100, message='Слишком много запросов' }={}) {
   return (req, res, next) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const ip = req.ip || 'unknown'; // trust proxy настроен выше, x-forwarded-for руками не читаем
     const now = Date.now();
     const reqs = (rateLimitMap.get(ip)||[]).filter(t => t > now-windowMs);
     reqs.push(now); rateLimitMap.set(ip, reqs);
@@ -117,6 +138,21 @@ function parseCategoryParam(raw) {
   if (!raw) return null;
   const valid = (Array.isArray(raw)?raw:[raw]).map(c => { if(!c||typeof c==='object') return null; const s=String(c).trim(); return /^[\d,]+$/.test(s)?s:null; }).filter(Boolean);
   return valid.length ? valid.join(',') : null;
+}
+
+// Страница каталога с ретраями на 403. После 3 неудач бросает ошибку (раньше молча возвращался null).
+async function fetchCatalogPage(offset) {
+  for (let retries = 0; ; ) {
+    try {
+      return await enqueueApiCall(async () => {
+        const { data } = await api.get('/elements-pagination', { params: { 'access-token': ALSTYLE_TOKEN, exclude_missing: 'true', limit: 250, offset, additional_fields: 'brand,images' } });
+        return data;
+      });
+    } catch (e) {
+      if (e.response?.status === 403 && retries < 3) { retries++; await sleep(10000 * retries); }
+      else throw e;
+    }
+  }
 }
 
 async function loadProducts(cat) {
@@ -191,19 +227,28 @@ async function loadAllProductsForSearch() {
     }
 
     console.log('🔍 Загрузка всех товаров из al-style...');
-    const all=[]; let offset=0, total=null;
+    const all = []; let offset = 0, total = null;
     do {
-      let data=null, retries=0;
-      while(retries<3) { try { data=await enqueueApiCall(async()=>{ const{data:d}=await api.get('/elements-pagination',{params:{'access-token':ALSTYLE_TOKEN,exclude_missing:'true',limit:250,offset,additional_fields:'brand,images'}}); return d; }); break; } catch(e) { if(e.response?.status===403){retries++;await new Promise(r=>setTimeout(r,10000*retries));}else throw e; } }
-      if(!data){console.log('❌ Пропускаем страницу');break;}
+      let data = null;
+      try { data = await fetchCatalogPage(offset); }
+      catch (e) { console.log('❌ Пропускаем страницу:', e.message); break; }
       all.push(...(data.elements||[]));
-      if(!total&&data.pagination?.totalCount){total=data.pagination.totalCount;console.log(`🔍 Всего: ${total}`);}
-      offset+=250; console.log(`🔍 Загружено: ${all.length}/${total||'?'}`);
-    } while(total&&offset<total);
-    const compact=all.map(p=>({article:p.article,name:p.name||'',full_name:p.full_name||'',brand:p.brand||'',price:p.price2||p.price1||0,isnew:p.isnew||0,image:p.images?.[0]||null}));
-    setCache('search_all_products',compact); await setRedisCache('search_all_products',compact,86400);
+      if (!total && data.pagination?.totalCount) { total = data.pagination.totalCount; console.log(`🔍 Всего: ${total}`); }
+      offset += 250; console.log(`🔍 Загружено: ${all.length}/${total||'?'}`);
+    } while (total && offset < total);
+    const compact = all.map(p => ({ article:p.article, name:p.name||'', full_name:p.full_name||'', brand:p.brand||'', price:p.price2||p.price1||0, isnew:p.isnew||0, image:p.images?.[0]||null }));
+    setCache('search_all_products', compact); await setRedisCache('search_all_products', compact, 86400);
     console.log(`✅ Кеш поиска готов: ${compact.length} товаров`); return compact;
   });
+}
+
+// ─── Валидация позиций заказа ────────────────────────────────
+// Берём от клиента только article и quantity; имя и цену подставляем сами.
+function normalizeItems(items) {
+  if (!Array.isArray(items) || !items.length || items.length > 100) return null;
+  const clean = items.map(i => ({ article: String(i?.article ?? '').trim(), quantity: Math.floor(Number(i?.quantity)) }));
+  if (clean.some(i => !/^[\w.\-]+$/.test(i.article) || !(i.quantity > 0) || i.quantity > 10000)) return null;
+  return clean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -229,6 +274,7 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
     if (search){const s=search.toLowerCase();products=products.filter(p=>p.name?.toLowerCase().includes(s)||p.full_name?.toLowerCase().includes(s)||p.brand?.toLowerCase().includes(s));}
+    products = [...products]; // копия: sort() ниже иначе сортирует закешированный массив на месте
     if(sortBy==='price_asc') products.sort((a,b)=>(a.price2||a.price1||0)-(b.price2||b.price1||0));
     else if(sortBy==='price_desc') products.sort((a,b)=>(b.price2||b.price1||0)-(a.price2||a.price1||0));
     else if(sortBy==='name_asc') products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
@@ -266,7 +312,10 @@ app.get('/api/categories', async (req,res) => {
 
 app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
   try {
-    const{q}=req.query; if(!q||q.length<2)return res.json([]);
+    const raw = typeof req.query.q === 'string' ? req.query.q : '';
+    // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
+    const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
+    if (q.length < 2) return res.json([]);
     if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,isnew,image_url,quantity').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...p,price2:p.price,image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
     const products=await loadAllProductsForSearch().catch(()=>[]);
     const s=q.toLowerCase();
@@ -275,34 +324,83 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
   } catch(e){console.error('❌ search:',e.message);res.json([]);}
 });
 
-app.post('/api/alstyle-order', rateLimit({windowMs:60000,max:30,message:'Подождите перед следующим заказом'}), async (req,res) => {
+// ─── Заказ в al-style: auth + проверка владельца + идемпотентность + mutex ──
+const processedOrders = new Map(); // orderId -> { job, ts }
+setInterval(() => { const c = Date.now() - 24*60*60*1000; for (const [id, o] of processedOrders) if (o.ts < c) processedOrders.delete(id); }, 60*60*1000);
+
+async function submitToAlstyle(items, comment, orderId) {
+  const fail = (status, message) => Object.assign(new Error(message), { status });
+  const { data: ud } = await api.get('/user-data', { params: { 'access-token': ALSTYLE_TOKEN } });
+  const userData = ud?.data; if (!userData) throw fail(500, 'Не удалось получить данные пользователя');
+  const attorney = userData['Доверенности']?.find(d => d['Основной'] && !d['empty']) || userData['Доверенности']?.[0];
+  const delivery = userData['Транспортники']?.find(d => d['Основной']) || userData['Транспортники']?.[0];
+  if (!attorney || !delivery) throw fail(500, 'Не найдены доверенность или способ доставки');
+  await cartApi.get('/clear', { params: { 'access-token': ALSTYLE_TOKEN } });
+  await cartApi.get('/add', { params: { 'access-token': ALSTYLE_TOKEN, add: items.map(i => i.article).join(','), quantity: items.map(i => i.quantity).join(',') } });
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  const ship = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  const { data: sr } = await cartApi.post('/submit', null, { params: {
+    'access-token': ALSTYLE_TOKEN,
+    comments: `Заказ с сайта stockeratrade.com. ID: ${orderId}. ${String(comment || '').slice(0, 500)}`,
+    shipping_date: ship, attorney_json: JSON.stringify(attorney), delivery_json: JSON.stringify(delivery), external_id: orderId,
+  } });
+  const alstyleOrderId = sr?.data?.id; console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
+  return { alstyleOrderId };
+}
+
+app.post('/api/alstyle-order', rateLimit({windowMs:60000,max:30,message:'Подождите перед следующим заказом'}), requireAuth, async (req,res) => {
   try {
-    const{items,comment,orderId}=req.body; if(!items?.length)return res.status(400).json({error:'items обязательны'});
-    const{data:ud}=await api.get('/user-data',{params:{'access-token':ALSTYLE_TOKEN}});
-    const userData=ud?.data; if(!userData)return res.status(500).json({error:'Не удалось получить данные пользователя'});
-    const attorney=userData['Доверенности']?.find(d=>d['Основной']&&!d['empty'])||userData['Доверенности']?.[0];
-    const delivery=userData['Транспортники']?.find(d=>d['Основной'])||userData['Транспортники']?.[0];
-    if(!attorney||!delivery)return res.status(500).json({error:'Не найдены доверенность или способ доставки'});
-    await cartApi.get('/clear',{params:{'access-token':ALSTYLE_TOKEN}});
-    await cartApi.get('/add',{params:{'access-token':ALSTYLE_TOKEN,add:items.map(i=>i.article).join(','),quantity:items.map(i=>i.quantity).join(',')}});
-    const d=new Date(); d.setDate(d.getDate()+1);
-    const ship=`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-    const{data:sr}=await cartApi.post('/submit',null,{params:{'access-token':ALSTYLE_TOKEN,comments:`Заказ с сайта stockeratrade.com. ID: ${orderId||'N/A'}. ${comment||''}`,shipping_date:ship,attorney_json:JSON.stringify(attorney),delivery_json:JSON.stringify(delivery),external_id:orderId||undefined}});
-    const alstyleOrderId=sr?.data?.id; console.log(`✅ Заказ создан в al-style: #${alstyleOrderId}`);
-    res.json({success:true,alstyleOrderId});
-  } catch(e){console.error('❌ al-style order:',e.response?.data||e.message);res.status(500).json({error:e.response?.data?.message||e.message});}
+    const { items, comment, orderId } = req.body || {};
+    if (!orderId || typeof orderId !== 'string') return res.status(400).json({ error: 'orderId обязателен' });
+    const clean = normalizeItems(items);
+    if (!clean) return res.status(400).json({ error: 'Некорректные items' });
+
+    // заказ должен существовать и принадлежать этому пользователю
+    const { data: ord, error: oe } = await supabaseAdmin.from('orders').select('id,user_id').eq('id', orderId).maybeSingle();
+    if (oe) return res.status(500).json({ error: oe.message });
+    if (!ord || ord.user_id !== req.user.id) return res.status(403).json({ error: 'Заказ не найден' });
+
+    // идемпотентность: повторный вызов с тем же orderId вернёт результат первого, а не создаст второй заказ
+    let entry = processedOrders.get(orderId);
+    const duplicate = !!entry;
+    if (!entry) {
+      const job = withOrderLock(() => submitToAlstyle(clean, comment, orderId));
+      entry = { job, ts: Date.now() };
+      processedOrders.set(orderId, entry);
+      job.catch(() => processedOrders.delete(orderId)); // при ошибке разрешаем повторить
+    }
+    const result = await entry.job;
+    res.json({ success: true, ...result, duplicate });
+  } catch(e){console.error('❌ al-style order:',e.response?.data||e.message);res.status(e.status||500).json({error:e.response?.data?.message||e.message});}
 });
 
 app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (req,res) => {
   try {
-    const{items,address_id,address_text,comment,total_price}=req.body;
-    if(!items?.length)return res.status(400).json({error:'items обязательны'});
-    const{data,error}=await supabaseAdmin.from('orders').insert({user_id:req.user.id,items,total_price:total_price||0,address_id:address_id||null,address_text:address_text||null,comment:comment||null,status:'pending'}).select().single();
-    if(error)return res.status(500).json({error:error.message});
-    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('\n');
-    const msg=`🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${req.user.user_metadata?.full_name||req.user.email||'Неизвестно'}\n📧 ${req.user.email||''}\n📍 ${address_text||'Не указан'}\n${comment?`💬 ${comment}\n`:''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
+    const { items, address_id, address_text, comment } = req.body || {};
+    const clean = normalizeItems(items);
+    if (!clean) return res.status(400).json({ error: 'Некорректные items' });
+
+    // цены и названия берём из нашей базы, а не от клиента
+    const articles = [...new Set(clean.map(i => i.article))];
+    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price').in('article', articles);
+    if (pe) return res.status(500).json({ error: pe.message });
+    const byArt = new Map((prods || []).map(p => [String(p.article), p]));
+    const missing = articles.filter(a => !byArt.has(a));
+    if (missing.length) return res.status(400).json({ error: 'Товары не найдены', missing });
+    const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, price: applyMarkup(Number(p.price) || 0) }; });
+    const total_price = priced.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    const { data, error } = await supabaseAdmin.from('orders').insert({
+      user_id: req.user.id, items: priced, total_price,
+      address_id: address_id || null, address_text: address_text ? String(address_text).slice(0, 500) : null,
+      comment: comment ? String(comment).slice(0, 1000) : null, status: 'pending',
+    }).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
+    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(req.user.user_metadata?.full_name || req.user.email || 'Неизвестно')}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(address_text || 'Не указан')}\n${comment ? `💬 ${esc(comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
     sendTelegramNotification(msg).catch(()=>{});
-    res.json({success:true,order:data});
+    res.json({ success: true, order: data });
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -328,40 +426,66 @@ app.delete('/api/favorites/:article', requireAuth, async (req,res) => {
   } catch(e){res.status(500).json({error:e.message});}
 });
 
+// Гостевой эндпоинт (без auth), поэтому: жёсткий лимит, обрезка длины и экранирование HTML
 app.post('/api/notify-order', rateLimit({windowMs:60000,max:10}), async (req,res) => {
   try {
-    const{items,total_price,address_text,comment,orderId}=req.body;
-    const orderItems=(items||[]).map(i=>`• ${i.name||'Товар'} × ${i.quantity} — ${((i.price||0)*(i.quantity||1)).toLocaleString('ru-RU')} ₸`).join('\n');
-    const nameMatch=comment?.match(/Имя:\s*([^|]+)/);
-    const phoneMatch=comment?.match(/Тел:\s*([^|]+)/);
-    const name=nameMatch?nameMatch[1].trim():'Гость';
-    const phone=phoneMatch?phoneMatch[1].trim():'Не указан';
-    const msg=`🛒 <b>Новый заказ #${orderId?.slice(-8)||'N/A'}</b>\n\n👤 ${name}\n📱 ${phone}\n📍 ${address_text||'Не указан'}\n\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(total_price||0).toLocaleString('ru-RU')} ₸</b>`;
+    const{items,total_price,address_text,comment,orderId}=req.body||{};
+    const list = Array.isArray(items) ? items.slice(0, 50) : [];
+    const orderItems=list.map(i=>`• ${esc(String(i?.name||'Товар').slice(0,120))} × ${Math.floor(Number(i?.quantity))||1} — ${(((Number(i?.price)||0))*(Math.floor(Number(i?.quantity))||1)).toLocaleString('ru-RU')} ₸`).join('\n');
+    const nameMatch=comment?.match?.(/Имя:\s*([^|]+)/);
+    const phoneMatch=comment?.match?.(/Тел:\s*([^|]+)/);
+    const name=nameMatch?nameMatch[1].trim().slice(0,80):'Гость';
+    const phone=phoneMatch?phoneMatch[1].trim().slice(0,30):'Не указан';
+    const oid = orderId ? String(orderId).slice(-8) : 'N/A';
+    const msg=`🛒 <b>Новый заказ #${esc(oid)}</b>\n\n👤 ${esc(name)}\n📱 ${esc(phone)}\n📍 ${esc(String(address_text||'Не указан').slice(0,300))}\n\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(Number(total_price)||0).toLocaleString('ru-RU')} ₸</b>`;
     await sendTelegramNotification(msg);
     res.json({success:true});
   } catch(e){console.error('❌ notify-order:',e.message);res.status(500).json({error:e.message});}
 });
 
+// ─── Синхронизация каталога ──────────────────────────────────
+let syncRunning = false;
+
 app.post('/api/admin/sync', async (req,res) => {
-  if(req.headers['x-sync-secret']!==SYNC_SECRET&&SYNC_SECRET)return res.status(401).json({error:'Unauthorized'});
-  res.json({message:'Синхронизация запущена в фоне'}); syncProductsToSupabase().catch(console.error);
+  if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  if (syncRunning) return res.status(409).json({ error: 'Синхронизация уже идёт' });
+  res.json({ message: 'Синхронизация запущена в фоне' });
+  syncProductsToSupabase().catch(console.error);
 });
 
 async function syncProductsToSupabase() {
-  if(!supabaseAdmin)return; console.log('🔄 Синхронизация товаров с al-style...');
-  const start=Date.now(); let synced=0,offset=0,total=null;
+  if (!supabaseAdmin) return;
+  if (syncRunning) { console.log('⏭️ Синхронизация уже идёт, пропускаем'); return; }
+  syncRunning = true;
+  console.log('🔄 Синхронизация товаров с al-style...');
+  const start = Date.now(); let synced = 0, offset = 0, total = null;
   try {
     do {
-      let data=null,retries=0;
-      while(retries<3){try{data=await enqueueApiCall(async()=>{const{data:d}=await api.get('/elements-pagination',{params:{'access-token':ALSTYLE_TOKEN,exclude_missing:'true',limit:250,offset,additional_fields:'brand,images'}});return d;});break;}catch(e){if(e.response?.status===403){retries++;await new Promise(r=>setTimeout(r,10000*retries));}else throw e;}}
-      if(!data)break; const els=data.elements||[]; if(!els.length)break;
-      if(!total)total=data.pagination?.totalCount||0;
-      for(let i=0;i<els.length;i+=100){const batch=els.slice(i,i+100).map(p=>({article:String(p.article),name:p.name||'',full_name:p.full_name||'',brand:p.brand||'',price:p.price2||p.price1||p.price||0,price1:p.price1||null,price2:p.price2||null,quantity:String(p.quantity??'0'),isnew:p.isnew||0,image_url:p.images?.[0]||null,images:JSON.stringify(p.images||[]),category_id:p.category_id?String(p.category_id):null,raw_data:'{}',synced_at:new Date().toISOString()}));await supabaseAdmin.from('products').upsert(batch,{onConflict:'article'});synced+=batch.length;}
-      offset+=250;
-    } while(total&&offset<total);
+      const data = await fetchCatalogPage(offset); // бросает ошибку, если страница не загрузилась
+      const els = data.elements || []; if (!els.length) break;
+      if (!total) total = data.pagination?.totalCount || 0;
+      for (let i = 0; i < els.length; i += 100) {
+        const batch = els.slice(i, i + 100).map(p => ({
+          article: String(p.article), name: p.name||'', full_name: p.full_name||'', brand: p.brand||'',
+          price: p.price2||p.price1||p.price||0, price1: p.price1||null, price2: p.price2||null,
+          quantity: String(p.quantity ?? '0'), isnew: p.isnew||0, image_url: p.images?.[0]||null,
+          images: JSON.stringify(p.images||[]), category_id: p.category_id ? String(p.category_id) : null,
+          raw_data: '{}', synced_at: new Date().toISOString(),
+        }));
+        const { error } = await supabaseAdmin.from('products').upsert(batch, { onConflict: 'article' });
+        if (error) throw new Error(`Supabase upsert: ${error.message}`); // supabase-js не бросает сам, проверяем вручную
+        synced += batch.length;
+      }
+      offset += 250;
+    } while (total && offset < total);
     console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
-    cache.delete('search_all_products'); if(redis)await redis.del('search_all_products').catch(()=>{});
-  } catch(e){console.error('❌ Ошибка синхронизации:',e.message);}
+    cache.delete('search_all_products'); if (redis) await redis.del('search_all_products').catch(()=>{});
+  } catch (e) {
+    console.error('❌ Ошибка синхронизации:', e.message);
+    await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации каталога</b>\n${esc(e.message)}\nЗаписано до сбоя: ${synced}${total ? ` из ${total}` : ''}`);
+  } finally {
+    syncRunning = false;
+  }
 }
 
 async function warmupCache() {

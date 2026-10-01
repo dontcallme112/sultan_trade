@@ -41,15 +41,30 @@ const ProductCard = memo(({ product, index = 0 }) => {
     return false;
   }, [product.quantity]);
 
+  // Сколько осталось — для бейджа "Осталось N шт."
+  const getLowStock = useCallback(() => {
+    const qty = product.quantity;
+    if (typeof qty === 'number' && qty > 0 && qty <= 5) return qty;
+    if (typeof qty === 'string') {
+      const n = parseInt(qty);
+      if (!isNaN(n) && n > 0 && n <= 5) return n;
+    }
+    return null;
+  }, [product.quantity]);
+
+  // "Хит" — дорогой товар (телефоны, ноутбуки)
+  const isHit = useCallback(() => {
+    const price = getProductPrice();
+    return price >= 150000;
+  }, [getProductPrice]);
+
   const handleClick = useCallback(() => {
     navigate(`/product/${product.article}`);
   }, [navigate, product.article]);
 
-  // Добавить в корзину
   const handleAddToCart = useCallback((e) => {
     e.stopPropagation();
     if (addedToCart || !isInStock()) return;
-
     addToCart({
       id: product.article,
       article: product.article,
@@ -57,16 +72,13 @@ const ProductCard = memo(({ product, index = 0 }) => {
       price: Math.round(getProductPrice() * 1.1),
       image: getProductImage(),
     });
-
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   }, [addedToCart, isInStock, addToCart, product, getProductPrice, getProductImage]);
 
-  // Купить сейчас — очищает корзину и переходит на checkout
   const handleBuyNow = useCallback((e) => {
     e.stopPropagation();
     if (!isInStock()) return;
-
     buyNow(
       {
         id: product.article,
@@ -80,10 +92,11 @@ const ProductCard = memo(({ product, index = 0 }) => {
     );
   }, [isInStock, buyNow, navigate, product, getProductPrice, getProductImage]);
 
-  const inStock      = isInStock();
+  const inStock     = isInStock();
+  const lowStock    = getLowStock();
   const currentPrice = getProductPrice();
-  const imageSrc     = getProductImage();
-  const productName  = product.name || product.full_name || 'Товар';
+  const imageSrc    = getProductImage();
+  const productName = product.name || product.full_name || 'Товар';
 
   return (
     <div className="product-card" onClick={handleClick}>
@@ -93,12 +106,21 @@ const ProductCard = memo(({ product, index = 0 }) => {
         {product.isnew === 1 && (
           <span className="product-badge new-badge">NEW</span>
         )}
-        <span className={`product-badge ${inStock ? 'stock-badge' : 'out-badge'}`}>
-          {inStock ? 'В наличии' : 'Нет'}
-        </span>
+        {isHit() && product.isnew !== 1 && (
+          <span className="product-badge hit-badge">ХИТ</span>
+        )}
+        {inStock ? (
+          lowStock ? (
+            <span className="product-badge low-badge">Осталось {lowStock} шт.</span>
+          ) : (
+            <span className="product-badge stock-badge">В наличии</span>
+          )
+        ) : (
+          <span className="product-badge out-badge">Нет</span>
+        )}
       </div>
 
-      {/* ── Изображение ── */}
+      {/* ── Изображение + hover-оверлей ── */}
       <div className="product-image-wrapper">
         {!imageLoaded && <div className="image-skeleton" aria-hidden="true" />}
 
@@ -125,18 +147,54 @@ const ProductCard = memo(({ product, index = 0 }) => {
             </svg>
           </div>
         )}
+
+        {/* Hover-оверлей — быстрые действия */}
+        <div className="card-overlay">
+          <button
+            className="overlay-btn overlay-cart"
+            onClick={handleAddToCart}
+            disabled={!inStock}
+            aria-label="В корзину"
+          >
+            {addedToCart ? (
+              <>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Добавлено
+              </>
+            ) : (
+              <>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="21" r="1"/>
+                  <circle cx="20" cy="21" r="1"/>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                В корзину
+              </>
+            )}
+          </button>
+          <button
+            className="overlay-btn overlay-buy"
+            onClick={handleBuyNow}
+            disabled={!inStock}
+            aria-label="Купить сейчас"
+          >
+            Купить сейчас
+          </button>
+        </div>
       </div>
 
       {/* ── Инфо ── */}
       <div className="product-info">
         {product.brand && <p className="product-brand">{product.brand}</p>}
-
         <h3 className="product-title" title={productName}>{productName}</h3>
 
         {/* ── Цена + кнопка корзины ── */}
         <div className="product-footer">
           <p className="product-price">{formatPrice(currentPrice)}</p>
-
           <button
             className={`add-to-cart-btn${addedToCart ? ' added' : ''}`}
             onClick={handleAddToCart}
@@ -159,7 +217,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
           </button>
         </div>
 
-        {/* ── Кнопка "Купить сейчас" ── */}
+        {/* ── Купить сейчас (десктоп — под футером) ── */}
         <button
           className="buy-now-btn"
           onClick={handleBuyNow}

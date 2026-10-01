@@ -14,187 +14,331 @@
   align-items: center;
 }
 
+.search-icon-left {
+  position: absolute;
+  left: 14px;
+  color: #555;
+  pointer-events: none;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
 .search-input {
   flex: 1;
-  padding: 12px 50px 12px 20px;
-  font-size: 0.9375rem;
-  color: #FFFFFF;
-  background-color: #1A1A1A;
-  border: 1px solid #333333;
-  border-radius: 24px;
+  padding: 11px 90px 11px 38px;
+  font-size: 0.9rem;
+  color: #fff;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
   outline: none;
-  transition: all 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
 }
 
-.search-input::placeholder {
-  color: #6A6A6A;
-}
+.search-input::placeholder { color: #555; }
 
 .search-input:focus {
-  border-color: #B8860B;
-  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.1);
+  border-color: rgba(184,134,11,0.5);
+  box-shadow: 0 0 0 3px rgba(184,134,11,0.08);
 }
 
-.search-button {
+/* Кнопка очистить */
+.search-clear {
   position: absolute;
-  right: 8px;
+  right: 48px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  background-color: #B8860B;
+  background: rgba(255,255,255,0.06);
   border: none;
-  border-radius: 50%;
-  color: #0A0A0A;
+  border-radius: 6px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.search-clear:hover { background: rgba(255,255,255,0.1); color: #aaa; }
+
+/* Кнопка поиска */
+.search-button {
+  position: absolute;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #B8860B, #DAA520);
+  border: none;
+  border-radius: 9px;
+  color: #080808;
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .search-button:hover {
-  background-color: #DAA520;
   transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(184,134,11,0.35);
 }
 
 /* ============================================
-   SEARCH DROPDOWN
+   DROPDOWN
    ============================================ */
 
 .search-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
-  max-height: 400px;
-  background-color: #1A1A1A;
-  border: 1px solid #333333;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: #141414;
+  border: 1px solid #252525;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
   overflow: hidden;
-  z-index: 1000;
+  z-index: 1100;
 }
 
-.search-loading,
-.search-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  text-align: center;
-  gap: 12px;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #333333;
-  border-top-color: #B8860B;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.search-loading p,
-.search-empty p {
-  color: #A0A0A0;
+.search-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #444;
+  padding: 12px 16px 6px;
   margin: 0;
 }
 
-/* ============================================
-   SEARCH SUGGESTIONS
-   ============================================ */
+/* ── Популярные теги ── */
+.search-popular { padding: 4px 16px 14px; }
 
+.popular-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.popular-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  color: #aaa;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.popular-tag svg { color: #B8860B; flex-shrink: 0; }
+
+.popular-tag:hover {
+  background: rgba(184,134,11,0.08);
+  border-color: rgba(184,134,11,0.3);
+  color: #DAA520;
+}
+
+/* ── Скелетоны ── */
+.search-skeletons { padding: 8px 0; }
+
+.suggestion-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.sk-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #1a1a1a 25%, #222 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  flex-shrink: 0;
+}
+
+.sk-lines { flex: 1; }
+
+.sk-line {
+  border-radius: 4px;
+  display: block;
+  background: linear-gradient(90deg, #1a1a1a 25%, #222 50%, #1a1a1a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Результаты ── */
 .search-suggestions {
-  max-height: 400px;
+  max-height: 320px;
   overflow-y: auto;
 }
+
+.search-suggestions::-webkit-scrollbar { width: 4px; }
+.search-suggestions::-webkit-scrollbar-track { background: transparent; }
+.search-suggestions::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 
 .search-suggestion-item {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 16px;
   background: none;
   border: none;
-  border-bottom: 1px solid #2A2A2A;
+  border-bottom: 1px solid #1e1e1e;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.2s;
+  transition: background 0.15s;
 }
 
-.search-suggestion-item:last-child {
-  border-bottom: none;
+.search-suggestion-item:last-child { border-bottom: none; }
+
+.search-suggestion-item:hover,
+.search-suggestion-item.active {
+  background: rgba(255,255,255,0.03);
 }
 
-.search-suggestion-item:hover {
-  background-color: #2A2A2A;
+.suggestion-img-wrap {
+  width: 44px;
+  height: 44px;
+  background: #0d0d0d;
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .suggestion-image {
-  width: 48px;
-  height: 48px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  background-color: #0D0D0D;
-  border-radius: 8px;
   padding: 4px;
-  flex-shrink: 0;
 }
 
-.suggestion-info {
-  flex: 1;
-  min-width: 0;
+.suggestion-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
 }
+
+.suggestion-info { flex: 1; min-width: 0; }
 
 .suggestion-brand {
-  font-size: 0.75rem;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: #B8860B;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .suggestion-name {
-  font-size: 0.875rem;
-  color: #FFFFFF;
-  margin: 4px 0;
+  font-size: 13px;
+  color: #ccc;
+  margin: 2px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Подсветка совпадения */
+.suggestion-highlight {
+  background: transparent;
+  color: #DAA520;
+  font-weight: 700;
+}
+
 .suggestion-price {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: #DAA520;
 }
 
+.suggestion-arrow {
+  color: #333;
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.search-suggestion-item:hover .suggestion-arrow,
+.search-suggestion-item.active .suggestion-arrow {
+  color: #B8860B;
+  transform: translateX(2px);
+}
+
+/* ── Показать все ── */
+.search-show-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(184,134,11,0.06);
+  border: none;
+  border-top: 1px solid #1e1e1e;
+  color: #B8860B;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.search-show-all:hover { background: rgba(184,134,11,0.1); color: #DAA520; }
+
+/* ── Пусто ── */
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 16px;
+  gap: 8px;
+  text-align: center;
+}
+
+.search-empty p {
+  color: #888;
+  font-size: 14px;
+  margin: 0;
+}
+
+.search-empty span {
+  color: #444;
+  font-size: 12px;
+}
+
 /* ============================================
-   RESPONSIVE
+   MOBILE
    ============================================ */
 
 @media (max-width: 768px) {
-  .search-bar {
-    max-width: 100%;
-  }
+  .search-bar { max-width: 100%; }
 
   .search-input {
-    padding: 10px 44px 10px 16px;
+    padding: 10px 80px 10px 36px;
     font-size: 0.875rem;
+    border-radius: 10px;
   }
 
-  .search-button {
-    width: 32px;
-    height: 32px;
-  }
+  .search-button { width: 30px; height: 30px; border-radius: 7px; }
+  .search-button svg { width: 15px; height: 15px; }
 
-  .search-button svg {
-    width: 16px;
-    height: 16px;
-  }
+  .search-clear { right: 44px; }
+
+  .search-dropdown { border-radius: 12px; }
 }

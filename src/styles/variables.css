@@ -1,45 +1,58 @@
 :root {
-  /* ── Фон ── */
-  --bg-primary:   #0a0a0a;
-  --bg-secondary: #111111;
-  --bg-elevated:  #1a1a1a;
-  --bg-hover:     #222222;
+  color-scheme: light;
 
-  /* ── Золото ── */
-  --gold:          #DAA520;
-  --gold-dark:     #B8860B;
-  --gold-light:    #F0C030;
-  --gold-pale:     rgba(218,165,32,0.12);
-  --gold-glow:     rgba(218,165,32,0.25);
-  --gold-gradient: linear-gradient(135deg, #B8860B 0%, #DAA520 100%);
+  /* ── Фон ── */
+  --bg-primary:   #F6F8FA;   /* фон страницы */
+  --bg-secondary: #FFFFFF;   /* карточки, шапка */
+  --bg-elevated:  #F0F3F6;   /* поля ввода, ghost-hover */
+  --bg-hover:     #E8EDF1;
+  --surface:      #FFFFFF;
+
+  /* ── Основной цвет ──
+     Имена --gold-* оставлены, чтобы не переписывать компоненты.
+     Теперь это глубокий сланцево-синий, а не золото. */
+  --gold:          #315A72;
+  --gold-dark:     #26485C;  /* hover */
+  --gold-light:    #3F7391;  /* hover ссылок: светлее, но читаемо на белом */
+  --gold-pale:     #E3F2F0;  /* выбранный фильтр, мягкие подложки */
+  --gold-glow:     rgba(49, 90, 114, 0.18);
+  --gold-gradient: linear-gradient(135deg, #26485C 0%, #315A72 100%);
+
+  /* ── Акцент (мятный) ──
+     Для рамок при наведении, индикаторов, фонов.
+     Не использовать как цвет текста на белом: контраст слабый. */
+  --accent:        #4FA7A0;
+  --accent-light:  #E3F2F0;
+  --accent-glow:   rgba(79, 167, 160, 0.22);
 
   /* ── Семантические ── */
   --primary:       var(--gold);
   --primary-dark:  var(--gold-dark);
+  --primary-hover: var(--gold-dark);
   --primary-light: var(--gold-light);
 
   /* ── Текст ── */
-  --text-primary:   #E8E8E8;
-  --text-secondary: #A0A0A0;
-  --text-muted:     #555555;
-  --text-inverse:   #0a0a0a;
+  --text-primary:   #1F2933;
+  --text-secondary: #687580;
+  --text-muted:     #8A97A1;
+  --text-inverse:   #FFFFFF;  /* текст на основном цвете */
 
   /* ── Границы ── */
-  --border:        #1e1e1e;
-  --border-light:  rgba(255,255,255,0.06);
-  --border-medium: #2a2a2a;
-  --border-gold:   rgba(218,165,32,0.3);
+  --border:        #DDE4E8;
+  --border-light:  rgba(31, 41, 51, 0.06);
+  --border-medium: #CDD6DC;
+  --border-gold:   #4FA7A0;   /* рамка карточки при наведении */
 
   /* ── Статусы ── */
-  --success: #10B981;
-  --error:   #EF4444;
-  --warning: #F59E0B;
+  --success: #4F8A68;
+  --error:   #C76565;
+  --warning: #D69A3A;
 
-  /* ── Тени ── */
-  --shadow-sm:   0 2px 8px rgba(0,0,0,0.4);
-  --shadow-md:   0 4px 16px rgba(0,0,0,0.5);
-  --shadow-lg:   0 8px 32px rgba(0,0,0,0.6);
-  --shadow-glow: 0 0 20px var(--gold-glow);
+  /* ── Тени (мягкие, под светлую тему) ── */
+  --shadow-sm:   0 1px 2px rgba(31, 41, 51, 0.06), 0 1px 3px rgba(31, 41, 51, 0.04);
+  --shadow-md:   0 4px 12px rgba(31, 41, 51, 0.08), 0 2px 4px rgba(31, 41, 51, 0.04);
+  --shadow-lg:   0 12px 32px rgba(31, 41, 51, 0.12), 0 4px 8px rgba(31, 41, 51, 0.04);
+  --shadow-glow: 0 6px 20px var(--gold-glow);
 
   /* ── Шрифты ── */
   --font-display: 'Playfair Display', 'Cormorant Garamond', serif;
@@ -56,10 +69,10 @@
   --text-4xl:  48px;
 
   /* ── Скругления ── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
   --radius-full: 9999px;
 
   /* ── Отступы ── */
@@ -75,10 +88,20 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
-  /* ── Переходы ── */
-  --transition-fast: 150ms cubic-bezier(0.4,0,0.2,1);
-  --transition-base: 250ms cubic-bezier(0.4,0,0.2,1);
-  --transition-slow: 400ms cubic-bezier(0.4,0,0.2,1);
+  /* ── Анимация: длительности и кривые ── */
+  --duration-fast: 180ms;
+  --duration-base: 320ms;
+  --duration-slow: 560ms;
+
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);   /* быстрый старт, мягкая остановка */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1); /* лёгкий "пружинистый" отскок */
+
+  /* Старые имена оставлены (длительность + кривая вместе).
+     Нельзя дописывать после них ещё одну кривую в animation: shorthand. */
+  --transition-fast: var(--duration-fast) var(--ease-out);
+  --transition-base: var(--duration-base) var(--ease-out);
+  --transition-slow: var(--duration-slow) var(--ease-out);
 
   /* ── Z-index ── */
   --z-dropdown:       1000;
