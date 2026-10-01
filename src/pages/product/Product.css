@@ -27,7 +27,7 @@
   border: 1px solid rgba(49, 90, 114, 0.3);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(31, 41, 51, 0.2);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--text-primary);
   max-width: 90vw;
@@ -124,7 +124,7 @@
   bottom: 1.5rem;
   left: 50%;
   transform: translateX(-50%);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--text-secondary);
 }
@@ -138,7 +138,7 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 2rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
 }
 
@@ -280,7 +280,7 @@
 }
 
 .product-brand {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--gold-dark);
@@ -296,7 +296,7 @@
 }
 
 .product-title {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-display);
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 700;
   color: var(--text-primary);
@@ -335,7 +335,7 @@
 }
 
 .product-article {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   color: var(--text-muted);
   margin: 0;
@@ -349,7 +349,7 @@
 }
 
 .product-price {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-display);
   font-size: 2.25rem;
   font-weight: 700;
   color: var(--gold);
@@ -357,21 +357,21 @@
 }
 
 .product-price-old {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 1rem;
   color: var(--text-muted);
   text-decoration: line-through;
 }
 
 /* Наличие */
-.product-stock { font-family: 'DM Sans', sans-serif; font-size: 0.9375rem; }
+.product-stock { font-family: var(--font-body); font-size: 0.9375rem; }
 .in-stock  { color: var(--success); font-weight: 500; }
 .out-of-stock { color: var(--error); font-weight: 500; }
 
 /* Описание */
 .product-description h3,
 .product-specs h3 {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -379,7 +379,7 @@
 }
 
 .product-description p {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--text-secondary);
   line-height: 1.7;
@@ -398,7 +398,7 @@
 }
 
 .spec-item {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--text-muted);
   padding: 0.3rem 0;
@@ -412,7 +412,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--text-secondary);
 }
@@ -469,7 +469,7 @@
   gap: 0.5rem;
   padding: 0.875rem 1.5rem;
   border-radius: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
@@ -528,7 +528,7 @@
   display: flex;
   align-items: center;
   gap: 0.875rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
 }
 
 .feature svg { color: var(--gold-dark); flex-shrink: 0; }
@@ -558,7 +558,7 @@
   min-height: 60vh;
   gap: 1rem;
   color: var(--text-muted);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
 }
 
 .loader {
@@ -580,11 +580,11 @@
   min-height: 60vh;
   text-align: center;
   gap: 1rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
 }
 
 .error-icon { font-size: 3rem; }
-.product-error h2 { font-family: 'Cormorant Garamond', serif; font-size: 2rem; color: var(--text-primary); }
+.product-error h2 { font-family: var(--font-display); font-size: 2rem; color: var(--text-primary); }
 .product-error p { color: var(--text-muted); }
 
 /* ============================================
@@ -688,7 +688,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   padding: 0.625rem 1rem;
   border-bottom: 1px solid rgba(31, 41, 51, 0.04);

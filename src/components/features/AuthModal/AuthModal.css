@@ -64,7 +64,7 @@
 }
 
 .auth-logo-text {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-display);
   font-size: 2rem;
   font-weight: 700;
   background: linear-gradient(135deg, var(--gold-dark), var(--gold));
@@ -89,7 +89,7 @@
   background: transparent;
   border: none;
   border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-muted);
@@ -109,7 +109,7 @@
   border: 1px solid rgba(199, 101, 101, 0.25);
   border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--error);
   margin-bottom: 1rem;
@@ -120,7 +120,7 @@
   border: 1px solid rgba(79, 138, 104, 0.25);
   border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--success);
   margin-bottom: 1rem;
@@ -140,7 +140,7 @@
 }
 
 .auth-field label {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -152,7 +152,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--text-primary);
   outline: none;
@@ -174,7 +174,7 @@
 }
 
 .auth-hint {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   color: var(--text-muted);
   margin: -0.25rem 0;
@@ -186,7 +186,7 @@
   background: linear-gradient(135deg, var(--gold-dark), var(--gold));
   border: none;
   border-radius: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-inverse);
@@ -214,7 +214,7 @@
   padding: 0.625rem;
   background: transparent;
   border: none;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   color: var(--text-muted);
   cursor: pointer;
@@ -256,7 +256,7 @@
 }
 
 .auth-divider span {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
@@ -268,7 +268,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-medium);
   border-radius: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 500;
   color: var(--text-primary);

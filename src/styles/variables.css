@@ -55,8 +55,8 @@
   --shadow-glow: 0 6px 20px var(--gold-glow);
 
   /* ── Шрифты ── */
-  --font-display: 'Playfair Display', 'Cormorant Garamond', serif;
-  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+--font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
+--font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ── Размеры ── */
   --text-xs:   12px;
