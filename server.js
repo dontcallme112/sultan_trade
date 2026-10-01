@@ -40,6 +40,21 @@ const isInStock = p => {
   return !Number.isNaN(n) && n > 0;
 };
 
+// Что НЕ показываем в списках: нет в наличии, нет названия, нет фото, цена «по запросу» или цена-заглушка.
+// Al-Style ставит у снятых позиций и запчастей цену 9 999 999 — такие товары продать нельзя.
+// SHOW_ON_REQUEST=true на Railway вернёт товары «по запросу» в список.
+const SHOW_ON_REQUEST = process.env.SHOW_ON_REQUEST === 'true';
+const PLACEHOLDER_PRICE = 9000000;
+const isListable = p => {
+  if (!p?.article || !(p.name || p.full_name)) return false;
+  if (!isInStock(p)) return false;
+  const d = dealerPrice(p);
+  if (!SHOW_ON_REQUEST && d <= 1) return false;
+  if (d >= PLACEHOLDER_PRICE) return false;
+  const hasImage = (Array.isArray(p.images) && p.images.length > 0) || !!p.image;
+  return hasImage;
+};
+
 if (!ALSTYLE_TOKEN) { console.error('ALSTYLE_ACCESS_TOKEN не найден!'); process.exit(1); }
 
 const supabaseAdmin = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
@@ -283,16 +298,10 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
     const {limit=12,offset=0,minPrice,maxPrice,brand,onlyNew,search,sortBy}=req.query;
     const cat = parseCategoryParam(req.query.category);
     let products;
-    if (onlyNew==='true'&&!cat&&supabaseAdmin&&!search&&(!sortBy||sortBy==='smart')&&!minPrice&&!maxPrice&&!brand) {
-      try {
-        const start=Number(offset);
-        const {data,error,count}=await supabaseAdmin.from('products').select('*',{count:'exact'}).eq('isnew',1).neq('quantity','0').order('price',{ascending:false}).range(start,start+Number(limit)-1);
-        if (!error) { const els=(data||[]).map(p=>normalizePrice({article:p.article,name:p.name,brand:p.brand,price1:p.price1,price2:p.price2,price:p.price,isnew:p.isnew,quantity:p.quantity,images:p.image_url?[p.image_url]:[],image:p.image_url})); return res.set('Cache-Control','public, max-age=60').json({elements:els,pagination:{totalCount:count,total:count,offset:start,limit:Number(limit),hasMore:start+els.length<count}}); }
-      } catch(e){console.warn('⚠️ PG onlyNew fallback:',e.message);}
-    }
+    // «Новинки» берутся из общего кеша товаров (loadAllProductsForSearch) и проходят те же фильтры, что и остальные списки
     if (onlyNew==='true'&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
     else { const data=await loadProducts(cat).catch(()=>null); if(!data)return res.status(502).json({error:'Не удалось загрузить товары',elements:[],pagination:{totalCount:0,hasMore:false}}); products=data.elements||[]; }
-    products = products.map(normalizePrice).filter(isInStock); // везде дилерская цена, только товары в наличии
+    products = products.map(normalizePrice).filter(isListable); // везде дилерская цена; только товары в наличии, с фото и реальной ценой
     if (minPrice||maxPrice) products=products.filter(p=>{const pr=p.price2||p.price1||0;return(!minPrice||pr>=+minPrice)&&(!maxPrice||pr<=+maxPrice);});
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
@@ -321,7 +330,8 @@ app.get('/api/product/:article', async (req,res) => {
     const key=`product_${req.params.article}`;
     const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(normalizePrice(cached));
     const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:req.params.article,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
-    res.json(product ? normalizePrice(product) : product);
+    if (!product || (!product.article && !product.name)) return res.status(404).json({ error: 'Товар не найден' });
+    res.json(normalizePrice(product));
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -339,8 +349,8 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
     // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
     const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
     if (q.length < 2) return res.json([]);
-    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
-    const products=(await loadAllProductsForSearch().catch(()=>[])).filter(isInStock);
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})).filter(isListable));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    const products=(await loadAllProductsForSearch().catch(()=>[])).filter(isListable);
     const s=q.toLowerCase();
     const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>normalizePrice(p));
     console.log(`🔍 RAM "${q}": ${results.length} результатов`); res.json(results);
@@ -397,33 +407,84 @@ app.post('/api/alstyle-order', rateLimit({windowMs:60000,max:30,message:'Под�
   } catch(e){console.error('❌ al-style order:',e.response?.data||e.message);res.status(e.status||500).json({error:e.response?.data?.message||e.message});}
 });
 
+// ─── Данные покупателя: обязательны для любого заказа ────────────────
+const cleanText = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const NAME_RE = /^\p{L}[\p{L}'’.\-]+(?:\s+\p{L}[\p{L}'’.\-]+)+$/u;   // минимум два слова: фамилия и имя
+
+function normalizePhone(v) {
+  const raw = String(v ?? '').trim();
+  let d = raw.replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1);              // 8 701 ... -> 7 701 ...
+  if (d.length === 10) d = '7' + d;                                       // 701 123 45 67 -> 7 701 ...
+  if (/^7\d{10}$/.test(d)) return '+' + d;                                // Казахстан / Россия
+  if (raw.startsWith('+') && d.length >= 10 && d.length <= 15) return '+' + d;   // другая страна
+  return null;
+}
+
+function validateCustomer(body) {
+  const customer_name = cleanText(body.customer_name, 100);
+  const phone = normalizePhone(body.phone);
+  const address_text = cleanText(body.address_text, 300);
+  const fields = {};
+  if (customer_name.length < 5 || !NAME_RE.test(customer_name)) fields.customer_name = 'Укажите полное имя: фамилию и имя';
+  if (!phone) fields.phone = 'Укажите номер телефона, например +7 701 123 45 67';
+  if (address_text.length < 10 || address_text.split(' ').length < 2) fields.address_text = 'Укажите полный адрес доставки: город, улица, дом';
+  return { customer_name, phone, address_text, fields, ok: Object.keys(fields).length === 0 };
+}
+
+// Заказ возможен только из аккаунта (requireAuth) и только с именем, телефоном и адресом
 app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (req,res) => {
   try {
-    const { items, address_id, address_text, comment } = req.body || {};
+    const { items, address_id, comment } = req.body || {};
+    const customer = validateCustomer(req.body || {});
+    if (!customer.ok) return res.status(400).json({ error: 'Заполните обязательные поля', fields: customer.fields });
     const clean = normalizeItems(items);
     if (!clean) return res.status(400).json({ error: 'Некорректные items' });
 
     // цены и названия берём из нашей базы, а не от клиента
     const articles = [...new Set(clean.map(i => i.article))];
-    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price,price1').in('article', articles);
+    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price,price1,quantity').in('article', articles);
     if (pe) return res.status(500).json({ error: pe.message });
     const byArt = new Map((prods || []).map(p => [String(p.article), p]));
     const missing = articles.filter(a => !byArt.has(a));
     if (missing.length) return res.status(400).json({ error: 'Товары не найдены', missing });
     const noPrice = articles.filter(a => dealerPrice(byArt.get(a)) <= 1);
     if (noPrice.length) return res.status(400).json({ error: 'Цена по запросу, оформить через менеджера', articles: noPrice });
+    // нельзя заказать больше, чем есть на складе (">10" и подобное считаем "много" и не ограничиваем)
+    const stockNumber = q => {
+      if (q === undefined || q === null) return Infinity;
+      if (typeof q === 'number') return q;
+      const str = String(q).trim();
+      if (!str) return 0;
+      if (str.startsWith('>')) return Infinity;
+      const n = parseInt(str, 10);
+      return Number.isNaN(n) ? 0 : n;
+    };
+    const short = clean.map(i => ({ i, p: byArt.get(i.article), have: stockNumber(byArt.get(i.article)?.quantity) })).filter(x => x.i.quantity > x.have);
+    if (short.length) {
+      const list = short.map(x => `${x.p.name} (в наличии ${x.have} шт.)`).join('; ');
+      return res.status(400).json({ error: `Недостаточно товара в наличии: ${list}. Уменьшите количество в корзине.`, articles: short.map(x => x.i.article) });
+    }
     const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, price: applyMarkup(dealerPrice(p)) }; });
     const total_price = priced.reduce((s, i) => s + i.price * i.quantity, 0);
 
-    const { data, error } = await supabaseAdmin.from('orders').insert({
+    const base = {
       user_id: req.user.id, items: priced, total_price,
-      address_id: address_id || null, address_text: address_text ? String(address_text).slice(0, 500) : null,
-      comment: comment ? String(comment).slice(0, 1000) : null, status: 'pending',
-    }).select().single();
+      address_id: address_id || null, address_text: customer.address_text,
+      comment: comment ? cleanText(comment, 1000) : null, status: 'pending',
+    };
+    let { data, error } = await supabaseAdmin.from('orders')
+      .insert({ ...base, customer_name: customer.customer_name, phone: customer.phone }).select().single();
+    // если колонок customer_name / phone в таблице ещё нет, сохраняем контакты в комментарии, чтобы заказ не потерялся
+    if (error && /customer_name|phone|column/i.test(error.message)) {
+      const contact = `Имя: ${customer.customer_name} | Тел: ${customer.phone}`;
+      ({ data, error } = await supabaseAdmin.from('orders')
+        .insert({ ...base, comment: [contact, base.comment].filter(Boolean).join(' | ') }).select().single());
+    }
     if (error) return res.status(500).json({ error: error.message });
 
     const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
-    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(req.user.user_metadata?.full_name || req.user.email || 'Неизвестно')}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(address_text || 'Не указан')}\n${comment ? `💬 ${esc(comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
+    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
     sendTelegramNotification(msg).catch(()=>{});
     res.json({ success: true, order: data });
   } catch(e){res.status(500).json({error:e.message});}
@@ -452,21 +513,9 @@ app.delete('/api/favorites/:article', requireAuth, async (req,res) => {
 });
 
 // Гостевой эндпоинт (без auth), поэтому: жёсткий лимит, обрезка длины и экранирование HTML
-app.post('/api/notify-order', rateLimit({windowMs:60000,max:10}), async (req,res) => {
-  try {
-    const{items,total_price,address_text,comment,orderId}=req.body||{};
-    const list = Array.isArray(items) ? items.slice(0, 50) : [];
-    const orderItems=list.map(i=>`• ${esc(String(i?.name||'Товар').slice(0,120))} × ${Math.floor(Number(i?.quantity))||1} — ${(((Number(i?.price)||0))*(Math.floor(Number(i?.quantity))||1)).toLocaleString('ru-RU')} ₸`).join('\n');
-    const nameMatch=comment?.match?.(/Имя:\s*([^|]+)/);
-    const phoneMatch=comment?.match?.(/Тел:\s*([^|]+)/);
-    const name=nameMatch?nameMatch[1].trim().slice(0,80):'Гость';
-    const phone=phoneMatch?phoneMatch[1].trim().slice(0,30):'Не указан';
-    const oid = orderId ? String(orderId).slice(-8) : 'N/A';
-    const msg=`🛒 <b>Новый заказ #${esc(oid)}</b>\n\n👤 ${esc(name)}\n📱 ${esc(phone)}\n📍 ${esc(String(address_text||'Не указан').slice(0,300))}\n\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${(Number(total_price)||0).toLocaleString('ru-RU')} ₸</b>`;
-    await sendTelegramNotification(msg);
-    res.json({success:true});
-  } catch(e){console.error('❌ notify-order:',e.message);res.status(500).json({error:e.message});}
-});
+// Гостевых заказов больше нет: уведомление в Telegram отправляет сам /api/orders.
+// Эндпоинт оставлен, чтобы старый код фронта не падал, но без входа в аккаунт он недоступен.
+app.post('/api/notify-order', rateLimit({windowMs:60000,max:30}), requireAuth, (req,res) => res.json({ success: true, skipped: true }));
 
 // ─── Синхронизация каталога ──────────────────────────────────
 let syncRunning = false;
