@@ -1,12 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext.jsx';
+import { useAuth } from '../../context/AuthContext';
 import { formatNumber } from '../../utils/priceUtils.js';
+import { openAuthModal } from '../../utils/authModal';
 import Price from '../../components/common/Price/price.jsx';
 import './Cart.css';
 
 const Cart = () => {
   const { cartItems, removeFromCart, updateQuantity, getCartTotal, clearCart } = useCart();
+  const { user } = useAuth();
 
   const subtotal = getCartTotal();
   const total = subtotal;
@@ -52,7 +55,7 @@ const Cart = () => {
                 </div>
 
                 <div className="item-price">
-                  {/* Цена БЕЗ наценки — как в каталоге */}
+                  {/* Цена в корзине уже с наценкой (как в каталоге) */}
                   <Price value={item.price * item.quantity} size="medium" showCurrency={true} />
                   <div className="price-unit">{formatNumber(item.price)} ₸ за шт.</div>
                 </div>
@@ -91,12 +94,26 @@ const Cart = () => {
               <span>Итого</span>
               <span className="total-price">{formatNumber(total)} ₸</span>
             </div>
-            <Link to="/checkout" className="checkout-btn">
-              Оформить заказ
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-              </svg>
-            </Link>
+
+            {user ? (
+              <Link to="/checkout" className="checkout-btn">
+                Оформить заказ
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </Link>
+            ) : (
+              <>
+                <button type="button" className="checkout-btn" onClick={openAuthModal}>
+                  Войти и оформить заказ
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </button>
+                <p className="cart-auth-note">Заказ можно оформить только после входа в аккаунт. Корзина сохранится.</p>
+              </>
+            )}
+
             <Link to="/catalog" className="continue-shopping">← Продолжить покупки</Link>
             <div className="trust-badges">
               <div className="badge-item">
