@@ -1,100 +1,120 @@
-/* ─── ProductList page ───────────────────────────────────────── */
+/* ─── Страница списка товаров (ProductGrid) ────────────────────
+   Колонки: 2 на телефоне, 3 на планшете, 4 на ПК.
+   Отступ сверху нужен, потому что шапка сайта зафиксирована. */
 .pl-page {
+  --pl-top: 104px;                  /* высота шапки сайта + запас: подгони, если не совпадает */
   min-height: 100vh;
   background: var(--bg-primary);
-  padding-bottom: 80px;
+  padding: var(--pl-top) var(--space-6) 80px;
+}
+@media (max-width: 768px) {
+  .pl-page { --pl-top: 84px; padding-inline: var(--space-3); }
 }
 
-/* Header */
-.pl-header {
+.pl-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ── Заголовок ── */
+.pl-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px 12px;
-  background: var(--bg-primary);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  margin-bottom: var(--space-5);
 }
 
 .pl-back {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-medium);
-  border-radius: 10px;
-  width: 36px;
-  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  color: var(--text-primary);
   flex-shrink: 0;
-  transition: background .14s;
-}
-.pl-back:active { background: var(--bg-hover); }
-
-.pl-title {
-  flex: 1;
-  font-size: 17px;
-  font-weight: 600;
+  width: 40px;
+  height: 40px;
   color: var(--text-primary);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pl-count {
-  background: var(--bg-elevated);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-medium);
-  color: var(--text-secondary);
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 20px;
-  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    border-color     var(--duration-fast) var(--ease-out),
+    color            var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-out);
+}
+.pl-back:hover { color: var(--gold); border-color: var(--gold); transform: translateX(-2px); }
+.pl-back:active { transform: scale(0.94); }
+
+.pl-heading-text { min-width: 0; }
+.pl-title {
+  margin: 0;
+  font-size: clamp(1.375rem, 2.5vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.pl-count {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
-/* Search */
-.pl-search-wrap {
-  padding: 10px 16px 6px;
+/* ── Панель: поиск + сортировка ── */
+.pl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-6);
 }
+
 .pl-search-box {
   display: flex;
   align-items: center;
-  gap: 9px;
-  background: var(--bg-elevated);
+  gap: 10px;
+  flex: 1 1 280px;
+  max-width: 440px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
   border: 1.5px solid var(--border-medium);
-  border-radius: 11px;
-  padding: 9px 13px;
-  transition: border-color .16s;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    box-shadow   var(--duration-base) var(--ease-out);
 }
-.pl-search-box:focus-within { border-color: var(--gold-light); }
+.pl-search-box:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
 .pl-search-box svg { color: var(--text-muted); flex-shrink: 0; }
 .pl-search-input {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;
-  font-size: 14px;
+  font: inherit;
+  font-size: 15px;
   color: var(--text-primary);
 }
 .pl-search-input::placeholder { color: var(--text-muted); }
 .pl-search-clear {
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
+  padding: 0 4px;
+  font-size: 20px;
   line-height: 1;
-  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
 }
+.pl-search-clear:hover { color: var(--text-primary); }
 
-/* Sort chips */
+/* Сортировка: пилюли, на телефоне прокручиваются по горизонтали */
 .pl-sort-row {
   display: flex;
-  gap: 7px;
-  padding: 8px 16px 12px;
+  gap: 8px;
+  margin-left: auto;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -103,124 +123,145 @@
 
 .pl-sort-btn {
   flex-shrink: 0;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1.5px solid var(--border-medium);
-  background: var(--bg-secondary);
-  color: var(--text-muted);
+  padding: 8px 16px;
+  font: inherit;
   font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all .15s;
+  font-weight: 600;
   white-space: nowrap;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out),
+    color            var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-out);
 }
-.pl-sort-btn:active { opacity: .75; }
+.pl-sort-btn:hover:not(.active) { color: var(--gold); border-color: var(--gold); }
+.pl-sort-btn:active { transform: scale(0.96); }
 .pl-sort-btn.active {
-  background: var(--gold-light);
-  border-color: var(--gold-light);
   color: var(--text-inverse);
-  font-weight: 700;
+  background: var(--gold);
+  border-color: var(--gold);
 }
 
-/* Products grid — 3 columns on mobile */
+@media (max-width: 640px) {
+  .pl-search-box { flex-basis: 100%; max-width: none; }
+  .pl-search-input { font-size: 16px; }   /* iOS не приближает страницу при фокусе */
+  .pl-sort-row { margin-left: 0; width: 100%; padding-bottom: 2px; }
+}
+
+/* ── Сетка ── */
 .pl-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 0 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  transition: opacity var(--duration-base) var(--ease-out);
 }
+@media (min-width: 640px)  { .pl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 1024px) { .pl-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; } }
 
-@media (min-width: 600px) {
-  .pl-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 0 16px; }
-}
-@media (min-width: 768px) {
-  .pl-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 0 20px; }
-}
-@media (min-width: 1100px) {
-  .pl-grid { grid-template-columns: repeat(6, 1fr); }
-}
+/* При смене сортировки/поиска старые карточки притухают, пока грузятся новые */
+.pl-grid.is-refreshing { opacity: 0.45; pointer-events: none; }
 
-/* Load more */
+/* ── Загрузить ещё ── */
 .pl-load-more {
-  padding: 24px 16px 0;
+  padding-top: var(--space-8);
   text-align: center;
 }
 .pl-load-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 12px 28px;
-  border-radius: 12px;
-  border: 1.5px solid var(--border-medium);
-  background: var(--bg-secondary);
-  color: var(--gold-light);
-  font-size: 13px;
+  min-width: 220px;
+  height: 46px;
+  padding: 0 28px;
+  font: inherit;
+  font-size: 14px;
   font-weight: 600;
+  color: var(--gold);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all .15s;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out),
+    transform        var(--duration-fast) var(--ease-out);
 }
-.pl-load-btn:hover { background: var(--bg-elevated); }
-.pl-load-btn:disabled { opacity: .5; cursor: default; }
+.pl-load-btn:hover:not(:disabled) { background: var(--gold-pale); border-color: var(--gold); }
+.pl-load-btn:active:not(:disabled) { transform: scale(0.98); }
+.pl-load-btn:disabled { opacity: 0.6; cursor: default; }
 
 .pl-spinner {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border: 2px solid var(--border-medium);
-  border-top-color: var(--gold-light);
+  border-top-color: var(--gold);
   border-radius: 50%;
-  animation: spin .7s linear infinite;
+  animation: rotate 0.7s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .pl-end {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 20px;
   margin: 0;
+  padding: var(--space-8) 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
-/* Empty */
+/* ── Пусто ── */
 .pl-empty {
+  padding: 72px 24px;
   text-align: center;
-  padding: 64px 24px;
 }
-.pl-empty-icon { font-size: 44px; margin-bottom: 12px; }
+.pl-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto var(--space-4);
+  font-size: 32px;
+  background: var(--accent-light);
+  border-radius: 50%;
+}
 .pl-empty-title {
+  margin: 0 0 6px;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-muted);
-  margin: 0 0 6px;
+  color: var(--text-primary);
 }
 .pl-empty-sub {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 20px;
+  margin: 0 0 var(--space-5);
+  font-size: 14px;
+  color: var(--text-secondary);
 }
-.pl-empty-btn {
+.pl-empty-btn,
+.pl-error button {
+  padding: 10px 20px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--gold);
   background: none;
   border: 1.5px solid var(--border-medium);
-  color: var(--gold-light);
-  padding: 10px 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color     var(--duration-fast) var(--ease-out);
 }
+.pl-empty-btn:hover,
+.pl-error button:hover { background: var(--gold-pale); border-color: var(--gold); }
 
-/* Error */
+/* ── Ошибка ── */
 .pl-error {
+  padding: 48px 24px;
   text-align: center;
-  padding: 40px 24px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
-.pl-error p { margin-bottom: 12px; }
-.pl-error button {
-  background: none;
-  border: 1px solid var(--border-medium);
-  color: var(--gold-light);
-  padding: 8px 18px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-}
+.pl-error p { margin-bottom: var(--space-3); }
