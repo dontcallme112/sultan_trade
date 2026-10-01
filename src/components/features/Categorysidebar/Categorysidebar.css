@@ -3,8 +3,8 @@
    ============================================ */
 
 .category-sidebar {
-  background: #111;
-  border: 1px solid #1E1E1E;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1.25rem;
   height: fit-content;
@@ -16,20 +16,20 @@
   align-items: center;
   margin-bottom: 1rem;
   padding-bottom: 0.875rem;
-  border-bottom: 1px solid #1E1E1E;
+  border-bottom: 1px solid var(--border);
 }
 
 .sidebar-header h3 {
   font-size: 1rem;
   font-weight: 700;
-  color: #FFF;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .reset-btn {
   background: none;
-  border: 1px solid rgba(218,165,32,0.4);
-  color: #DAA520;
+  border: 1px solid rgba(49, 90, 114, 0.4);
+  color: var(--gold);
   padding: 0.3rem 0.75rem;
   border-radius: 6px;
   font-size: 0.8125rem;
@@ -38,19 +38,19 @@
   white-space: nowrap;
 }
 
-.reset-btn:hover { background: #DAA520; color: #0A0A0A; }
+.reset-btn:hover { background: var(--gold); color: var(--text-inverse); }
 
 .sidebar-loading {
   display: flex; flex-direction: column;
   align-items: center; gap: 0.75rem;
-  padding: 2rem 1rem; color: #555;
+  padding: 2rem 1rem; color: var(--text-muted);
   font-size: 0.875rem;
 }
 
 .loader-small {
   width: 28px; height: 28px;
-  border: 3px solid #2A2A2A;
-  border-top-color: #DAA520;
+  border: 3px solid var(--border-medium);
+  border-top-color: var(--gold);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -79,17 +79,17 @@
 }
 
 .category-item:hover {
-  background: #1A1A1A;
-  border-color: rgba(218,165,32,0.25);
+  background: var(--bg-elevated);
+  border-color: rgba(49, 90, 114, 0.25);
 }
 
 .category-item.active {
-  background: linear-gradient(135deg, #B8860B, #DAA520);
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
   border-color: transparent;
-  box-shadow: 0 2px 12px rgba(184,134,11,0.25);
+  box-shadow: 0 2px 12px rgba(49, 90, 114, 0.25);
 }
 
-.category-item.active .category-name { color: #0A0A0A; font-weight: 700; }
+.category-item.active .category-name { color: var(--text-inverse); font-weight: 700; }
 .category-item.active .category-count { color: rgba(10,10,10,0.6); }
 
 .category-icon {
@@ -109,7 +109,7 @@
 .category-name {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #CCC;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -118,7 +118,7 @@
 
 .category-count {
   font-size: 0.75rem;
-  color: #555;
+  color: var(--text-muted);
 }
 
 /* ============================================
@@ -154,7 +154,7 @@
     max-width: 104px;
     flex-shrink: 0;
     gap: 0.375rem;
-    border: 1px solid #1E1E1E;
+    border: 1px solid var(--border);
   }
 
   .category-item:hover { transform: none; }

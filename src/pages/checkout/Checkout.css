@@ -4,7 +4,7 @@
 
 .checkout-page {
   min-height: 100vh;
-  background: #0A0A0A;
+  background: var(--bg-primary);
   padding: calc(80px + 2rem) 0 3rem;
 }
 
@@ -18,7 +18,7 @@
   font-family: var(--font-display);
   font-size: 2rem;
   font-weight: 800;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin-bottom: 1.5rem;
 }
 
@@ -33,7 +33,7 @@
    ============================================ */
 
 .checkout-form-section {
-  background: #1A1A1A;
+  background: var(--bg-elevated);
   border-radius: 12px;
   padding: 1.5rem;
 }
@@ -41,7 +41,7 @@
 .form-section {
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #2A2A2A;
+  border-bottom: 1px solid var(--border-medium);
 }
 
 .form-section:last-of-type {
@@ -52,7 +52,7 @@
 .form-section-title {
   font-size: 1.125rem;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin-bottom: 1rem;
 }
 
@@ -63,7 +63,7 @@
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #CCC;
+  color: var(--text-primary);
   margin-bottom: 0.4rem;
 }
 
@@ -72,9 +72,9 @@
   width: 100%;
   padding: 0.75rem 1rem;
   font-size: 1rem;
-  color: #FFFFFF;
-  background: #0F0F0F;
-  border: 1px solid #2A2A2A;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
   outline: none;
   transition: border-color 0.2s;
@@ -82,7 +82,7 @@
 }
 
 .form-group input:focus,
-.form-group textarea:focus { border-color: #B8860B; }
+.form-group textarea:focus { border-color: var(--gold-dark); }
 
 .form-group textarea {
   resize: vertical;
@@ -108,31 +108,31 @@
   align-items: center;
   gap: 1rem;
   padding: 0.875rem 1rem;
-  background: #0F0F0F;
-  border: 2px solid #2A2A2A;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-medium);
   border-radius: 8px;
   transition: all 0.2s;
 }
 
 .payment-method input:checked + .payment-method-content {
-  border-color: #B8860B;
-  background: rgba(184, 134, 11, 0.08);
+  border-color: var(--gold-dark);
+  background: rgba(49, 90, 114, 0.08);
 }
 
 .payment-method:hover .payment-method-content {
-  border-color: rgba(184, 134, 11, 0.5);
+  border-color: rgba(49, 90, 114, 0.5);
 }
 
 .payment-method-icon {
   width: 44px; height: 44px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  color: #B8860B;
+  color: var(--gold-dark);
 }
 
 .payment-method-info h3 {
   font-size: 1rem; font-weight: 700;
-  color: #FFFFFF; margin: 0 0 0.2rem;
+  color: var(--text-primary); margin: 0 0 0.2rem;
 }
 
 .payment-method-info p {
@@ -144,16 +144,16 @@
 .btn-lg { padding: 1rem; font-size: 1rem; }
 
 .btn-primary {
-  background: linear-gradient(135deg, #B8860B, #DAA520);
-  color: #0A0A0A; border: none;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  color: var(--text-inverse); border: none;
   border-radius: 8px; font-weight: 700;
   cursor: pointer; transition: all 0.2s;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #DAA520, #F0C030);
+  background: linear-gradient(135deg, var(--gold), #F0C030);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(184, 134, 11, 0.3);
+  box-shadow: 0 6px 20px rgba(49, 90, 114, 0.3);
 }
 
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -166,7 +166,7 @@
   position: sticky;
   top: calc(80px + 1.5rem);
   height: fit-content;
-  background: #1A1A1A;
+  background: var(--bg-elevated);
   border-radius: 12px;
   padding: 1.5rem;
 }
@@ -178,16 +178,16 @@
   gap: 0.5rem;
   font-size: 1.375rem;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin-bottom: 1.25rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #2A2A2A;
+  border-bottom: 1px solid var(--border-medium);
 }
 
 .summary-count {
   font-size: 0.8125rem;
   font-weight: 400;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* ── Список товаров ── */
@@ -196,18 +196,18 @@
   max-height: 280px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #2A2A2A transparent;
+  scrollbar-color: var(--bg-hover) transparent;
 }
 
 .summary-items::-webkit-scrollbar { width: 4px; }
 .summary-items::-webkit-scrollbar-track { background: transparent; }
-.summary-items::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
+.summary-items::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 2px; }
 
 .summary-item {
   display: flex;
   gap: 0.75rem;
   padding: 0.875rem 0;
-  border-bottom: 1px solid #1A1A1A;
+  border-bottom: 1px solid var(--border);
   align-items: flex-start;
 }
 
@@ -237,14 +237,14 @@
 
 .summary-item-price-unit {
   font-size: 0.8125rem;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0 0 0.5rem;
 }
 
 .summary-item-total {
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #DAA520;
+  color: var(--gold);
   white-space: nowrap;
   padding-top: 2px;
 }
@@ -259,18 +259,18 @@
 .qty-btn {
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
-  background: #1A1A1A;
-  border: 1px solid #2A2A2A;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  color: #CCC; font-size: 1.125rem;
+  color: var(--text-primary); font-size: 1.125rem;
   cursor: pointer; transition: all 0.15s;
   line-height: 1; flex-shrink: 0;
 }
 
 .qty-btn:hover {
-  background: rgba(184,134,11,0.15);
-  border-color: rgba(184,134,11,0.4);
-  color: #DAA520;
+  background: rgba(49, 90, 114, 0.15);
+  border-color: rgba(49, 90, 114, 0.4);
+  color: var(--gold);
 }
 
 .qty-value {
@@ -278,16 +278,16 @@
   text-align: center;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #FFF;
+  color: var(--text-primary);
 }
 
 .qty-remove {
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   background: transparent;
-  border: 1px solid #2A2A2A;
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  color: #555; cursor: pointer;
+  color: var(--text-muted); cursor: pointer;
   transition: all 0.15s;
   margin-left: 0.25rem; flex-shrink: 0;
 }
@@ -295,13 +295,13 @@
 .qty-remove:hover {
   background: rgba(239,68,68,0.1);
   border-color: rgba(239,68,68,0.3);
-  color: #EF4444;
+  color: var(--error);
 }
 
 /* ── Итоги ── */
 .summary-totals {
   padding-top: 1rem;
-  border-top: 1px solid #2A2A2A;
+  border-top: 1px solid var(--border-medium);
 }
 
 .summary-row {
@@ -309,34 +309,34 @@
   justify-content: space-between;
   margin-bottom: 0.625rem;
   font-size: 0.9375rem;
-  color: #A0A0A0;
+  color: var(--text-secondary);
 }
 
 .summary-row.total {
   margin-top: 0.875rem;
   padding-top: 0.875rem;
-  border-top: 1px solid #2A2A2A;
+  border-top: 1px solid var(--border-medium);
   font-size: 1.125rem;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin-bottom: 0;
 }
 
-.summary-row .free { color: #10B981; font-weight: 500; }
+.summary-row .free { color: var(--success); font-weight: 500; }
 
 .continue-shopping-btn {
   width: 100%;
   margin-top: 1rem;
   padding: 0.625rem;
   background: transparent;
-  border: 1px solid #2A2A2A;
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
-  color: #666; font-size: 0.875rem;
+  color: var(--text-secondary); font-size: 0.875rem;
   cursor: pointer; transition: all 0.2s;
   text-align: center;
 }
 
-.continue-shopping-btn:hover { border-color: #444; color: #AAA; }
+.continue-shopping-btn:hover { border-color: var(--border-medium); color: var(--text-secondary); }
 
 /* ============================================
    EMPTY STATE
@@ -351,13 +351,13 @@
   text-align: center;
   gap: 1rem;
   padding: 2rem;
-  background: #1A1A1A;
+  background: var(--bg-elevated);
   border-radius: 12px;
 }
 
 .checkout-empty-icon { font-size: 3rem; }
-.checkout-empty h2 { color: #FFF; margin: 0; }
-.checkout-empty p  { color: #555; margin: 0; }
+.checkout-empty h2 { color: var(--text-primary); margin: 0; }
+.checkout-empty p  { color: var(--text-muted); margin: 0; }
 
 /* ============================================
    TABLET ≤1024px
@@ -445,20 +445,20 @@
   justify-content: center;
   background: #FF5733;
   border-radius: 10px;
-  color: #FFF;
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
 .kaspi-info-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #FFF;
+  color: var(--text-primary);
   margin: 0 0 0.25rem;
 }
 
 .kaspi-info-desc {
   font-size: 0.8125rem;
-  color: #888;
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.4;
 }

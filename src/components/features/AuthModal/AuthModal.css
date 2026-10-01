@@ -20,8 +20,8 @@
 
 .auth-modal {
   position: relative;
-  background: #0E0E0E;
-  border: 1px solid rgba(184, 134, 11, 0.2);
+  background: var(--bg-secondary);
+  border: 1px solid rgba(49, 90, 114, 0.2);
   border-radius: 20px;
   padding: 2.5rem 2rem;
   width: 100%;
@@ -45,15 +45,15 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1px solid #1E1E1E;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #555;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .auth-close:hover {
-  background: #1A1A1A;
+  background: var(--bg-elevated);
   color: #EEE;
 }
 
@@ -67,7 +67,7 @@
   font-family: 'Cormorant Garamond', serif;
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #B8860B, #DAA520);
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 0.1em;
@@ -76,7 +76,7 @@
 /* Tabs */
 .auth-tabs {
   display: flex;
-  background: #141414;
+  background: var(--bg-secondary);
   border-radius: 10px;
   padding: 4px;
   margin-bottom: 1.5rem;
@@ -92,15 +92,15 @@
   font-family: 'DM Sans', sans-serif;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #555;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
 
 .auth-tab.active {
-  background: #1E1E1E;
-  color: #DAA520;
+  background: var(--bg-elevated);
+  color: var(--gold);
 }
 
 /* Messages */
@@ -143,14 +143,14 @@
   font-family: 'DM Sans', sans-serif;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   letter-spacing: 0.03em;
 }
 
 .auth-field input {
   padding: 0.75rem 1rem;
-  background: #141414;
-  border: 1px solid #1E1E1E;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 10px;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9375rem;
@@ -159,10 +159,10 @@
   transition: border-color 0.2s;
 }
 
-.auth-field input::placeholder { color: #333; }
+.auth-field input::placeholder { color: var(--text-muted); }
 
 .auth-field input:focus {
-  border-color: rgba(184, 134, 11, 0.5);
+  border-color: rgba(49, 90, 114, 0.5);
   background: #161616;
 }
 
@@ -176,33 +176,33 @@
 .auth-hint {
   font-family: 'DM Sans', sans-serif;
   font-size: 0.8125rem;
-  color: #444;
+  color: var(--text-muted);
   margin: -0.25rem 0;
 }
 
 /* Buttons */
 .auth-btn-primary {
   padding: 0.875rem;
-  background: linear-gradient(135deg, #B8860B, #DAA520);
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
   border: none;
   border-radius: 10px;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #080808;
+  color: var(--text-inverse);
   cursor: pointer;
   transition: all 0.25s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  box-shadow: 0 4px 16px rgba(184, 134, 11, 0.2);
+  box-shadow: 0 4px 16px rgba(49, 90, 114, 0.2);
   margin-top: 0.25rem;
 }
 
 .auth-btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(184, 134, 11, 0.35);
+  box-shadow: 0 8px 24px rgba(49, 90, 114, 0.35);
 }
 
 .auth-btn-primary:disabled {
@@ -216,20 +216,20 @@
   border: none;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.875rem;
-  color: #555;
+  color: var(--text-muted);
   cursor: pointer;
   text-align: center;
   transition: color 0.2s;
 }
 
-.auth-btn-ghost:hover { color: #888; }
+.auth-btn-ghost:hover { color: var(--text-secondary); }
 
 /* Spinner */
 .auth-spinner {
   width: 18px;
   height: 18px;
   border: 2px solid rgba(0,0,0,0.3);
-  border-top-color: #080808;
+  border-top-color: var(--border);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   display: inline-block;
@@ -252,26 +252,26 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: #1E1E1E;
+  background: var(--bg-elevated);
 }
 
 .auth-divider span {
   font-family: 'DM Sans', sans-serif;
   font-size: 0.8125rem;
-  color: #333;
+  color: var(--text-muted);
 }
 
 /* Google Button */
 .auth-btn-google {
   width: 100%;
   padding: 0.8125rem;
-  background: #141414;
-  border: 1px solid #222;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
   border-radius: 10px;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: #CCC;
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -281,8 +281,8 @@
 }
 
 .auth-btn-google:hover:not(:disabled) {
-  background: #1A1A1A;
-  border-color: #333;
+  background: var(--bg-elevated);
+  border-color: var(--border-medium);
   color: #EEE;
 }
 

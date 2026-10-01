@@ -7,7 +7,7 @@
 
 .card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 40px rgba(31, 41, 51, 0.12);
   border-color: var(--accent-gold);
 }
 

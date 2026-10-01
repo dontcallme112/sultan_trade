@@ -12,8 +12,8 @@
     left: 0;
     right: 0;
     height: 60px;
-    background: #0d0d0d;
-    border-top: 1px solid #1e1e1e;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
     z-index: 1000;
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -26,7 +26,7 @@
     gap: 3px;
     flex: 1;
     padding: 6px 0;
-    color: #444;
+    color: var(--text-muted);
     text-decoration: none;
     transition: color .15s;
     position: relative;
@@ -39,11 +39,11 @@
   }
 
   .tab-item.active {
-    color: #d4a843;
+    color: var(--gold-light);
   }
 
   .tab-item.active svg {
-    stroke: #d4a843;
+    stroke: var(--gold-light);
   }
 
   /* Центральная кнопка — выделенная */
@@ -54,18 +54,18 @@
   .tab-center-btn {
     width: 44px;
     height: 44px;
-    background: linear-gradient(135deg, #B8860B, #DAA520);
+    background: linear-gradient(135deg, var(--gold-dark), var(--gold));
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-top: -18px;
-    box-shadow: 0 4px 16px rgba(184, 134, 11, 0.4);
+    box-shadow: 0 4px 16px rgba(49, 90, 114, 0.4);
     transition: transform .15s;
   }
 
   .tab-item-center svg {
-    stroke: #080808;
+    stroke: var(--text-inverse);
   }
 
   .tab-item-center.active .tab-center-btn {
@@ -88,8 +88,8 @@
     position: absolute;
     top: -6px;
     right: -8px;
-    background: #d4a843;
-    color: #080808;
+    background: var(--gold-light);
+    color: var(--text-inverse);
     font-size: 9px;
     font-weight: 800;
     min-width: 16px;

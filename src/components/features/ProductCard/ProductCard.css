@@ -1,14 +1,14 @@
 /* ── Card hover ── */
 .product-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(184,134,11,0.4);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(184,134,11,0.1);
+  border-color: rgba(49, 90, 114, 0.4);
+  box-shadow: 0 12px 32px rgba(31, 41, 51, 0.2), 0 0 0 1px rgba(49, 90, 114, 0.1);
 }
 
 /* ── Новый бейдж ХИТ ── */
 .hit-badge {
   background: linear-gradient(135deg, #7C3AED, #A855F7);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* ── Бейдж мало осталось ── */
@@ -63,8 +63,8 @@
 }
 
 .overlay-cart {
-  background: linear-gradient(135deg, #B8860B, #DAA520);
-  color: #080808;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  color: var(--text-inverse);
 }
 
 .overlay-cart:hover:not(:disabled) {
@@ -72,13 +72,13 @@
 }
 
 .overlay-buy {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  color: #fff;
+  background: rgba(31, 41, 51, 0.08);
+  border: 1px solid rgba(31, 41, 51, 0.15) !important;
+  color: var(--text-primary);
 }
 
 .overlay-buy:hover:not(:disabled) {
-  background: rgba(255,255,255,0.14);
+  background: rgba(31, 41, 51, 0.14);
   transform: scale(1.03);
 }
 
