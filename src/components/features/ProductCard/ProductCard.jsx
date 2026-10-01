@@ -18,6 +18,16 @@ const parseQty = (qty) => {
   return 0;
 };
 
+// Текст про остаток: "24 шт." или "более 10 шт." (Al-Style отдаёт ">10", когда товара много)
+const stockText = (qty) => {
+  if (typeof qty === 'string' && qty.trim().startsWith('>')) {
+    const rest = qty.trim().slice(1).trim();
+    return /^\d+$/.test(rest) ? `более ${rest} шт.` : 'много';
+  }
+  const n = typeof qty === 'number' ? qty : parseInt(qty, 10);
+  return Number.isFinite(n) && n > 0 ? `${n} шт.` : null;
+};
+
 const CartIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="9" cy="21" r="1" />
@@ -51,6 +61,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
   const inStock = qty > 0;
   const lowStock = inStock && qty <= 5 ? qty : null;
   const canBuy = inStock && !onRequest;
+  const stockLabel = inStock ? stockText(product.quantity) : null;
 
   const cartItem = () => ({
     id: product.article,
@@ -103,7 +114,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
           lowStock ? (
             <span className="product-badge low-badge">Осталось {lowStock} шт.</span>
           ) : (
-            <span className="product-badge stock-badge">В наличии</span>
+            <span className="product-badge stock-badge">В наличии{stockLabel ? `: ${stockLabel}` : ''}</span>
           )
         ) : (
           <span className="product-badge out-badge">Нет в наличии</span>
