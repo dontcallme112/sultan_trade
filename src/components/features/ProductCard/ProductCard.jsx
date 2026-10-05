@@ -125,7 +125,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
       </div>
 
       {/* ── Изображение + hover-панель действий ── */}
-      <div className="product-image-wrapper">
+      <div className={`product-image-wrapper${imageSrc ? '' : ' no-image'}`}>
         {!imageLoaded && imageSrc && <div className="image-skeleton" aria-hidden="true" />}
 
         {imageSrc ? (

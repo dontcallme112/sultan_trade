@@ -99,6 +99,8 @@
   .product-card:hover .product-image { transform: scale(1.05); }
 }
 
+.product-image-wrapper.no-image { aspect-ratio: 16 / 7; }
+.product-image-wrapper.no-image .product-image-placeholder svg { width: 40px; height: 40px; }
 .product-image-placeholder {
   display: flex;
   align-items: center;
@@ -172,7 +174,7 @@
 .overlay-buy:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
 
 /* ── Информация ── */
-.product-info {
+.product-card .product-info {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -180,7 +182,7 @@
   padding: 14px 16px 16px;
 }
 
-.product-brand {
+.product-card .product-brand {
   margin: 0;
   font-size: 11px;
   font-weight: 600;
@@ -189,7 +191,7 @@
   color: var(--text-muted);
 }
 
-.product-title {
+.product-card .product-title {
   margin: 0;
   font-family: var(--font-body);
   font-size: 15px;
@@ -198,10 +200,10 @@
   letter-spacing: 0;
   color: var(--text-primary);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: calc(1.35em * 2);   /* карточки в ряду одной высоты */
+  min-height: calc(1.35em * 3);   /* карточки в ряду одной высоты */
   transition: color var(--duration-fast) var(--ease-out);
 }
 @media (hover: hover) {
@@ -217,7 +219,7 @@
   padding-top: 8px;
 }
 
-.product-price {
+.product-card .product-price {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
@@ -226,13 +228,13 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.product-price-unit {
+.product-card .product-price-unit {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--text-muted);
 }
-.product-price.on-request {
+.product-card .product-price.on-request {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
@@ -290,9 +292,9 @@
 
 /* ── Мобильная компоновка ── */
 @media (max-width: 640px) {
-  .product-info { padding: 12px; }
-  .product-title { font-size: 14px; }
-  .product-price { font-size: 16px; }
+  .product-card .product-info { padding: 12px; }
+  .product-card .product-title { font-size: 14px; }
+  .product-card .product-price { font-size: 16px; }
   .product-badges { top: 8px; left: 8px; right: 8px; }
 }
 
