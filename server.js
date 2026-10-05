@@ -22,7 +22,45 @@ const applyMarkup = price => Math.round(price * (1 + MARKUP_PERCENT / 100));
 
 // Цена для клиента = ДИЛЕРСКАЯ (price1) + MARKUP_PERCENT, а не розничная price2.
 // По документации Al-Style: price1 = 1 означает «цена по запросу» (фронт показывает price === 1).
-const dealerPrice = p => { const v = Number(p?.price1); return v > 1 ? v : 1; };
+// ── Курс доллара для товаров с ценой в $ (радиаторы и т.п.) ──
+// USD_KZT_RATE                — фиксированный курс (если задан, автоматика отключена)
+// USD_RATE_MARGIN_PERCENT     — надбавка к официальному курсу Нацбанка, % (рыночный курс обычно выше официального)
+// USD_KZT_RATE_FALLBACK       — запасной курс, если Нацбанк недоступен
+let usdRate = null;
+let usdRateSource = 'none';
+async function refreshUsdRate() {
+  const fixed = Number(process.env.USD_KZT_RATE);
+  if (fixed > 0) { usdRate = fixed; usdRateSource = 'env:fixed'; return; }
+  const margin = Number(process.env.USD_RATE_MARGIN_PERCENT) || 0;
+  try {
+    const { data } = await axios.get('https://nationalbank.kz/rss/rates_all.xml', { timeout: 15000, responseType: 'text' });
+    let rate = null;
+    for (const m of String(data).matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
+      const block = m[1];
+      if (!/<title>\s*USD\s*<\/title>/i.test(block)) continue;
+      const d = block.match(/<description>\s*([\d.,\s]+)\s*<\/description>/i);
+      const quant = Number((block.match(/<quant>\s*(\d+)\s*<\/quant>/i) || [])[1]) || 1;
+      if (d) rate = Number(d[1].replace(/\s/g, '').replace(',', '.')) / quant;
+      break;
+    }
+    if (rate > 100 && rate < 5000) {
+      usdRate = rate * (1 + margin / 100);
+      usdRateSource = margin ? `nbrk+${margin}%` : 'nbrk';
+      console.log(`💵 Курс USD: ${rate} (Нацбанк)${margin ? ` + ${margin}% = ${usdRate.toFixed(2)}` : ''}`);
+      return;
+    }
+    console.warn('⚠️ Не удалось прочитать курс USD в ответе Нацбанка');
+  } catch (e) { console.warn('⚠️ Курс USD (Нацбанк):', e.message); }
+  const fb = Number(process.env.USD_KZT_RATE_FALLBACK);
+  if (!usdRate && fb > 0) { usdRate = fb; usdRateSource = 'env:fallback'; }
+}
+
+// Цена для клиента = ДИЛЕРСКАЯ + наценка. Для товаров в $: price_usd × курс.
+const dealerPrice = p => {
+  const usd = Number(p?.price_usd);
+  if (usd > 0) return usdRate ? Math.round(usd * usdRate) : 1;   // нет курса -> «по запросу»
+  const v = Number(p?.price1); return v > 1 ? v : 1;
+};
 // Приводит товар к единой цене: price, price1 и price2 = дилерская. Что бы ни читал фронт, он увидит её.
 const normalizePrice = p => { const d = dealerPrice(p); return { ...p, retail_price: p.price2 ?? null, price: d, price1: d, price2: d }; };
 // Для сортировки: «по запросу» (1) уходит в конец
@@ -51,7 +89,7 @@ const isListable = p => {
   const d = dealerPrice(p);
   if (!SHOW_ON_REQUEST && d <= 1) return false;
   if (d >= PLACEHOLDER_PRICE) return false;
-  const hasImage = (Array.isArray(p.images) && p.images.length > 0) || !!p.image;
+  const hasImage = (Array.isArray(p.images) && p.images.length > 0) || !!p.image || p.source === 'manual';
   return hasImage;
 };
 
@@ -80,7 +118,8 @@ app.use(cors({
   origin: (origin, cb) => cb(null, !origin || !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
 }));
-app.use(express.json({ limit: '200kb' }));
+const jsonSmall = express.json({ limit: '200kb' });
+app.use((req, res, next) => (req.path === '/api/admin/import-products' ? next() : jsonSmall(req, res, next)));
 app.use((req, res, next) => { console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -198,11 +237,11 @@ async function loadProducts(cat) {
   if (supabaseAdmin) {
     try {
       let query = supabaseAdmin.from('products')
-        .select('article, name, full_name, brand, price, price1, price2, isnew, quantity, image_url, category_id')
+        .select('article, name, full_name, brand, price, price1, price2, price_usd, unit, source, description, isnew, quantity, image_url, category_id')
         .neq('quantity', '0')
         .order('price', { ascending: false })
-        .limit(250);
-      if (cat) query = query.eq('category_id', cat);
+        .limit(2000);
+      if (cat) query = /^99000\d$/.test(String(cat)) ? query.eq('root_category_id', String(cat)) : query.eq('category_id', String(cat));
       const { data, error } = await query;
       if (!error && data?.length > 0) {
         const elements = data.map(p => ({
@@ -211,6 +250,7 @@ async function loadProducts(cat) {
           isnew: p.isnew, quantity: p.quantity,
           images: p.image_url ? [p.image_url] : [], image: p.image_url,
           category_id: p.category_id,
+          price_usd: p.price_usd, unit: p.unit, source: p.source, description: p.description,
         }));
         const result = { elements, pagination: { totalCount: data.length } };
         setCache(key, result);
@@ -220,6 +260,9 @@ async function loadProducts(cat) {
       }
     } catch (e) { console.warn('⚠️ Supabase loadProducts fallback:', e.message); }
   }
+
+  // категории своих товаров (99xxxx) есть только в нашей базе: поход в Al-Style бессмыслен
+  if (/^990\d{3}$/.test(String(cat || ''))) return { elements: [], pagination: { totalCount: 0 } };
 
   return fetchOnce(key, () => enqueueApiCall(async () => {
     console.log(`📦 API: загрузка товаров, категория: ${cat||'все'}`);
@@ -244,7 +287,7 @@ async function loadAllProductsForSearch() {
         const pageSize = 1000;
         while (true) {
           const { data, error } = await supabaseAdmin.from('products')
-            .select('article, name, full_name, brand, price, price1, isnew, quantity, image_url')
+            .select('article, name, full_name, brand, price, price1, price_usd, unit, source, isnew, quantity, image_url')
             .neq('quantity', '0')
             .order('price', { ascending: false })
             .range(from, from + pageSize - 1);
@@ -254,7 +297,7 @@ async function loadAllProductsForSearch() {
           from += pageSize;
         }
         if (allData.length > 0) {
-          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: dealerPrice(p), isnew: p.isnew||0, quantity: p.quantity, image: p.image_url||null }));
+          const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: p.price_usd ? null : dealerPrice(p), price_usd: p.price_usd ?? null, unit: p.unit||null, source: p.source||'alstyle', isnew: p.isnew||0, quantity: p.quantity, image: p.image_url||null }));
           setCache('search_all_products_v3', compact);
           await setRedisCache('search_all_products_v3', compact, 86400);
           console.log(`✅ Кеш поиска из Supabase: ${compact.length} товаров`);
@@ -291,7 +334,102 @@ function normalizeItems(items) {
 // ═══════════════════════════════════════════════════════════════
 // ROUTES
 // ═══════════════════════════════════════════════════════════════
-app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, cache:cache.size }));
+// ═══ «Свои» товары (не из Al-Style): категории и загрузка прайса ═══
+// Дерево категорий в формате, который ждёт страница каталога (как у Al-Style: level / left / right / elements)
+function buildManualCategoryTree(rows) {
+  const roots = new Map();
+  for (const r of rows) {
+    if (!r.root_category_id || !r.category_id) continue;
+    if (!roots.has(r.root_category_id)) roots.set(r.root_category_id, { name: r.root_category_name, kids: new Map(), total: 0 });
+    const root = roots.get(r.root_category_id); root.total++;
+    const k = root.kids.get(r.category_id) || { name: r.category_name, n: 0 };
+    k.n++; root.kids.set(r.category_id, k);
+  }
+  const out = []; let pos = 9000000;
+  for (const [rid, root] of [...roots.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+    const left = pos++; const kids = [];
+    for (const [cid, k] of [...root.kids.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
+      kids.push({ id: Number(cid), name: k.name, level: 2, left: pos++, right: pos++, elements: k.n });
+    }
+    out.push({ id: Number(rid), name: root.name, level: 1, left, right: pos++, elements: root.total }, ...kids);
+  }
+  return out;
+}
+let manualCatCache = { at: 0, data: [] };
+async function getManualCategories() {
+  if (!supabaseAdmin) return [];
+  if (Date.now() - manualCatCache.at < 10 * 60 * 1000) return manualCatCache.data;
+  try {
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabaseAdmin.from('products')
+        .select('category_id, category_name, root_category_id, root_category_name')
+        .eq('source', 'manual').neq('quantity', '0').range(from, from + 999);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    manualCatCache = { at: Date.now(), data: buildManualCategoryTree(rows) };
+    return manualCatCache.data;
+  } catch (e) { console.warn('⚠️ Категории своих товаров:', e.message); return manualCatCache.data; }
+}
+
+// Проверка одной позиции из файла прайса. Возвращает { row } или { error }
+function toManualRow(p) {
+  const bad = (m) => ({ error: `${p?.article || '?'}: ${m}` });
+  if (!p || typeof p !== 'object') return bad('не объект');
+  if (typeof p.article !== 'string' || !/^[\w.\-]{2,60}$/.test(p.article)) return bad('артикул (латиница, цифры, - . _)');
+  const name = cleanText(p.name, 200); if (name.length < 3) return bad('название слишком короткое');
+  const kzt = p.price_kzt == null ? null : Number(p.price_kzt);
+  const usd = p.price_usd == null ? null : Number(p.price_usd);
+  if (!((kzt > 1 && kzt < 1e9) !== (usd > 0 && usd < 1e6))) return bad('нужна ровно одна цена: price_kzt или price_usd');
+  for (const k of ['category_id', 'root_category_id']) if (!/^\d{4,8}$/.test(String(p[k] ?? ''))) return bad(`${k} должен быть числом из 4–8 цифр`);
+  if (p.image != null && !/^(\/|https?:\/\/)\S{1,290}$/.test(String(p.image))) return bad('image: путь должен начинаться с / или https://');
+  return { row: {
+    article: p.article, name, full_name: name, brand: cleanText(p.brand, 80),
+    price: kzt || 0, price1: kzt || null, price2: kzt || null, price_usd: usd || null,
+    quantity: '>1000', isnew: 0, image_url: p.image || null, images: p.image ? [p.image] : [],
+    category_id: String(p.category_id), root_category_id: String(p.root_category_id),
+    category_name: cleanText(p.category_name, 120), root_category_name: cleanText(p.root_category_name, 120),
+    description: cleanText(p.description, 1000) || null, unit: cleanText(p.unit, 10) || 'шт.',
+    supplier: cleanText(p.supplier, 80) || null, source: 'manual', raw_data: {}, synced_at: new Date().toISOString(),
+  } };
+}
+
+// Загрузка прайса: POST /api/admin/import-products, заголовок x-sync-secret, тело { products: [...] }
+// Позиции того же поставщика (supplier), которых нет в файле, прячутся (остаток 0).
+app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (req, res) => {
+  if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Supabase не настроен' });
+  const list = req.body?.products;
+  if (!Array.isArray(list) || !list.length || list.length > 5000) return res.status(400).json({ error: 'products: массив от 1 до 5000 позиций' });
+  const rows = [], errors = [];
+  for (const p of list) { const r = toManualRow(p); r.row ? rows.push(r.row) : errors.push(r.error); }
+  if (errors.length) return res.status(400).json({ error: 'В файле есть ошибки, ничего не загружено', errors: errors.slice(0, 30), errorsTotal: errors.length });
+  if (new Set(rows.map(r => r.article)).size !== rows.length) return res.status(400).json({ error: 'В файле повторяются артикулы' });
+  try {
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await supabaseAdmin.from('products').upsert(rows.slice(i, i + 200), { onConflict: 'article' });
+      if (error) throw new Error(error.message);
+    }
+    let hidden = 0;
+    for (const supplier of [...new Set(rows.map(r => r.supplier).filter(Boolean))]) {
+      const keep = new Set(rows.filter(r => r.supplier === supplier).map(r => r.article));
+      const { data: old } = await supabaseAdmin.from('products').select('article').eq('source', 'manual').eq('supplier', supplier).neq('quantity', '0');
+      const gone = (old || []).map(o => o.article).filter(a => !keep.has(a));
+      for (let i = 0; i < gone.length; i += 200) {
+        await supabaseAdmin.from('products').update({ quantity: '0' }).in('article', gone.slice(i, i + 200));
+      }
+      hidden += gone.length;
+    }
+    cache.clear(); manualCatCache.at = 0;
+    if (redis) await redis.del('search_all_products_v3').catch(() => {});
+    console.log(`✅ Импорт прайса: ${rows.length} позиций, скрыто ${hidden}`);
+    res.json({ success: true, upserted: rows.length, hidden });
+  } catch (e) { console.error('❌ Импорт прайса:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
 app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) => {
   try {
@@ -327,6 +465,12 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
 
 app.get('/api/product/:article', async (req,res) => {
   try {
+    if (/[A-Za-z]/.test(req.params.article) && supabaseAdmin) {
+      const { data: m } = await supabaseAdmin.from('products')
+        .select('article,name,full_name,brand,price1,price_usd,quantity,image_url,description,unit,source,category_id,category_name')
+        .eq('article', req.params.article).eq('source', 'manual').maybeSingle();
+      if (m) return res.json(normalizePrice({ ...m, images: m.image_url ? [m.image_url] : [], image: m.image_url }));
+    }
     const key=`product_${req.params.article}`;
     const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(normalizePrice(cached));
     const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:req.params.article,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
@@ -337,9 +481,9 @@ app.get('/api/product/:article', async (req,res) => {
 
 app.get('/api/categories', async (req,res) => {
   try {
-    const cached=getCache('categories',CACHE_TIMES.categories); if(cached)return res.json(cached);
+    const cached=getCache('categories',CACHE_TIMES.categories); if(cached)return res.json([...cached, ...(await getManualCategories())]);
     const cats=await fetchOnce('categories',()=>enqueueApiCall(async()=>{console.log('📦 API: загрузка категорий...');const{data}=await api.get('/categories',{params:{'access-token':ALSTYLE_TOKEN}});const c=Array.isArray(data)?data:[];setCache('categories',c);console.log('✅ Категорий:',c.length);return c;}));
-    res.json(cats);
+    res.json([...cats, ...(await getManualCategories())]);
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -349,7 +493,7 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
     // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
     const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
     if (q.length < 2) return res.json([]);
-    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})).filter(isListable));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,price_usd,unit,source,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})).filter(isListable));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
     const products=(await loadAllProductsForSearch().catch(()=>[])).filter(isListable);
     const s=q.toLowerCase();
     const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>normalizePrice(p));
@@ -443,7 +587,7 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
 
     // цены и названия берём из нашей базы, а не от клиента
     const articles = [...new Set(clean.map(i => i.article))];
-    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price,price1,quantity').in('article', articles);
+    const { data: prods, error: pe } = await supabaseAdmin.from('products').select('article,name,price,price1,price_usd,unit,quantity').in('article', articles);
     if (pe) return res.status(500).json({ error: pe.message });
     const byArt = new Map((prods || []).map(p => [String(p.article), p]));
     const missing = articles.filter(a => !byArt.has(a));
@@ -465,7 +609,7 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
       const list = short.map(x => `${x.p.name} (в наличии ${x.have} шт.)`).join('; ');
       return res.status(400).json({ error: `Недостаточно товара в наличии: ${list}. Уменьшите количество в корзине.`, articles: short.map(x => x.i.article) });
     }
-    const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, price: applyMarkup(dealerPrice(p)) }; });
+    const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, unit: p.unit || 'шт.', price: applyMarkup(dealerPrice(p)) }; });
     const total_price = priced.reduce((s, i) => s + i.price * i.quantity, 0);
 
     const base = {
@@ -483,7 +627,7 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
     }
     if (error) return res.status(500).json({ error: error.message });
 
-    const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
+    const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} ${esc(i.unit || 'шт.')} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
     const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
     sendTelegramNotification(msg).catch(()=>{});
     res.json({ success: true, order: data });
@@ -558,6 +702,7 @@ async function syncProductsToSupabase() {
     if (total && synced >= total * 0.9) {
       const { error: staleErr } = await supabaseAdmin.from('products')
         .update({ quantity: '0' })
+        .eq('source', 'alstyle')
         .lt('synced_at', new Date(start).toISOString())
         .neq('quantity', '0');
       if (staleErr) console.warn('⚠️ Не удалось скрыть устаревшие товары:', staleErr.message);
@@ -586,6 +731,7 @@ async function warmupCache() {
 
 app.listen(PORT, () => {
   console.log(`📡 Port: ${PORT}`);
+  refreshUsdRate(); setInterval(refreshUsdRate, 6*60*60*1000);
   setTimeout(warmupCache, 30000);
   setTimeout(async()=>{ await syncProductsToSupabase(); setInterval(syncProductsToSupabase,60*60*1000); }, 5*60*1000);
 });
