@@ -226,6 +226,12 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.product-price-unit {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
 .product-price.on-request {
   font-size: 14px;
   font-weight: 600;

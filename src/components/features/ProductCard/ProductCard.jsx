@@ -61,7 +61,9 @@ const ProductCard = memo(({ product, index = 0 }) => {
   const inStock = qty > 0;
   const lowStock = inStock && qty <= 5 ? qty : null;
   const canBuy = inStock && !onRequest;
-  const stockLabel = inStock ? stockText(product.quantity) : null;
+  // у «своих» товаров (трубы, радиаторы...) точного остатка нет: показываем просто «В наличии»
+  const stockLabel = inStock && product.source !== 'manual' ? stockText(product.quantity) : null;
+  const priceUnit = product.unit && product.unit !== 'шт.' ? product.unit : null;   // «/ м», «/ т»
 
   const cartItem = () => ({
     id: product.article,
@@ -69,6 +71,7 @@ const ProductCard = memo(({ product, index = 0 }) => {
     name: productName,
     price: getPriceWithMarkup(dealerPrice),
     image: imageSrc,
+    unit: product.unit || 'шт.',
   });
 
   const handleClick = useCallback(() => {
@@ -170,7 +173,10 @@ const ProductCard = memo(({ product, index = 0 }) => {
         <h3 className="product-title" title={productName}>{productName}</h3>
 
         <div className="product-footer">
-          <p className={`product-price${onRequest ? ' on-request' : ''}`}>{formatPriceWithMarkup(dealerPrice)}</p>
+          <p className={`product-price${onRequest ? ' on-request' : ''}`}>
+            {formatPriceWithMarkup(dealerPrice)}
+            {priceUnit && !onRequest && <span className="product-price-unit"> / {priceUnit}</span>}
+          </p>
           <button
             type="button"
             className={`add-to-cart-btn${addedToCart ? ' added' : ''}`}
