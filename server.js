@@ -5,6 +5,10 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
+import { createApiPayService, UserError, DEFAULT_BASE_URL } from './apipay.js';
+import { createPrivacy } from './privacy.js';
+import { createPricing } from './pricing.js';
+import { createChatService, createSupabaseChatStore, createTelegramSender, ChatError } from './chat.js';
 
 dotenv.config();
 
@@ -18,7 +22,6 @@ const SYNC_SECRET   = process.env.SYNC_SECRET;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 // Наценка должна совпадать с MARKUP_PERCENT во фронте (priceFormatter). Можно переопределить переменной MARKUP_PERCENT на Railway.
 const MARKUP_PERCENT = Number.isFinite(Number(process.env.MARKUP_PERCENT)) && process.env.MARKUP_PERCENT !== undefined && process.env.MARKUP_PERCENT !== '' ? Number(process.env.MARKUP_PERCENT) : 5;
-const applyMarkup = price => Math.round(price * (1 + MARKUP_PERCENT / 100));
 
 // Цена для клиента = ДИЛЕРСКАЯ (price1) + MARKUP_PERCENT, а не розничная price2.
 // По документации Al-Style: price1 = 1 означает «цена по запросу» (фронт показывает price === 1).
@@ -56,13 +59,14 @@ async function refreshUsdRate() {
 }
 
 // Цена для клиента = ДИЛЕРСКАЯ + наценка. Для товаров в $: price_usd × курс.
-const dealerPrice = p => {
-  const usd = Number(p?.price_usd);
-  if (usd > 0) return usdRate ? Math.round(usd * usdRate) : 1;   // нет курса -> «по запросу»
-  const v = Number(p?.price1); return v > 1 ? v : 1;
-};
 // Приводит товар к единой цене: price, price1 и price2 = дилерская. Что бы ни читал фронт, он увидит её.
-const normalizePrice = p => { const d = dealerPrice(p); return { ...p, retail_price: p.price2 ?? null, price: d, price1: d, price2: d }; };
+// PUBLIC_BACKEND_URL (Railway → Variables): адрес этого сервера, через него отдаём фото вместо адреса поставщика
+// ID_SECRET: любая случайная строка от 8 символов; по ней номера Al-Style превращаются в непрозрачные коды (смена секрета ломает старые ссылки)
+const privacy = createPrivacy({ publicBackendUrl: process.env.PUBLIC_BACKEND_URL, idSecret: process.env.ID_SECRET });
+// MARKUP_ON_SERVER=true: наценку считает сервер, в ответах API только готовая цена (закупочной цены в сети нет)
+const MARKUP_ON_SERVER = String(process.env.MARKUP_ON_SERVER || '').toLowerCase() === 'true';
+const { applyMarkup, dealerPrice, normalizePrice } = createPricing({ markupPercent: MARKUP_PERCENT, markupOnServer: MARKUP_ON_SERVER, getUsdRate: () => usdRate, privacy });
+const IMG_UPSTREAM = (process.env.IMG_UPSTREAM || 'https://img.al-style.kz').replace(/\/+$/, '');
 // Для сортировки: «по запросу» (1) уходит в конец
 const sortPrice = (p, asc = false) => (p.price2 > 1 ? p.price2 : (asc ? Number.MAX_SAFE_INTEGER : 0));
 
@@ -112,6 +116,7 @@ console.log(`CORS: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : '⚠�
 console.log('⏱️  Кеш: товары 10мин, категории 30мин\n');
 
 const app = express();
+app.disable('x-powered-by');
 app.set('trust proxy', 1); // 1 прокси перед приложением (Railway/Render/Fly и т.п.); req.ip станет настоящим IP клиента
 app.use(compression());
 app.use(cors({
@@ -120,7 +125,7 @@ app.use(cors({
 }));
 const jsonSmall = express.json({ limit: '200kb' });
 app.use((req, res, next) => (req.path === '/api/admin/import-products' ? next() : jsonSmall(req, res, next)));
-app.use((req, res, next) => { console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
+app.use((req, res, next) => { if (!req.path.startsWith('/media/') && !(req.method === 'GET' && req.path === '/api/chat/messages')) console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -205,7 +210,7 @@ const requireAuth = async (req, res, next) => {
   req.user = user; next();
 };
 
-const api     = axios.create({ baseURL: 'https://api.al-style.kz/api',      timeout: 30000 });
+const api     = axios.create({ baseURL: process.env.ALSTYLE_API_BASE || 'https://api.al-style.kz/api', timeout: 30000 });   // ALSTYLE_API_BASE нужен только для тестов
 const cartApi = axios.create({ baseURL: 'https://api.al-style.kz/cart-api', timeout: 30000 });
 
 function parseCategoryParam(raw) {
@@ -326,7 +331,7 @@ async function loadAllProductsForSearch() {
 // Берём от клиента только article и quantity; имя и цену подставляем сами.
 function normalizeItems(items) {
   if (!Array.isArray(items) || !items.length || items.length > 100) return null;
-  const clean = items.map(i => ({ article: String(i?.article ?? '').trim(), quantity: Math.floor(Number(i?.quantity)) }));
+  const clean = items.map(i => ({ article: String(privacy.decodeArticle(String(i?.article ?? '').trim())), quantity: Math.floor(Number(i?.quantity)) }));
   if (clean.some(i => !/^[\w.\-]+$/.test(i.article) || !(i.quantity > 0) || i.quantity > 10000)) return null;
   return clean;
 }
@@ -429,7 +434,65 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
   } catch (e) { console.error('❌ Импорт прайса:', e.message); res.status(500).json({ error: e.message }); }
 });
 
-app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
+// ═══ Онлайн-чат на сайте (ответы менеджера через Telegram) ═══
+// Нужны переменные Railway: CHAT_WEBHOOK_SECRET (случайная строка 16+ символов). Бот и чат берутся из
+// CHAT_BOT_TOKEN / CHAT_TELEGRAM_CHAT_ID, а если их нет, из TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (как у заказов).
+// CHAT_HOURS (по умолчанию 09:00-19:00, время Алматы), CHAT_AUTOREPLY и CHAT_OFFLINE_REPLY: тексты автоответов (необязательно).
+const CHAT_BOT_TOKEN = process.env.CHAT_BOT_TOKEN || TG_TOKEN;
+const chatSvc = createChatService({
+  store: supabaseAdmin ? createSupabaseChatStore(supabaseAdmin) : null,
+  telegram: CHAT_BOT_TOKEN ? createTelegramSender({ token: CHAT_BOT_TOKEN, http: axios, base: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org' }) : null,
+  chatId: process.env.CHAT_TELEGRAM_CHAT_ID || TG_CHAT_ID,
+  hours: process.env.CHAT_HOURS || '09:00-19:00',
+  webhookSecret: process.env.CHAT_WEBHOOK_SECRET || '',
+  autoReply: process.env.CHAT_AUTOREPLY, offlineReply: process.env.CHAT_OFFLINE_REPLY,
+});
+const chatError = (res, e) => {
+  if (e instanceof ChatError) return res.status(e.status).json({ error: e.message });
+  console.error('❌ Чат:', e?.message || 'ошибка');
+  return res.status(500).json({ error: 'Чат временно недоступен' });
+};
+const chatToken = (req) => { const t = req.headers['x-chat-token']; return typeof t === 'string' && /^[\w-]{20,64}$/.test(t) ? t : undefined; };
+// вошедший пользователь (необязательно): менеджер увидит имя и почту
+const optionalUser = async (req) => {
+  const a = req.headers.authorization;
+  if (!supabaseAdmin || !a?.startsWith('Bearer ')) return null;
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(a.slice(7));
+    return error || !user ? null : { id: user.id, email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name || '' };
+  } catch { return null; }
+};
+app.get('/api/chat/status', (req,res) => res.set('Cache-Control','no-store').json(chatSvc.status()));
+app.post('/api/chat/messages', async (req,res) => {
+  try { res.status(201).json(await chatSvc.postMessage({ token: chatToken(req), text: req.body?.text, name: req.body?.name, user: await optionalUser(req), ip: req.ip })); }
+  catch (e) { chatError(res, e); }
+});
+app.get('/api/chat/messages', async (req,res) => {
+  try { res.set('Cache-Control','no-store').json(await chatSvc.poll({ token: chatToken(req), afterId: req.query.after, ip: req.ip })); }
+  catch (e) { chatError(res, e); }
+});
+// Сюда Telegram присылает сообщения менеджеров (регистрируется скриптом set-chat-webhook.mjs)
+app.post('/api/chat/telegram', async (req,res) => {
+  if (!chatSvc.checkWebhookSecret(req.headers['x-telegram-bot-api-secret-token'])) return res.status(401).json({ error: 'Unauthorized' });
+  try { await chatSvc.handleTelegramUpdate(req.body); } catch (e) { console.error('❌ Чат (webhook):', e?.message || 'ошибка'); }
+  res.json({ ok: true });   // Telegram всегда получает 200, иначе он будет слать то же сообщение повторно
+});
+
+// Фото товаров через наш сервер: покупатель не видит адрес поставщика. Забираем только картинки, имя файла строго проверяем.
+app.get('/media/:file', rateLimit({windowMs:60000,max:1500}), async (req,res) => {
+  const file = privacy.resolveMediaFile(req.params.file);   // p…_1.jpg -> 92544_1.jpg; недопустимые имена -> null
+  if (!file) return res.status(404).end();
+  try {
+    const up = await axios.get(`${IMG_UPSTREAM}/${file}`, { responseType: 'stream', timeout: 15000, maxRedirects: 0, validateStatus: () => true });
+    const type = String(up.headers['content-type'] || '');
+    if (up.status !== 200 || !type.startsWith('image/')) { up.data.destroy(); return res.status(404).end(); }
+    res.set({ 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+    if (up.headers['content-length']) res.set('Content-Length', up.headers['content-length']);
+    up.data.pipe(res);
+  } catch { if (!res.headersSent) res.status(502).end(); }
+});
+
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
 app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) => {
   try {
@@ -465,15 +528,16 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
 
 app.get('/api/product/:article', async (req,res) => {
   try {
-    if (/[A-Za-z]/.test(req.params.article) && supabaseAdmin) {
+    const art = privacy.decodeArticle(req.params.article);   // код p… -> настоящий номер; «свои» артикулы и старые номера как есть
+    if (/[A-Za-z]/.test(art) && supabaseAdmin) {
       const { data: m } = await supabaseAdmin.from('products')
         .select('article,name,full_name,brand,price1,price_usd,quantity,image_url,description,unit,source,category_id,category_name')
-        .eq('article', req.params.article).eq('source', 'manual').maybeSingle();
+        .eq('article', art).eq('source', 'manual').maybeSingle();
       if (m) return res.json(normalizePrice({ ...m, images: m.image_url ? [m.image_url] : [], image: m.image_url }));
     }
-    const key=`product_${req.params.article}`;
+    const key=`product_${art}`;
     const cached=getCache(key,CACHE_TIMES.product); if(cached)return res.json(normalizePrice(cached));
-    const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:req.params.article,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
+    const product=await fetchOnce(key,()=>enqueueApiCall(async()=>{const{data}=await api.get('/element-info',{params:{'access-token':ALSTYLE_TOKEN,article:art,additional_fields:'brand,images,description'}});const d=Array.isArray(data)?data[0]:data;setCache(key,d);return d;}));
     if (!product || (!product.article && !product.name)) return res.status(404).json({ error: 'Товар не найден' });
     res.json(normalizePrice(product));
   } catch(e){res.status(500).json({error:e.message});}
@@ -493,7 +557,7 @@ app.get('/api/search', rateLimit({windowMs:60000,max:100}), async (req,res) => {
     // вырезаем символы, которые ломают синтаксис PostgREST-фильтра .or() и LIKE-шаблоны
     const q = raw.replace(/[%,()*\\_"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 64);
     if (q.length < 2) return res.json([]);
-    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,price_usd,unit,source,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>({...normalizePrice(p),image:p.image_url,images:p.image_url?[p.image_url]:[]})).filter(isListable));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
+    if(supabaseAdmin){try{const{data,error}=await supabaseAdmin.from('products').select('article,name,brand,price,price1,price_usd,unit,source,isnew,image_url,quantity').neq('quantity','0').or(`name.ilike.%${q}%,brand.ilike.%${q}%,article.ilike.%${q}%`).order('price',{ascending:false}).limit(20);if(!error&&data?.length>0){console.log(`🔍 PG "${q}": ${data.length} результатов`);return res.json(data.map(p=>normalizePrice({...p,image:p.image_url,images:p.image_url?[p.image_url]:[]})).filter(isListable));}}catch(e){console.warn('⚠️ PG поиск fallback:',e.message);}}
     const products=(await loadAllProductsForSearch().catch(()=>[])).filter(isListable);
     const s=q.toLowerCase();
     const results=products.map(p=>{let score=0;if(p.brand?.toLowerCase().includes(s))score+=3;if(p.name?.toLowerCase().includes(s))score+=2;return score?{...p,score}:null;}).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,20).map(({score,...p})=>normalizePrice(p));
@@ -591,9 +655,9 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
     if (pe) return res.status(500).json({ error: pe.message });
     const byArt = new Map((prods || []).map(p => [String(p.article), p]));
     const missing = articles.filter(a => !byArt.has(a));
-    if (missing.length) return res.status(400).json({ error: 'Товары не найдены', missing });
+    if (missing.length) return res.status(400).json({ error: 'Товары не найдены', missing: missing.map(privacy.encodeArticle) });
     const noPrice = articles.filter(a => dealerPrice(byArt.get(a)) <= 1);
-    if (noPrice.length) return res.status(400).json({ error: 'Цена по запросу, оформить через менеджера', articles: noPrice });
+    if (noPrice.length) return res.status(400).json({ error: 'Цена по запросу, оформить через менеджера', articles: noPrice.map(privacy.encodeArticle) });
     // нельзя заказать больше, чем есть на складе (">10" и подобное считаем "много" и не ограничиваем)
     const stockNumber = q => {
       if (q === undefined || q === null) return Infinity;
@@ -607,7 +671,7 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
     const short = clean.map(i => ({ i, p: byArt.get(i.article), have: stockNumber(byArt.get(i.article)?.quantity) })).filter(x => x.i.quantity > x.have);
     if (short.length) {
       const list = short.map(x => `${x.p.name} (в наличии ${x.have} шт.)`).join('; ');
-      return res.status(400).json({ error: `Недостаточно товара в наличии: ${list}. Уменьшите количество в корзине.`, articles: short.map(x => x.i.article) });
+      return res.status(400).json({ error: `Недостаточно товара в наличии: ${list}. Уменьшите количество в корзине.`, articles: short.map(x => privacy.encodeArticle(x.i.article)) });
     }
     const priced = clean.map(i => { const p = byArt.get(i.article); return { article: i.article, name: p.name, quantity: i.quantity, unit: p.unit || 'шт.', price: applyMarkup(dealerPrice(p)) }; });
     const total_price = priced.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -628,16 +692,76 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
     if (error) return res.status(500).json({ error: error.message });
 
     const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} ${esc(i.unit || 'шт.')} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
-    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
+    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${apipaySvc.configured ? '💳 Оплата: ожидается (Kaspi)\n' : ''}${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
     sendTelegramNotification(msg).catch(()=>{});
-    res.json({ success: true, order: data });
+    res.json({ success: true, order: privacy.publicOrder(data) });
   } catch(e){res.status(500).json({error:e.message});}
+});
+
+// ═══ Оплата заказа через ApiPay (Kaspi) ═══
+// Нужна переменная APIPAY_API_KEY (Railway → Variables). Без неё заказы работают как раньше, оплата отключена.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const apipayStore = {
+  async getOrder(id, userId) {
+    let q = supabaseAdmin.from('orders').select('*').eq('id', id);
+    if (userId) q = q.eq('user_id', userId);
+    const { data, error } = await q.maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  },
+  async saveOrder(id, patch) {
+    const { error } = await supabaseAdmin.from('orders').update(patch).eq('id', id);
+    if (error) throw new Error(error.message);
+  },
+  // true только если ЭТОТ запрос перевёл заказ в paid (защита от двойного Telegram при гонке опроса и сверки)
+  async markPaid(id, patch) {
+    const { data, error } = await supabaseAdmin.from('orders').update(patch).eq('id', id).neq('payment_status', 'paid').select('id');
+    if (error) throw new Error(error.message);
+    return (data || []).length > 0;
+  },
+  // открытые заказы + закрытые без оплаты счета ещё 24 часа (они могут стать paid)
+  async listOpen(limit) {
+    const since = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+    const closedSince = Date.now() - 24 * 3600 * 1000;
+    const { data, error } = await supabaseAdmin.from('orders').select('*')
+      .not('payment_invoice_id', 'is', null).in('payment_status', ['pending', 'failed']).gte('created_at', since).limit(limit);
+    if (error) throw new Error(error.message);
+    return (data || []).filter(o => o.payment_status === 'pending' || (o.payment_closed_at && Date.parse(o.payment_closed_at) > closedSince));
+  },
+};
+const apipaySvc = createApiPayService({
+  apiKey: process.env.APIPAY_API_KEY,
+  http: axios.create({ baseURL: process.env.APIPAY_BASE_URL || DEFAULT_BASE_URL, timeout: 15000 }),
+  store: apipayStore,
+  notify: sendTelegramNotification,
+});
+const sendPayError = (res, e) => {
+  if (e instanceof UserError) return res.status(e.status).json({ error: e.message });
+  console.error('❌ Оплата:', e?.message || 'ошибка');
+  return res.status(500).json({ error: 'Не удалось обработать оплату. Заказ сохранён, менеджер свяжется с вами.' });
+};
+
+// Выставить счёт Kaspi по заказу (сумму и телефон берём из заказа в базе, не от клиента)
+app.post('/api/orders/:id/pay', rateLimit({windowMs:60000,max:20,message:'Слишком много попыток оплаты'}), requireAuth, async (req,res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
+    const kaspiPhone = typeof req.body?.kaspi_phone === 'string' ? req.body.kaspi_phone.slice(0, 30) : undefined;
+    res.json(await apipaySvc.startPayment({ orderId: req.params.id, userId: req.user.id, kaspiPhone }));
+  } catch (e) { sendPayError(res, e); }
+});
+
+// Состояние оплаты (его опрашивает страница оплаты; к ApiPay мы обращаемся не чаще раза в 3 с на заказ)
+app.get('/api/orders/:id/payment', rateLimit({windowMs:60000,max:60}), requireAuth, async (req,res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
+    res.set('Cache-Control', 'no-store').json(await apipaySvc.getState({ orderId: req.params.id, userId: req.user.id }));
+  } catch (e) { sendPayError(res, e); }
 });
 
 app.get('/api/orders', requireAuth, async (req,res) => {
   try {
     const{data,error}=await supabaseAdmin.from('orders').select('*').eq('user_id',req.user.id).order('created_at',{ascending:false});
-    if(error)return res.status(500).json({error:error.message}); res.json(data||[]);
+    if(error)return res.status(500).json({error:error.message}); res.json((data||[]).map(privacy.publicOrder));
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -731,6 +855,10 @@ async function warmupCache() {
 
 app.listen(PORT, () => {
   console.log(`📡 Port: ${PORT}`);
+  console.log(`💳 Оплата ApiPay: ${apipaySvc.configured ? '✅ ключ задан' : '⚠️  APIPAY_API_KEY не задан, оплата отключена'}`);
+  console.log(`💬 Онлайн-чат: ${chatSvc.configured ? '✅ включён' : '⚠️  выключен (нужны CHAT_WEBHOOK_SECRET, бот и чат Telegram)'}`);
+  if (chatSvc.configured) setInterval(() => chatSvc.flushPending().catch(e => console.warn('⚠️ Чат (досылка):', e?.message || 'ошибка')), 60 * 1000);
+  if (apipaySvc.configured) setInterval(() => apipaySvc.reconcile().catch(e => console.warn('⚠️ Сверка оплаты:', e?.message || 'ошибка')), 90 * 1000);
   refreshUsdRate(); setInterval(refreshUsdRate, 6*60*60*1000);
   setTimeout(warmupCache, 30000);
   setTimeout(async()=>{ await syncProductsToSupabase(); setInterval(syncProductsToSupabase,60*60*1000); }, 5*60*1000);
