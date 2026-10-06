@@ -417,15 +417,24 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
       const { error } = await supabaseAdmin.from('products').upsert(rows.slice(i, i + 200), { onConflict: 'article' });
       if (error) throw new Error(error.message);
     }
+    // Скрываем позиции этого поставщика, которых нет в новом файле. Читаем постранично (Supabase отдаёт не больше 1000 строк за запрос),
+    // ошибки не глотаем, а считаем реально скрытые строки.
     let hidden = 0;
     for (const supplier of [...new Set(rows.map(r => r.supplier).filter(Boolean))]) {
       const keep = new Set(rows.filter(r => r.supplier === supplier).map(r => r.article));
-      const { data: old } = await supabaseAdmin.from('products').select('article').eq('source', 'manual').eq('supplier', supplier).neq('quantity', '0');
-      const gone = (old || []).map(o => o.article).filter(a => !keep.has(a));
-      for (let i = 0; i < gone.length; i += 200) {
-        await supabaseAdmin.from('products').update({ quantity: '0' }).in('article', gone.slice(i, i + 200));
+      const old = [];
+      for (let from = 0; ;) {   // шаг по фактически полученному числу строк: если в проекте Supabase лимит строк меньше 1000, ничего не пропустим
+        const { data, error } = await supabaseAdmin.from('products').select('article').eq('source', 'manual').eq('supplier', supplier).neq('quantity', '0').order('article').range(from, from + 999);
+        if (error) throw new Error('Не удалось прочитать старые позиции: ' + error.message);
+        if (!data?.length) break;
+        old.push(...data); from += data.length;
       }
-      hidden += gone.length;
+      const gone = old.map(o => o.article).filter(a => !keep.has(a));
+      for (let i = 0; i < gone.length; i += 100) {
+        const { data: done, error } = await supabaseAdmin.from('products').update({ quantity: '0' }).in('article', gone.slice(i, i + 100)).select('article');
+        if (error) throw new Error('Не удалось скрыть старые позиции: ' + error.message);
+        hidden += (done || []).length;
+      }
     }
     cache.clear(); manualCatCache.at = 0;
     if (redis) await redis.del('search_all_products_v3').catch(() => {});
