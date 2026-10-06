@@ -16,6 +16,7 @@ import NewProducts from './pages/NewProducts/NewProducts';
 import Profile from './pages/Profile/Profile.jsx';
 import AuthCallback from './pages/AuthCallback/AuthCallback.jsx';
 import ProductGrid from './components/features/ProductGrid/ProductGrid.jsx';
+import ChatWidget from './components/features/ChatWidget/ChatWidget';
 import './styles/globals.css';
 import './styles/variables.css';
 import './styles/animations.css';
@@ -39,10 +40,12 @@ function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/telegram" element={<AuthCallback />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
           <Footer />
           <TabBar />
+          <ChatWidget />
         </div>
       </Router>
     </CartProvider>

@@ -1,0 +1,170 @@
+/* Онлайн-чат. Только переменные темы; все классы с префиксом chat-, чтобы не пересекаться с остальным сайтом. */
+.chat-root { --chat-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+
+/* ── Кнопка в углу ── */
+.chat-fab {
+  position: fixed;
+  right: 20px;
+  bottom: var(--chat-bottom);
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  color: var(--text-inverse);
+  background: var(--gold-gradient);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.chat-fab:hover { transform: scale(1.06); box-shadow: var(--shadow-glow); }
+.chat-fab:active { transform: scale(0.96); }
+.chat-fab:focus-visible, .chat-send:focus-visible, .chat-close:focus-visible, .chat-chip:focus-visible { outline: 3px solid var(--accent-glow); outline-offset: 2px; }
+
+.chat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font: 700 12px/22px var(--font-body);
+  text-align: center;
+  color: var(--text-inverse);
+  background: var(--error);
+  border: 2px solid var(--bg-secondary);
+  border-radius: var(--radius-full);
+}
+
+/* ── Окно ── */
+.chat-panel {
+  position: fixed;
+  right: 20px;
+  bottom: var(--chat-bottom);
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  height: min(580px, calc(100vh - 40px));
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: chatIn var(--duration-base) var(--ease-out);
+}
+@keyframes chatIn { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chat-panel { animation: none; } .chat-fab { transition: none; } }
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  color: var(--text-inverse);
+  background: var(--gold-gradient);
+}
+.chat-header-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chat-header-text strong { font: 600 16px/1.3 var(--font-body); }
+.chat-status { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.92; }
+.chat-dot { width: 8px; height: 8px; background: rgba(255, 255, 255, 0.5); border-radius: 50%; flex-shrink: 0; }
+.chat-dot.on { background: #7FE0A8; box-shadow: 0 0 0 3px rgba(127, 224, 168, 0.25); }
+.chat-close {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0;
+  color: inherit; background: rgba(255, 255, 255, 0.14);
+  border: none; border-radius: var(--radius-full); cursor: pointer;
+}
+.chat-close:hover { background: rgba(255, 255, 255, 0.26); }
+
+/* ── Переписка ── */
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-primary);
+}
+
+.chat-empty { margin: auto 0; padding: 8px 4px; text-align: center; }
+.chat-empty-title { font: 600 24px/1.2 var(--font-body); color: var(--text-secondary); }
+.chat-empty-sub { margin: 6px 0 16px; font-size: 14px; color: var(--text-muted); }
+.chat-name {
+  display: block; width: 100%; margin: 0 0 12px; padding: 10px 12px;
+  font: inherit; font-size: 14px; text-align: center; color: var(--text-primary);
+  background: var(--bg-secondary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+}
+.chat-name:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px var(--accent-glow); }
+.chat-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.chat-chip {
+  padding: 8px 12px; font: 500 13px/1.2 var(--font-body); color: var(--gold);
+  background: var(--bg-secondary); border: 1px solid var(--border-medium); border-radius: var(--radius-full); cursor: pointer;
+}
+.chat-chip:hover { background: var(--gold-pale); border-color: var(--accent); }
+
+.chat-row { display: flex; }
+.chat-row.client { justify-content: flex-end; }
+.chat-row.manager { justify-content: flex-start; }
+.chat-row.system { justify-content: center; }
+.chat-bubble-wrap { display: flex; flex-direction: column; max-width: 82%; }
+.chat-row.client .chat-bubble-wrap { align-items: flex-end; }
+.chat-bubble {
+  padding: 9px 13px; font-size: 14px; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  border-radius: 16px;
+}
+.chat-row.client .chat-bubble { color: var(--text-inverse); background: var(--gold); border-bottom-right-radius: 4px; }
+.chat-row.manager .chat-bubble { color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.chat-bubble.pending { opacity: 0.65; }
+.chat-bubble.failed { background: var(--error); }
+.chat-meta { margin-top: 3px; font-size: 11px; color: var(--text-muted); }
+.chat-retry { padding: 0; font: inherit; font-weight: 600; color: var(--error); background: none; border: none; cursor: pointer; text-decoration: underline; }
+.chat-system { max-width: 90%; padding: 6px 12px; font-size: 12px; line-height: 1.4; text-align: center; color: var(--text-secondary); background: var(--bg-elevated); border-radius: var(--radius-md); }
+
+.chat-error { padding: 8px 16px; font-size: 13px; color: var(--error); background: rgba(199, 101, 101, 0.1); border-top: 1px solid rgba(199, 101, 101, 0.25); }
+
+/* ── Ввод ── */
+.chat-footer { padding: 10px 12px 12px; background: var(--bg-secondary); border-top: 1px solid var(--border); }
+.chat-input {
+  display: block; width: 100%; max-height: 120px; padding: 10px 12px; resize: none;
+  font: inherit; font-size: 15px; line-height: 1.4; color: var(--text-primary);
+  background: var(--bg-elevated); border: 1px solid transparent; border-radius: var(--radius-md);
+}
+.chat-input:focus { outline: none; background: var(--bg-secondary); border-color: var(--gold); box-shadow: 0 0 0 3px var(--accent-glow); }
+.chat-footer-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.chat-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.chat-send {
+  display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  color: var(--text-inverse); background: var(--gold); border: none; border-radius: var(--radius-full); cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+.chat-send:hover:not(:disabled) { background: var(--gold-dark); transform: scale(1.05); }
+.chat-send:disabled { color: var(--text-muted); background: var(--bg-elevated); cursor: not-allowed; }
+
+/* ── Телефон: окно на весь экран ── */
+/* Нижняя панель сайта (TabBar) занимает ~60px: кнопку чата поднимаем над ней, а окно открываем поверх всего */
+@media (max-width: 900px) {
+  .chat-fab { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 640px) {
+  .chat-fab { right: 14px; width: 52px; height: 52px; }
+  .chat-panel {
+    z-index: 1100;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .chat-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .chat-input { font-size: 16px; }   /* меньше 16px iPhone приближает страницу при вводе */
+}

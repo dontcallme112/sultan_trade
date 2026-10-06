@@ -110,7 +110,7 @@ export default function SearchBar() {
 
   const formatPrice = (price) => {
     if (!price) return '';
-    return new Intl.NumberFormat('ru-RU').format(Math.round(price * 1.1)) + ' ₸';
+    return new Intl.NumberFormat('ru-RU').format(Math.round(price)) + ' ₸';
   };
 
   const showPopular = isOpen && query.length < 2;

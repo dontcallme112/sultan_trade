@@ -88,7 +88,7 @@ export default function Product() {
         user_id:   user.id,
         article:   product.article,
         name:      product.name,
-        price:     Math.round(getProductPrice() * 1.1), // с наценкой
+        price:     Math.round(getProductPrice()), // с наценкой
         image_url: getProductImages()[0],
       });
       setIsFavorite(true);
@@ -98,7 +98,7 @@ export default function Product() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    const priceWithMarkup = Math.round(getProductPrice() * 1.1);
+    const priceWithMarkup = Math.round(getProductPrice());
     const cartItem = {
       id:      product.article,
       article: product.article,
@@ -116,7 +116,7 @@ export default function Product() {
   // Купить сейчас с наценкой
   const handleBuyNow = () => {
     if (!product || !inStock) return;
-    const priceWithMarkup = Math.round(getProductPrice() * 1.1);
+    const priceWithMarkup = Math.round(getProductPrice());
     buyNow(
       {
         id:      product.article,
