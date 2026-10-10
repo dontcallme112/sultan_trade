@@ -203,7 +203,7 @@ export default function ChatWidget() {
             )}
 
             {messages.map(m => (
-              <div key={m.id} className={`chat-row ${m.sender}`}>
+              <div key={m.id} className={`chat-row ${m.sender === 'bot' ? 'manager' : m.sender}`}>
                 {m.sender === 'system'
                   ? <div className="chat-system">{m.body}</div>
                   : (
@@ -211,6 +211,7 @@ export default function ChatWidget() {
                       <div className={`chat-bubble${m.failed ? ' failed' : ''}${m.pending ? ' pending' : ''}`}>{m.body}</div>
                       <div className="chat-meta">
                         {m.sender === 'manager' && <span>Менеджер · </span>}
+                        {m.sender === 'bot' && <span>Автоответ · </span>}
                         {m.failed
                           ? <button type="button" className="chat-retry" onClick={() => send(m.body, m.id)}>Не отправлено · Повторить</button>
                           : <span>{m.pending ? 'Отправляется…' : time(m.created_at)}</span>}

@@ -120,6 +120,8 @@ export default function ProductGrid({ onlyNew = false, title = '' }) {
     setLocalSearch(val);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      // страница «Результаты поиска» (нет категории): если поле очистили, возвращаем в каталог, а не показываем «все товары»
+      if (!val.trim() && !categoryId && !onlyNew) { navigate('/catalog'); return; }
       const p = new URLSearchParams(searchParams);
       if (val.trim()) p.set('search', val.trim());
       else p.delete('search');
@@ -164,7 +166,7 @@ export default function ProductGrid({ onlyNew = false, title = '' }) {
             </svg>
             <input
               className="pl-search-input"
-              placeholder={onlyNew ? 'Найти среди новинок' : `Найти в «${categoryName}»`}
+              placeholder={onlyNew ? 'Найти среди новинок' : (!categoryId && searchQuery ? 'Уточнить запрос' : `Найти в «${categoryName}»`)}
               value={localSearch}
               onChange={e => handleSearch(e.target.value)}
             />
