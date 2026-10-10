@@ -9,6 +9,7 @@ import { createApiPayService, UserError, DEFAULT_BASE_URL } from './apipay.js';
 import { createPrivacy } from './privacy.js';
 import { createPricing } from './pricing.js';
 import { createChatService, createSupabaseChatStore, createTelegramSender, ChatError } from './chat.js';
+import { readFileSync } from 'node:fs';
 
 dotenv.config();
 
@@ -171,7 +172,7 @@ async function fetchOnce(key, fn) {
 }
 
 // ─── API очередь (каталог/синк) ──────────────────────────────
-const API_MIN_INTERVAL = 5000;
+const API_MIN_INTERVAL = process.env.API_MIN_INTERVAL_MS === undefined ? 5000 : Number(process.env.API_MIN_INTERVAL_MS);   // пауза между запросами к Al-Style (для тестов можно уменьшить)
 let apiQueue = Promise.resolve();
 function enqueueApiCall(fn) {
   const next = apiQueue.then(async () => { const r = await fn(); await sleep(API_MIN_INTERVAL); return r; });
@@ -185,6 +186,27 @@ function withOrderLock(fn) {
   orderLock = run.catch(() => {});
   return run;
 }
+
+// ─── Повторы при сбоях (Supabase и Al-Style иногда отвечают «upstream request timeout») ──
+const RETRY_BASE_MS = Number(process.env.RETRY_BASE_MS) || 2000;   // 2 с, 4 с, 8 с...
+const DB_PAUSE_MS = process.env.DB_PAUSE_MS === undefined ? 100 : Number(process.env.DB_PAUSE_MS);
+async function withRetry(label, fn, tries = 4) {
+  for (let n = 1; ; n++) {
+    try { return await fn(); }
+    catch (e) {
+      if (n >= tries || /^(22|23|42)/.test(String(e?.code || ''))) throw e;   // ошибки данных и SQL повтором не лечатся
+      const wait = RETRY_BASE_MS * 2 ** (n - 1);
+      console.warn(`⚠️ ${label}: попытка ${n} не удалась (${String(e?.message || 'ошибка').slice(0, 90)}), повтор через ${Math.round(wait / 1000)} с`);
+      await sleep(wait);
+    }
+  }
+}
+// запрос к Supabase с проверкой ошибки (supabase-js сам ошибки не бросает) и повторами
+const dbCall = (label, fn, tries) => withRetry(label, async () => {
+  const { data, error } = await fn();
+  if (error) throw Object.assign(new Error(error.message), { code: error.code });
+  return data;
+}, tries);
 
 // ─── Rate limiting ────────────────────────────────────────────
 const rateLimitMap = new Map();
@@ -228,7 +250,9 @@ async function fetchCatalogPage(offset) {
         return data;
       });
     } catch (e) {
+      const transient = [502, 503, 504].includes(e.response?.status) || (!e.response && /timeout|ECONNRESET|ECONNABORTED|ETIMEDOUT|EAI_AGAIN|socket hang up|network/i.test(`${e.code || ''} ${e.message || ''}`));
       if (e.response?.status === 403 && retries < 3) { retries++; await sleep(10000 * retries); }
+      else if (transient && retries < 3) { retries++; console.warn(`⚠️ Al-Style: страница ${offset} не ответила (${e.code || e.response?.status || e.message}), повтор ${retries}/3`); await sleep(RETRY_BASE_MS * 2 * retries); }
       else throw e;
     }
   }
@@ -241,13 +265,19 @@ async function loadProducts(cat) {
 
   if (supabaseAdmin) {
     try {
-      let query = supabaseAdmin.from('products')
-        .select('article, name, full_name, brand, price, price1, price2, price_usd, unit, source, description, isnew, quantity, image_url, category_id')
-        .neq('quantity', '0')
-        .order('price', { ascending: false })
-        .limit(2000);
-      if (cat) query = /^99000\d$/.test(String(cat)) ? query.eq('root_category_id', String(cat)) : query.eq('category_id', String(cat));
-      const { data, error } = await query;
+      const data = []; let error = null, prevFirst = null;
+      for (let from = 0; from < 10000; ) {   // Supabase отдаёт не больше 1000 строк за запрос: читаем страницами; порядок задаём однозначно (цена, затем артикул)
+        let query = supabaseAdmin.from('products')
+          .select('article, name, full_name, brand, price, price1, price2, price_usd, unit, source, description, isnew, quantity, image_url, category_id')
+          .neq('quantity', '0')
+          .order('price', { ascending: false }).order('article', { ascending: true })
+          .range(from, from + 999);
+        if (cat) query = /^99000\d$/.test(String(cat)) ? query.eq('root_category_id', String(cat)) : query.eq('category_id', String(cat));
+        const { data: page, error: pageErr } = await query;
+        if (pageErr) { error = pageErr; break; }
+        if (!page?.length || page[0].article === prevFirst) break;   // пусто или страница повторилась: читать дальше нечего
+        prevFirst = page[0].article; data.push(...page); from += page.length;
+      }
       if (!error && data?.length > 0) {
         const elements = data.map(p => ({
           article: p.article, name: p.name, full_name: p.full_name,
@@ -288,18 +318,17 @@ async function loadAllProductsForSearch() {
     if (supabaseAdmin) {
       try {
         let allData = [];
-        let from = 0;
+        let from = 0, prevFirst = null;
         const pageSize = 1000;
         while (true) {
           const { data, error } = await supabaseAdmin.from('products')
             .select('article, name, full_name, brand, price, price1, price_usd, unit, source, isnew, quantity, image_url')
             .neq('quantity', '0')
-            .order('price', { ascending: false })
+            .order('price', { ascending: false }).order('article', { ascending: true })
             .range(from, from + pageSize - 1);
-          if (error || !data?.length) break;
-          allData.push(...data);
-          if (data.length < pageSize) break;
-          from += pageSize;
+          if (error || !data?.length || data[0].article === prevFirst) break;
+          prevFirst = data[0].article; allData.push(...data);
+          from += data.length;
         }
         if (allData.length > 0) {
           const compact = allData.map(p => ({ article: p.article, name: p.name||'', full_name: p.full_name||'', brand: p.brand||'', price: dealerPrice(p), price1: p.price_usd ? null : dealerPrice(p), price_usd: p.price_usd ?? null, unit: p.unit||null, source: p.source||'alstyle', isnew: p.isnew||0, quantity: p.quantity, image: p.image_url||null }));
@@ -369,7 +398,7 @@ async function getManualCategories() {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabaseAdmin.from('products')
         .select('category_id, category_name, root_category_id, root_category_name')
-        .eq('source', 'manual').neq('quantity', '0').range(from, from + 999);
+        .eq('source', 'manual').neq('quantity', '0').order('article').range(from, from + 999);
       if (error) throw error;
       rows.push(...(data || []));
       if (!data || data.length < 1000) break;
@@ -423,11 +452,13 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
     for (const supplier of [...new Set(rows.map(r => r.supplier).filter(Boolean))]) {
       const keep = new Set(rows.filter(r => r.supplier === supplier).map(r => r.article));
       const old = [];
-      for (let from = 0; ;) {   // шаг по фактически полученному числу строк: если в проекте Supabase лимит строк меньше 1000, ничего не пропустим
+      let prevFirst = null;
+      for (let from = 0, pages = 0; ; pages++) {   // шаг по фактически полученному числу строк: если в проекте Supabase лимит строк меньше 1000, ничего не пропустим
+        if (pages > 200) throw new Error('Слишком много страниц при чтении старых позиций (больше 200)');
         const { data, error } = await supabaseAdmin.from('products').select('article').eq('source', 'manual').eq('supplier', supplier).neq('quantity', '0').order('article').range(from, from + 999);
         if (error) throw new Error('Не удалось прочитать старые позиции: ' + error.message);
-        if (!data?.length) break;
-        old.push(...data); from += data.length;
+        if (!data?.length || data[0].article === prevFirst) break;   // пусто или та же страница повторилась: читать дальше нечего
+        prevFirst = data[0].article; old.push(...data); from += data.length;
       }
       const gone = old.map(o => o.article).filter(a => !keep.has(a));
       for (let i = 0; i < gone.length; i += 100) {
@@ -448,13 +479,17 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
 // CHAT_BOT_TOKEN / CHAT_TELEGRAM_CHAT_ID, а если их нет, из TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (как у заказов).
 // CHAT_HOURS (по умолчанию 09:00-19:00, время Алматы), CHAT_AUTOREPLY и CHAT_OFFLINE_REPLY: тексты автоответов (необязательно).
 const CHAT_BOT_TOKEN = process.env.CHAT_BOT_TOKEN || TG_TOKEN;
+// Заготовки ответов менеджера и автоответы по ключевым словам лежат в chat-config.json (рядом с server.js); нет файла: чат работает без них
+let chatConfig = {};
+try { chatConfig = JSON.parse(readFileSync(new URL('./chat-config.json', import.meta.url), 'utf8')); }
+catch (e) { if (e.code !== 'ENOENT') console.warn('⚠️ chat-config.json не прочитан:', e.message); }
 const chatSvc = createChatService({
   store: supabaseAdmin ? createSupabaseChatStore(supabaseAdmin) : null,
   telegram: CHAT_BOT_TOKEN ? createTelegramSender({ token: CHAT_BOT_TOKEN, http: axios, base: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org' }) : null,
   chatId: process.env.CHAT_TELEGRAM_CHAT_ID || TG_CHAT_ID,
   hours: process.env.CHAT_HOURS || '09:00-19:00',
   webhookSecret: process.env.CHAT_WEBHOOK_SECRET || '',
-  autoReply: process.env.CHAT_AUTOREPLY, offlineReply: process.env.CHAT_OFFLINE_REPLY,
+  autoReply: process.env.CHAT_AUTOREPLY, offlineReply: process.env.CHAT_OFFLINE_REPLY, config: chatConfig,
 });
 const chatError = (res, e) => {
   if (e instanceof ChatError) return res.status(e.status).json({ error: e.message });
@@ -503,27 +538,46 @@ app.get('/media/:file', rateLimit({windowMs:60000,max:1500}), async (req,res) =>
 
 app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
+// Поиск: ё=е, регистр не важен, запрос из нескольких слов = все слова должны встретиться (в названии, полном названии или бренде)
+const normSearch = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+const searchTokens = (q) => normSearch(q).slice(0, 80).split(' ').filter(Boolean).slice(0, 6);
+function searchScore(p, tokens) {
+  const name = normSearch(p.name), full = normSearch(p.full_name), brand = normSearch(p.brand);
+  let score = 0;
+  for (const t of tokens) {
+    if (name.split(/[\s"«»()\/,.\-]+/).some(w => w.startsWith(t))) score += 4;      // слово в названии начинается с запроса («наушник» -> «Наушники»)
+    else if (name.includes(t)) score += 2;
+    else if (brand.includes(t)) score += 2;
+    else if (full.includes(t)) score += 1;
+    else return 0;                                                                // какого-то слова запроса нет совсем: товар не подходит
+  }
+  return score;
+}
+
 app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) => {
   try {
     const {limit=12,offset=0,minPrice,maxPrice,brand,onlyNew,search,sortBy}=req.query;
     const cat = parseCategoryParam(req.query.category);
     let products;
     // «Новинки» берутся из общего кеша товаров (loadAllProductsForSearch) и проходят те же фильтры, что и остальные списки
-    if (onlyNew==='true'&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
+    const tokens = searchTokens(search);
+    // «Новинки» и поиск без категории берутся из общего кеша ВСЕХ товаров (раньше поиск шёл только по 1000 самых дорогих)
+    if ((onlyNew==='true'||tokens.length)&&!cat) { products=await loadAllProductsForSearch().catch(()=>[]); }
     else { const data=await loadProducts(cat).catch(()=>null); if(!data)return res.status(502).json({error:'Не удалось загрузить товары',elements:[],pagination:{totalCount:0,hasMore:false}}); products=data.elements||[]; }
     products = products.map(normalizePrice).filter(isListable); // везде дилерская цена; только товары в наличии, с фото и реальной ценой
     if (minPrice||maxPrice) products=products.filter(p=>{const pr=p.price2||p.price1||0;return(!minPrice||pr>=+minPrice)&&(!maxPrice||pr<=+maxPrice);});
     if (brand) products=products.filter(p=>p.brand?.toLowerCase()===brand.toLowerCase());
     if (onlyNew==='true') products=products.filter(p=>p.isnew===1);
-    if (search){const s=search.toLowerCase();products=products.filter(p=>p.name?.toLowerCase().includes(s)||p.full_name?.toLowerCase().includes(s)||p.brand?.toLowerCase().includes(s));}
+    if (tokens.length){products=products.map(p=>({p,sc:searchScore(p,tokens)})).filter(x=>x.sc>0).map(x=>{x.p.__score=x.sc;return x.p;});}
     products = [...products]; // копия: sort() ниже иначе сортирует закешированный массив на месте
     if(sortBy==='price_asc') products.sort((a,b)=>sortPrice(a,true)-sortPrice(b,true));
     else if(sortBy==='price_desc') products.sort((a,b)=>sortPrice(b)-sortPrice(a));
     else if(sortBy==='name_asc') products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ru'));
     else if(sortBy==='newest') products.sort((a,b)=>(b.isnew||0)-(a.isnew||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));
+    else if(tokens.length) products.sort((a,b)=>(b.__score||0)-(a.__score||0)||(b.price2||b.price1||0)-(a.price2||a.price1||0));   // поиск: сначала самые подходящие
     else {
       // По умолчанию: убираем товары дороже 1М, новинки вперёд, потом по цене убыванию
-      products = products.filter(p => (p.price2||p.price1||0) <= 1000000);
+      products = products.filter(p => p.source === 'manual' || (p.price2||p.price1||0) <= 1000000);
       products.sort((a, b) => {
         const pa = a.price2||a.price1||0, pb = b.price2||b.price1||0;
         if ((b.isnew||0) !== (a.isnew||0)) return (b.isnew||0) - (a.isnew||0);
@@ -531,7 +585,7 @@ app.get('/api/products', rateLimit({windowMs:60000,max:300}), async (req,res) =>
       });
     }
     const start=Number(offset),end=start+Number(limit);
-    res.set('Cache-Control','public, max-age=60').json({elements:products.slice(start,end),pagination:{totalCount:products.length,total:products.length,offset:start,limit:Number(limit),hasMore:end<products.length}});
+    res.set('Cache-Control','public, max-age=60').json({elements:products.slice(start,end).map(({__score,...p})=>p),pagination:{totalCount:products.length,total:products.length,offset:start,limit:Number(limit),hasMore:end<products.length}});
   } catch(e){console.error('❌ /api/products:',e.message);res.status(500).json({error:e.message,elements:[],pagination:{totalCount:0,hasMore:false}});}
 });
 
@@ -804,46 +858,81 @@ app.post('/api/admin/sync', async (req,res) => {
   syncProductsToSupabase().catch(console.error);
 });
 
+// Отпечаток строки каталога: по нему понимаем, что товар изменился (цена, остаток, название, фото, категория)
+const numSig = v => (v == null || v === '' ? '' : String(Number(v)));
+const rowSig = r => [r.name, r.full_name, r.brand, numSig(r.price), numSig(r.price1), numSig(r.price2), r.quantity, numSig(r.isnew), r.image_url, r.category_id].map(v => (v == null ? '' : String(v))).join('\u0001');
+
+// Что сейчас лежит в базе из Al-Style: артикул -> { отпечаток, виден ли }. Читаем страницами по 1000 строк.
+async function loadAlstyleSnapshot() {
+  const map = new Map();
+  for (let from = 0; from < 200000; ) {
+    const data = await dbCall('чтение каталога', () => supabaseAdmin.from('products')
+      .select('article,name,full_name,brand,price,price1,price2,quantity,isnew,image_url,category_id')
+      .eq('source', 'alstyle').order('article').range(from, from + 999));
+    if (!data?.length) break;
+    for (const r of data) map.set(r.article, { sig: rowSig(r), active: r.quantity !== '0' });
+    from += data.length;
+  }
+  return map;
+}
+
+let lastSyncFailed = false;
 async function syncProductsToSupabase() {
   if (!supabaseAdmin) return;
   if (syncRunning) { console.log('⏭️ Синхронизация уже идёт, пропускаем'); return; }
   syncRunning = true;
   console.log('🔄 Синхронизация товаров с al-style...');
-  const start = Date.now(); let synced = 0, offset = 0, total = null;
+  const start = Date.now(); let seenCount = 0, written = 0, unchanged = 0, offset = 0, total = null;
   try {
+    // 1) снимок базы: нужен, чтобы не переписывать неизменившиеся товары (раньше каждый час писали все 13 тысяч строк)
+    let snapshot = null;
+    try { snapshot = await loadAlstyleSnapshot(); }
+    catch (e) { console.warn('⚠️ Не удалось прочитать каталог из базы, пишем всё без сравнения:', e.message); }
+    const seen = new Set(), pending = [];
+    const flush = async (all) => {
+      while (pending.length >= 100 || (all && pending.length)) {
+        const batch = pending.splice(0, 100);
+        await dbCall('запись товаров', () => supabaseAdmin.from('products').upsert(batch, { onConflict: 'article' }));
+        written += batch.length;
+        if (DB_PAUSE_MS) await sleep(DB_PAUSE_MS);
+      }
+    };
     do {
-      const data = await fetchCatalogPage(offset); // бросает ошибку, если страница не загрузилась
+      const data = await fetchCatalogPage(offset); // бросает ошибку, если страница не загрузилась (после повторов)
       const els = data.elements || []; if (!els.length) break;
       if (!total) total = data.pagination?.totalCount || 0;
-      for (let i = 0; i < els.length; i += 100) {
-        const batch = els.slice(i, i + 100).map(p => ({
+      for (const p of els) {
+        const row = {
           article: String(p.article), name: p.name||'', full_name: p.full_name||'', brand: p.brand||'',
           price: dealerPrice(p), price1: p.price1||null, price2: p.price2||null,
           quantity: String(p.quantity ?? '0'), isnew: p.isnew||0, image_url: p.images?.[0]||null,
           images: JSON.stringify(p.images||[]), category_id: p.category_id ? String(p.category_id) : null,
           raw_data: '{}', synced_at: new Date().toISOString(),
-        }));
-        const { error } = await supabaseAdmin.from('products').upsert(batch, { onConflict: 'article' });
-        if (error) throw new Error(`Supabase upsert: ${error.message}`); // supabase-js не бросает сам, проверяем вручную
-        synced += batch.length;
+        };
+        seen.add(row.article);
+        const prev = snapshot?.get(row.article);
+        if (prev && prev.active && prev.sig === rowSig(row)) unchanged++; else pending.push(row);
       }
+      await flush(false);
       offset += 250;
     } while (total && offset < total);
-    console.log(`✅ Синхронизация завершена: ${synced} товаров за ${Math.round((Date.now()-start)/1000)}с`);
+    await flush(true);
+    seenCount = seen.size;
+    console.log(`✅ Синхронизация завершена: в Al-Style ${seenCount}, записано ${written}, без изменений ${unchanged}, за ${Math.round((Date.now()-start)/1000)}с`);
     // Товары, которых нет в свежей выдаче (закончились у поставщика), прячем: обнуляем остаток.
     // Только если синк прошёл почти целиком, чтобы сбой API не скрыл весь каталог.
-    if (total && synced >= total * 0.9) {
-      const { error: staleErr } = await supabaseAdmin.from('products')
-        .update({ quantity: '0' })
-        .eq('source', 'alstyle')
-        .lt('synced_at', new Date(start).toISOString())
-        .neq('quantity', '0');
-      if (staleErr) console.warn('⚠️ Не удалось скрыть устаревшие товары:', staleErr.message);
+    if (snapshot && total && seenCount >= total * 0.9) {
+      const stale = [...snapshot].filter(([a, v]) => v.active && !seen.has(a)).map(([a]) => a);
+      for (let i = 0; i < stale.length; i += 100)
+        await dbCall('скрытие устаревших', () => supabaseAdmin.from('products').update({ quantity: '0' }).in('article', stale.slice(i, i + 100)));
+      if (stale.length) console.log(`🙈 Скрыто устаревших товаров: ${stale.length}`);
     }
     cache.delete('search_all_products_v3'); if (redis) await redis.del('search_all_products_v3').catch(()=>{});
+    if (lastSyncFailed) { lastSyncFailed = false; await sendTelegramNotification('✅ <b>Синхронизация каталога восстановилась</b>'); }
   } catch (e) {
+    lastSyncFailed = true;
     console.error('❌ Ошибка синхронизации:', e.message);
-    await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации каталога</b>\n${esc(e.message)}\nЗаписано до сбоя: ${synced}${total ? ` из ${total}` : ''}`);
+    await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации каталога</b>\n${esc(e.message)}\nВ Al-Style просмотрено: ${seenCount || offset}${total ? ` из ${total}` : ''}, записано изменений: ${written}`);
   } finally {
     syncRunning = false;
   }
