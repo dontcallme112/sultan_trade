@@ -10,6 +10,7 @@ import { createPrivacy } from './privacy.js';
 import { createPricing } from './pricing.js';
 import { createChatService, createSupabaseChatStore, createTelegramSender, ChatError } from './chat.js';
 import { readFileSync } from 'node:fs';
+import { pickPopular, DEFAULT_POPULAR_CONFIG } from './popular.js';
 
 dotenv.config();
 
@@ -604,6 +605,23 @@ app.get('/api/product/:article', async (req,res) => {
     if (!product || (!product.article && !product.name)) return res.status(404).json({ error: 'Товар не найден' });
     res.json(normalizePrice(product));
   } catch(e){res.status(500).json({error:e.message});}
+});
+
+// ═══ «Популярные товары» на главной: ходовая электроника по группам (настройка в popular-config.json) ═══
+let popularCfg = DEFAULT_POPULAR_CONFIG;
+try { popularCfg = { ...DEFAULT_POPULAR_CONFIG, ...JSON.parse(readFileSync(new URL('./popular-config.json', import.meta.url), 'utf8')) }; }
+catch (e) { if (e.code !== 'ENOENT') console.warn('⚠️ popular-config.json не прочитан, берём настройки по умолчанию:', e.message); }
+let popularCache = { at: 0, data: null };
+app.get('/api/popular', rateLimit({windowMs:60000,max:120}), async (req,res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || popularCfg.limit || 8, 1), 24);
+    if (!popularCache.data || Date.now() - popularCache.at > 10 * 60 * 1000) {
+      const all = await loadAllProductsForSearch().catch(() => []);
+      if (!all.length) return res.json({ elements: [], slots: [] });      // база не ответила: пустой ответ не запоминаем
+      popularCache = { at: Date.now(), data: pickPopular(all.map(normalizePrice).filter(isListable), { ...popularCfg, limit: 24 }) };
+    }
+    res.set('Cache-Control', 'public, max-age=300').json({ elements: popularCache.data.elements.slice(0, limit), slots: popularCache.data.slots });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/categories', async (req,res) => {
