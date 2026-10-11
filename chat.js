@@ -7,6 +7,24 @@
 // у чата свой ограничитель запросов; текст экранируется перед отправкой в Telegram; токен бота никогда не попадает в ошибки и логи.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
+const normText = (s) => String(s ?? '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+const PLACEHOLDER_RE = /^\s*ЗАПОЛНИТЬ/i;    // тексты, которые ещё не заполнены, не используются
+
+// Заготовки (templates) и автоответы (faq) из chat-config.json. Незаполненные и выключенные записи пропускаются.
+export function normalizeChatConfig(config = {}) {
+  const templates = new Map();
+  for (const [k, v] of Object.entries(config?.templates || {})) {
+    const key = normText(k).replace(/\s+/g, '_').replace(/^\/+/, '').slice(0, 30);
+    const text = cleanText(String(v ?? ''), 2000);
+    if (key && text && !PLACEHOLDER_RE.test(text)) templates.set(key, text);
+  }
+  const faq = (Array.isArray(config?.faq) ? config.faq : [])
+    .filter(e => e && e.enabled !== false && Array.isArray(e.keywords) && typeof e.answer === 'string')
+    .map(e => ({ name: String(e.name || e.keywords[0] || 'faq').slice(0, 40), keywords: e.keywords.map(normText).filter(Boolean), answer: cleanText(e.answer, 1000) }))
+    .filter(e => e.keywords.length && e.answer && !PLACEHOLDER_RE.test(e.answer));
+  return { templates, faq };
+}
+
 export class ChatError extends Error {
   constructor(status, message) { super(message); this.name = 'ChatError'; this.status = status; }
 }
@@ -55,8 +73,10 @@ export function createLimiter(now = () => Date.now()) {
  *  hours     — «09:00-19:00»
  *  webhookSecret — секрет вебхука Telegram
  */
-export function createChatService({ store, telegram, chatId, hours = '09:00-19:00', webhookSecret = '', autoReply, offlineReply, log = console, now = () => Date.now() }) {
+export function createChatService({ store, telegram, chatId, hours = '09:00-19:00', webhookSecret = '', autoReply, offlineReply, config, log = console, now = () => Date.now() }) {
   const allow = createLimiter(now);
+  const { templates, faq } = normalizeChatConfig(config);
+  const faqSent = new Map();   // «диалог:название» -> когда последний раз отвечали (чтобы не повторяться)
   const configured = Boolean(telegram && chatId && store && webhookSecret);   // без секрета вебхука ответы менеджера не дойдут, поэтому чат не показываем
   const hintAt = new Map();   // когда последний раз подсказывали менеджеру про Reply
 
@@ -68,11 +88,11 @@ export function createChatService({ store, telegram, chatId, hours = '09:00-19:0
 
   const publicMsg = (m) => ({ id: m.id, sender: m.sender, body: m.body, created_at: m.created_at });
 
-  async function forward(conv, msg, first) {
+  async function forward(conv, msg, first, note = '') {
     const label = conv.display_name ? esc(conv.display_name) : 'Гость';
     const head = `💬 <b>Чат #${shortId(conv.id)}</b> · ${label}`;
     const tail = first ? '\n\n<i>Ответьте на это сообщение (Reply), и клиент увидит ответ на сайте.</i>' : '';
-    const sent = await telegram.send(chatId, `${head}\n${esc(msg.body)}${tail}`);
+    const sent = await telegram.send(chatId, `${head}\n${esc(msg.body)}${note ? `\n<i>${esc(note)}</i>` : ''}${tail}`);
     await store.updateMessage(msg.id, { tg_chat_id: Number(chatId), tg_message_id: Number(sent), tg_attempts: (msg.tg_attempts || 0) + 1 });
   }
 
@@ -100,8 +120,11 @@ export function createChatService({ store, telegram, chatId, hours = '09:00-19:0
 
     const msg = await store.addMessage({ conversation_id: conv.id, sender: 'client', body });
     await store.touchConversation(conv.id, { last_message_at: new Date(now()).toISOString() });
+    const faqHit = faq.find(e => e.keywords.some(k => normText(body).includes(k)));
+    const faqKey = faqHit ? `${conv.id}:${faqHit.name}` : null;
+    const faqFresh = faqHit && now() - (faqSent.get(faqKey) || 0) > 24 * 3600 * 1000;
     let delivered = true;
-    try { await forward(conv, msg, first); }
+    try { await forward(conv, msg, first, faqFresh ? `🤖 Автоответ отправлен клиенту: ${faqHit.name}` : ''); }
     catch (e) {
       delivered = false;
       log.warn(`⚠️ Чат: не удалось переслать сообщение менеджеру (${e.status || e.code || 'ошибка'}), повторим автоматически`);
@@ -115,6 +138,12 @@ export function createChatService({ store, telegram, chatId, hours = '09:00-19:0
       const sys = await store.addMessage({ conversation_id: conv.id, sender: 'system', body: online() ? reply.on : reply.off });
       await store.touchConversation(conv.id, { last_auto_at: new Date(now()).toISOString() });
       extra.push(publicMsg(sys));
+    }
+    if (faqFresh) {   // автоответ по ключевым словам; если не получилось записать (например, не выполнен SQL про 'bot'), клиента это не касается
+      try {
+        const bot = await store.addMessage({ conversation_id: conv.id, sender: 'bot', body: faqHit.answer });
+        faqSent.set(faqKey, now()); extra.push(publicMsg(bot));
+      } catch (e) { log.warn(`⚠️ Чат: не удалось записать автоответ «${faqHit.name}» (${e.message || 'ошибка'})`); }
     }
     return { token: newToken, message: publicMsg(msg), extra, delivered };
   }
@@ -148,6 +177,73 @@ export function createChatService({ store, telegram, chatId, hours = '09:00-19:0
     await telegram.send(chatId, text).catch(() => {});
   }
 
+  const say = (html) => telegram.send(chatId, html).catch(e => log.warn(`⚠️ Чат: не удалось отправить в Telegram (${e.status || e.code || 'ошибка'})`));
+  const ago = (iso) => { const min = Math.max(0, Math.round((now() - Date.parse(iso)) / 60000)); return min < 1 ? 'только что' : min < 60 ? `${min} мин` : min < 1440 ? `${Math.round(min / 60)} ч` : `${Math.round(min / 1440)} дн`; };
+  const parseCommand = (text) => { const m = String(text).match(/^\/([^\s@]+)(?:@\w+)?(?:\s+([\s\S]*))?$/); return m ? { name: m[1].toLowerCase(), args: (m[2] || '').trim() } : null; };
+  const COMMANDS = new Set(['start', 'help', 'open', 'to', 't', 'templates', 'tpl']);
+  const HELP = [
+    '🤖 <b>Команды чата</b>',
+    '/open — кто ждёт ответа',
+    '/to #КОД текст — написать клиенту по коду (код в списке /open и в сообщении «💬 Чат #…»)',
+    '/t имя — ответить заготовкой: нажмите «Ответить» на сообщение клиента и напишите /t имя',
+    '/templates — список заготовок',
+    '/help — эта справка',
+    '',
+    'Обычный ответ: нажмите «Ответить» (Reply) на сообщение клиента и напишите текст.',
+  ].join('\n');
+
+  async function deliver(conversationId, text, tgMessageId) {
+    const saved = await store.addMessage({ conversation_id: conversationId, sender: 'manager', body: text, ...(tgMessageId ? { tg_chat_id: Number(chatId), tg_message_id: Number(tgMessageId) } : {}) });
+    await store.touchConversation(conversationId, { last_message_at: new Date(now()).toISOString() });
+    return saved;
+  }
+  // диалоги, где последнее слово за клиентом (служебные сообщения и автоответы не считаются ответом менеджера)
+  async function waiting(limit) {
+    const convs = await store.listRecentConversations(60);
+    if (!convs.length) return [];
+    const msgs = await store.lastMessages(convs.map(c => c.id), 600);
+    const last = new Map();
+    for (const m of msgs) { if (m.sender === 'system' || m.sender === 'bot') continue; if (!last.has(m.conversation_id)) last.set(m.conversation_id, m); }
+    return convs.map(c => ({ ...c, last: last.get(c.id) })).filter(c => c.last && c.last.sender === 'client').slice(0, limit);
+  }
+  async function runCommand(cmd, m, replyTo) {
+    const name = cmd.name;
+    if (name === 'start' || name === 'help') { await say(HELP); return { ok: true, command: 'help' }; }
+    if (name === 'templates' || name === 'tpl') {
+      if (!templates.size) { await say('Заготовок пока нет. Их добавляют в файл chat-config.json (раздел templates).'); return { ok: true, command: 'templates' }; }
+      const lines = [...templates].map(([k, v]) => `/t ${esc(k)} — ${esc(v.length > 60 ? v.slice(0, 57) + '…' : v)}`);
+      await say(`📝 <b>Заготовки</b>\n${lines.join('\n')}`); return { ok: true, command: 'templates' };
+    }
+    if (name === 'open') {
+      const list = await waiting(10);
+      if (!list.length) { await say('✅ Все клиенты получили ответ.'); return { ok: true, command: 'open', count: 0 }; }
+      const lines = list.map((c, i) => `${i + 1}. <b>#${shortId(c.id)}</b> · ${c.display_name ? esc(c.display_name) : 'Гость'} · ${ago(c.last.created_at)}\n   «${esc(c.last.body.length > 70 ? c.last.body.slice(0, 67) + '…' : c.last.body)}»`);
+      await say(`📋 <b>Ждут ответа: ${list.length}</b>\n${lines.join('\n')}\n\nОтветить: «Ответить» на сообщение клиента или /to #КОД текст`);
+      return { ok: true, command: 'open', count: list.length };
+    }
+    if (name === 'to') {
+      const mm = cmd.args.match(/^#?([0-9a-fA-F]{6})\s+([\s\S]+)$/);
+      if (!mm) { await say('Формат: /to #КОД текст (например, /to #8A8D16 Здравствуйте!). Коды видны в /open.'); return { ok: false, reason: 'bad_args' }; }
+      const text = cleanText(mm[2], MAX_MANAGER_TEXT);
+      const conv = (await store.listRecentConversations(300)).find(c => shortId(c.id) === mm[1].toUpperCase());
+      if (!conv) { await say(`Диалог #${esc(mm[1].toUpperCase())} не найден среди последних. Проверьте код в /open.`); return { ok: false, reason: 'unknown_conversation' }; }
+      await deliver(conv.id, text, m.message_id);
+      await say(`✅ Отправлено клиенту #${shortId(conv.id)}`); return { ok: true, command: 'to' };
+    }
+    if (name === 't') {
+      const key = normText(cmd.args).replace(/\s+/g, '_').replace(/^\/+/, '');
+      if (!key) return runCommand({ name: 'templates', args: '' }, m, replyTo);
+      if (!replyTo) { await say('Нажмите «Ответить» на сообщение клиента и напишите /t имя.'); return { ok: false, reason: 'not_a_reply' }; }
+      const text = templates.get(key);
+      if (!text) { await say(`Заготовки «${esc(key)}» нет. Список: /templates`); return { ok: false, reason: 'unknown_template' }; }
+      const target = await store.findMessageByTelegram(Number(chatId), Number(replyTo));
+      if (!target) { await say('Не нашёл, к какому клиенту относится это сообщение. Нажмите «Ответить» на сообщение клиента (с пометкой «💬 Чат #…»).'); return { ok: false, reason: 'unknown_target' }; }
+      await deliver(target.conversation_id, text, m.message_id);
+      await say('✅ Заготовка отправлена клиенту'); return { ok: true, command: 't' };
+    }
+    return { ok: false, reason: 'unknown_command' };
+  }
+
   // Ответ менеджера из Telegram. Возвращает { ok, reason }
   async function handleTelegramUpdate(update) {
     const m = update?.message;
@@ -156,8 +252,13 @@ export function createChatService({ store, telegram, chatId, hours = '09:00-19:0
     const text = cleanText(m.text || m.caption || '', MAX_MANAGER_TEXT);
     const replyTo = m.reply_to_message?.message_id;
 
+    const cmd = parseCommand(text);
+    if (cmd && COMMANDS.has(cmd.name)) return runCommand(cmd, m, replyTo);
+    if (cmd && replyTo && templates.has(cmd.name)) return runCommand({ name: 't', args: cmd.name }, m, replyTo);   // «/доставка» в ответе на сообщение клиента
+
     if (!replyTo) {
-      if (text && !text.startsWith('/')) await hint('ℹ️ Чтобы ответить клиенту, нажмите «Ответить» (Reply) на его сообщение из чата. Обычные сообщения клиенту не отправляются.');
+      if (cmd) await hint('ℹ️ Не знаю такой команды. Список команд: /help');
+      else if (text) await hint('ℹ️ Чтобы ответить клиенту, нажмите «Ответить» (Reply) на его сообщение из чата. Обычные сообщения клиенту не отправляются. Список команд: /help');
       return { ok: false, reason: 'not_a_reply' };
     }
     const target = await store.findMessageByTelegram(Number(chatId), Number(replyTo));
@@ -219,6 +320,12 @@ export function createSupabaseChatStore(sb) {
     },
     async findMessageByTelegram(chatId, messageId) {
       return must(await sb.from('chat_messages').select('id,conversation_id,sender').eq('tg_chat_id', chatId).eq('tg_message_id', messageId).maybeSingle());
+    },
+    async listRecentConversations(limit) {
+      return must(await sb.from('chat_conversations').select('id,display_name,last_message_at').order('last_message_at', { ascending: false }).limit(limit)) || [];
+    },
+    async lastMessages(conversationIds, limit) {
+      return must(await sb.from('chat_messages').select('id,conversation_id,sender,body,created_at').in('conversation_id', conversationIds).order('id', { ascending: false }).limit(limit)) || [];
     },
     async listPendingForward(sinceIso, maxAttempts, limit) {
       return must(await sb.from('chat_messages').select('*').eq('sender', 'client').is('tg_message_id', null).lt('tg_attempts', maxAttempts).gt('created_at', sinceIso).order('id', { ascending: true }).limit(limit)) || [];
