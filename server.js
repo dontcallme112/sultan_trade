@@ -11,6 +11,7 @@ import { createPricing } from './pricing.js';
 import { createChatService, createSupabaseChatStore, createTelegramSender, ChatError } from './chat.js';
 import { readFileSync } from 'node:fs';
 import { pickPopular, DEFAULT_POPULAR_CONFIG } from './popular.js';
+import { buildIndex, matchLot } from './matcher.js';
 
 dotenv.config();
 
@@ -621,6 +622,29 @@ app.get('/api/popular', rateLimit({windowMs:60000,max:120}), async (req,res) => 
       popularCache = { at: Date.now(), data: pickPopular(all.map(normalizePrice).filter(isListable), { ...popularCfg, limit: 24 }) };
     }
     res.set('Cache-Control', 'public, max-age=300').json({ elements: popularCache.data.elements.slice(0, limit), slots: popularCache.data.slots });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══ Подбор товаров под лоты закупок (для программы «радар закупок»; закрыто секретом, отдаёт и закупочную цену) ═══
+let matchIndex = { at: 0, idx: null };
+app.post('/api/admin/match', async (req,res) => {
+  if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 200) : [];
+    if (!items.length) return res.status(400).json({ error: 'Нужен список items: [{ id, text }]' });
+    if (!matchIndex.idx || Date.now() - matchIndex.at > 10 * 60 * 1000) {
+      const all = await loadAllProductsForSearch().catch(() => []);
+      if (!all.length) return res.status(503).json({ error: 'Каталог пока не загружен' });
+      matchIndex = { at: Date.now(), idx: buildIndex(all.filter(isListable)) };
+    }
+    const ourPrice = p => { const d = dealerPrice(p); return d > 1 ? applyMarkup(d) : 0; };
+    res.json({ items: items.map(it => ({
+      id: it.id,
+      matches: matchLot(String(it.text || '').slice(0, 600), matchIndex.idx, { priceOf: ourPrice })
+        .filter(m => ourPrice(m.product) > 0)
+        .map(m => ({ article: privacy.encodeArticle(String(m.product.article)), name: m.product.name, brand: m.product.brand || '', unit: m.product.unit || 'шт.',
+          dealer_price: dealerPrice(m.product), our_price: ourPrice(m.product), confidence: m.confidence, score: Math.round(m.score * 10) / 10 })),
+    })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
