@@ -15,6 +15,8 @@ export function rootOf(w) {
   return w;
 }
 
+const ADJECTIVE_RE = /(ая|яя|ый|ий|ой|ое|ее|ые|ие|ого|его|ому|ему|ую|юю|ным|ных)$/;
+
 export function tokenize(text) {
   const raw = norm(text).match(/[a-zа-я0-9][a-zа-я0-9\-.\/]*/g) || [];
   const words = [], codes = [];
@@ -23,7 +25,9 @@ export function tokenize(text) {
     if (/[a-z]/.test(t) || (/\d/.test(t) && t.length >= 3 && /[a-zа-я]/.test(t))) { if (t.length >= 2 && !GENERIC_CODES.has(t)) codes.push(t); }
     else if (/^[а-я]{3,}/.test(t) && !STOP.has(t)) words.push(t);
   }
-  return { words, codes, stems: words.map(w => w.slice(0, 5)), roots: words.map(rootOf) };
+  const roots = words.map(rootOf);
+  const ti = words.findIndex(w => w.length < 6 || !ADJECTIVE_RE.test(w));      // первое слово, которое не прилагательное
+  return { words, codes, stems: words.map(w => w.slice(0, 5)), roots, typeRoot: roots[ti >= 0 ? ti : 0] };
 }
 
 // Взаимоисключающие признаки: если лот требует одно, товар с явным противоположным признаком не подходит
@@ -72,7 +76,7 @@ export function matchLot(text, index, { topN = 3, priceOf = (p) => Number(p.pric
   const lot = tokenize(text);
   if (!lot.stems.length && !lot.codes.length) return [];
   const lotNorm = norm(text);
-  const type = lot.roots[0];
+  const type = lot.typeRoot;
   const lotSpecs = specsOf(text);
   const lotStems = new Set(lot.stems), lotCodes = new Set(lot.codes);
   const generic = lot.codes.length === 0;      // в лоте нет марки и модели: «Мышь компьютерная проводная»
