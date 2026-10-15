@@ -31,10 +31,14 @@ export function conflicts(lotNorm, productNorm) {
   return CONFLICT_PAIRS.some(([need, bad]) => need.test(lotNorm) && bad.test(productNorm) && !need.test(productNorm));
 }
 
+// слова-признаки аксессуаров: «Коврик для мыши» и «Сумка для ноутбука» не подходят под «мышь» и «ноутбук»
+const ACCESSORY_RE = /(^|[\s"(])(для|чехол|сумк|рюкзак|кабел|зарядн|адаптер|переходник|крепл|подставк|защитн|пленк|стекл|ремеш|ремн|держател|кронштейн|наклейк|ковр|батаре|аккумулятор)/;
+
 export function buildIndex(products) {
   return products.map(p => {
     const tk = tokenize(`${p.name || ''} ${p.brand || ''}`);
-    return { p, tk, norm: norm(`${p.name || ''} ${p.brand || ''}`), first: tk.stems[0] || '', stemSet: new Set(tk.stems), codeSet: new Set(tk.codes) };
+    const nm = norm(`${p.name || ''} ${p.brand || ''}`);
+    return { p, tk, norm: nm, accessory: ACCESSORY_RE.test(norm(p.name || '')), first: tk.stems[0] || '', stemSet: new Set(tk.stems), codeSet: new Set(tk.codes) };
   });
 }
 
@@ -48,22 +52,24 @@ export function matchLot(text, index, { topN = 3, priceOf = (p) => Number(p.pric
   const generic = lot.codes.length === 0;      // в лоте нет марки и модели: «Мышь компьютерная проводная»
   const res = [];
   for (const it of index) {
-    const typeHit = it.first === type ? 3 : (type && it.tk.stems.slice(0, 3).includes(type) ? 1 : 0);
+    // 3: тип товара в начале названия («Мышь …»); 2: в первых трёх словах («Компьютерная мышь …»), если это не аксессуар; 1: то же для аксессуароподобных названий
+    const inFirst3 = Boolean(type && it.tk.stems.slice(0, 3).includes(type));
+    const typeHit = it.first === type ? 3 : inFirst3 ? (it.accessory ? 1 : 2) : 0;
     const shared = [...it.codeSet].filter(c => lotCodes.has(c));
     if (typeHit === 0 && shared.length < 2) continue;            // нужен тот же тип товара либо совпадение хотя бы двух кодов
     if (typeHit === 1 && shared.length === 0) continue;          // «Сумка для ноутбука» не должна подходить под «ноутбук»
     if (conflicts(lotNorm, it.norm)) continue;                    // «проводная» не получит «wireless»
     const overlap = [...it.stemSet].filter(s => lotStems.has(s)).length / Math.max(3, it.stemSet.size);
     const score = typeHit + Math.min(6, shared.length * 2) + 2 * Math.min(1, overlap);
-    const confidence = typeHit === 3 && shared.length >= 2 ? 'high'
-      : typeHit === 3 && (shared.length >= 1 || overlap >= 0.5 || generic) ? 'medium' : 'low';
+    const confidence = typeHit >= 2 && shared.length >= 2 ? 'high'
+      : typeHit >= 2 && (shared.length >= 1 || overlap >= 0.5 || generic) ? 'medium' : 'low';
     res.push({ product: it.p, score, confidence, matched: { type: typeHit, codes: shared } });
   }
   const tier = { high: 3, medium: 2, low: 1 };
   const byName = (a, b) => String(a.product.article).localeCompare(String(b.product.article));
   if (generic) {
     // обезличенный лот: в закупках выигрывает цена, поэтому среди товаров того же типа берём самые дешёвые
-    res.sort((a, b) => (b.matched.type === 3) - (a.matched.type === 3) || priceOf(a.product) - priceOf(b.product) || b.score - a.score || byName(a, b));
+    res.sort((a, b) => (b.matched.type >= 2) - (a.matched.type >= 2) || priceOf(a.product) - priceOf(b.product) || b.score - a.score || byName(a, b));
   } else {
     res.sort((a, b) => tier[b.confidence] - tier[a.confidence] || b.score - a.score || priceOf(a.product) - priceOf(b.product) || byName(a, b));
   }

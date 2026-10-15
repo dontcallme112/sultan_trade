@@ -640,7 +640,7 @@ app.post('/api/admin/match', async (req,res) => {
     const ourPrice = p => { const d = dealerPrice(p); return d > 1 ? applyMarkup(d) : 0; };
     res.json({ items: items.map(it => ({
       id: it.id,
-      matches: matchLot(String(it.text || '').slice(0, 600), matchIndex.idx, { priceOf: ourPrice })
+      matches: matchLot(String(it.text || '').slice(0, 600), matchIndex.idx, { priceOf: ourPrice, topN: Math.min(Math.max(parseInt(req.body?.top, 10) || 3, 1), 10) })
         .filter(m => ourPrice(m.product) > 0)
         .map(m => ({ article: privacy.encodeArticle(String(m.product.article)), name: m.product.name, brand: m.product.brand || '', unit: m.product.unit || 'шт.',
           dealer_price: dealerPrice(m.product), our_price: ourPrice(m.product), confidence: m.confidence, score: Math.round(m.score * 10) / 10 })),
