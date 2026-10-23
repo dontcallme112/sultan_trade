@@ -12,6 +12,7 @@ import { createChatService, createSupabaseChatStore, createTelegramSender, ChatE
 import { readFileSync } from 'node:fs';
 import { pickPopular, DEFAULT_POPULAR_CONFIG } from './popular.js';
 import { buildIndex, matchLot } from './matcher.js';
+import { createIntantClient, syncIntant, compileCategories, parseCities } from './intant.js';
 
 dotenv.config();
 
@@ -538,7 +539,7 @@ app.get('/media/:file', rateLimit({windowMs:60000,max:1500}), async (req,res) =>
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
-app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, intant: Boolean(intantClient), markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
 // Поиск: ё=е, регистр не важен, запрос из нескольких слов = все слова должны встретиться (в названии, полном названии или бренде)
 const normSearch = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -893,6 +894,47 @@ app.post('/api/notify-order', rateLimit({windowMs:60000,max:30}), requireAuth, (
 // ─── Синхронизация каталога ──────────────────────────────────
 let syncRunning = false;
 
+// ═══ Intant: товары партнёра по B2B API (прайс + остатки) ═══
+// Переменные Railway: INTANT_LOGIN и INTANT_PASSWORD (или INTANT_AUTH=bearer и INTANT_TOKEN), INTANT_BASE_URL (по умолчанию https://api.intant.kz),
+// INTANT_CITIES (по умолчанию Алматы; «*» = все города), INTANT_SYNC_MINUTES (по умолчанию 60; 0 = только вручную).
+let intantCategories = compileCategories();
+try { intantCategories = compileCategories(JSON.parse(readFileSync(new URL('./intant-categories.json', import.meta.url), 'utf8'))); }
+catch (e) { if (e.code !== 'ENOENT') console.warn('⚠️ intant-categories.json не прочитан, берём разделы по умолчанию:', e.message); }
+const intantClient = (process.env.INTANT_LOGIN && process.env.INTANT_PASSWORD) || process.env.INTANT_TOKEN
+  ? createIntantClient({ baseUrl: process.env.INTANT_BASE_URL || 'https://api.intant.kz', login: process.env.INTANT_LOGIN, password: process.env.INTANT_PASSWORD, token: process.env.INTANT_TOKEN,
+      authMode: process.env.INTANT_AUTH, retryBaseMs: RETRY_BASE_MS, timeoutMs: Number(process.env.INTANT_TIMEOUT_MS) || 120000 })
+  : null;
+let intantRunning = false, intantFailed = false, intantLast = null;
+async function runIntantSync() {
+  if (!intantClient || !supabaseAdmin || intantRunning) return null;
+  intantRunning = true;
+  try {
+    const stats = await syncIntant({ client: intantClient, supabase: supabaseAdmin, dbCall, cities: parseCities(process.env.INTANT_CITIES), categories: intantCategories, pauseMs: DB_PAUSE_MS });
+    intantLast = { at: new Date().toISOString(), ok: true, ...stats };
+    manualCatCache.at = 0; popularCache.at = 0; matchIndex.at = 0;
+    for (const k of [...cache.keys()]) if (/^(product|search_all)/.test(String(k))) cache.delete(k);     // списки и карточки товаров пересчитаются уже с новыми данными
+    if (redis) await redis.del('search_all_products_v3').catch(() => {});
+    if (intantFailed) { intantFailed = false; await sendTelegramNotification('✅ <b>Синхронизация Intant восстановилась</b>'); }
+    return stats;
+  } catch (e) {
+    intantFailed = true; intantLast = { at: new Date().toISOString(), ok: false, error: e.message };
+    console.error('❌ Ошибка синхронизации Intant:', e.message);
+    await sendTelegramNotification(`⚠️ <b>Ошибка синхронизации Intant</b>\n${esc(e.message)}`);
+    return null;
+  } finally { intantRunning = false; }
+}
+app.post('/api/admin/sync-intant', async (req,res) => {
+  if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  if (!intantClient) return res.status(503).json({ error: 'Intant не настроен: задайте INTANT_LOGIN и INTANT_PASSWORD' });
+  if (intantRunning) return res.status(409).json({ error: 'Синхронизация Intant уже идёт' });
+  res.status(202).json({ message: 'Синхронизация Intant запущена в фоне' });
+  runIntantSync().catch(console.error);
+});
+app.get('/api/admin/intant-status', (req,res) => {
+  if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  res.json({ configured: Boolean(intantClient), running: intantRunning, last: intantLast });
+});
+
 app.post('/api/admin/sync', async (req,res) => {
   if (!SYNC_SECRET || req.headers['x-sync-secret'] !== SYNC_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   if (syncRunning) return res.status(409).json({ error: 'Синхронизация уже идёт' });
@@ -1002,4 +1044,6 @@ app.listen(PORT, () => {
   refreshUsdRate(); setInterval(refreshUsdRate, 6*60*60*1000);
   setTimeout(warmupCache, 30000);
   setTimeout(async()=>{ await syncProductsToSupabase(); setInterval(syncProductsToSupabase,60*60*1000); }, 5*60*1000);
+  const intantMinutes = process.env.INTANT_SYNC_MINUTES === undefined ? 60 : Number(process.env.INTANT_SYNC_MINUTES);
+  if (intantClient && intantMinutes > 0) setTimeout(async () => { await runIntantSync(); setInterval(runIntantSync, intantMinutes * 60 * 1000); }, 2 * 60 * 1000);
 });

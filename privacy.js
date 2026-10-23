@@ -12,7 +12,7 @@ import { createHmac } from 'node:crypto';
 export const MEDIA_FILE_RE = /^[\w.\-]{1,120}\.(?:jpe?g|png|webp|gif)$/i;
 
 const SUPPLIER_IMG_RE = /^https?:\/\/img\.al-style\.kz\/([\w.\-]{1,120}\.(?:jpe?g|png|webp|gif))$/i;
-const SUPPLIER_WORDS_RE = /al[\s\-_]?style|алстайл|ал[\s\-_]?стайл/gi;
+const SUPPLIER_WORDS_RE = /al[\s\-_]?style|алстайл|ал[\s\-_]?стайл|intant|интант|интэнт/gi;
 const NUMERIC_FILE_RE = /^(\d{1,10})((?:_\d{1,3})?\.(?:jpe?g|png|webp|gif))$/i;   // 92544_1.jpg
 const CODED_FILE_RE = /^(p[0-9a-z]{7})((?:_\d{1,3})?\.(?:jpe?g|png|webp|gif))$/i;  // p0a1b2c3_1.jpg
 const CODE_RE = /^p[0-9a-z]{7}$/;
