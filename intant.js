@@ -4,30 +4,59 @@
 import { createHash } from 'node:crypto';
 
 export const INTANT_SUPPLIER = 'Intant';
-export const INTANT_ROOT = { id: '990005', name: 'Телеком и кабельные системы' };
+export const INTANT_ROOT = { id: '990005', name: 'Сети, телеком и ИТ-оборудование' };
+export const INTANT_ROOT_SECURITY = { id: '990007', name: 'Безопасность и видеонаблюдение' };
+export const INTANT_ROOT_POWER = { id: '990008', name: 'Электропитание и зарядные станции' };
 
 const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
 // ───── разделы: по ключевым словам в названии (в API Intant категорий нет); первое совпадение выигрывает ─────
+// Порядок важен: узкие правила (шлагбаум, домофон, регистратор) стоят раньше широких (камера, сеть), а марки без уточнения («Hikvision …») только в конце.
+const SEC = INTANT_ROOT_SECURITY.id, PWR = INTANT_ROOT_POWER.id;
 export const DEFAULT_CATEGORIES = [
+  // безопасность
+  { id: '990710', root: SEC, name: 'Кронштейны и крепления для камер', match: '^(?=.*(камер|домофон|hikvision|hilook|dahua|ajax))(?=.*(кронштейн|стойка для крепления|крепление|штатив))' },
+  { id: '990703', root: SEC, name: 'Жёсткие диски для видеонаблюдения', match: 'жесткий диск|(^|[\\s(,])hdd([\\s),]|$)|skyhawk|твердотельный' },
+  { id: '990702', root: SEC, name: 'Видеорегистраторы', match: 'видеорегистратор|(^|[^a-z])(nvr|dvr|xvr)([^a-z]|$)' },
+  { id: '990711', root: SEC, name: 'Досмотровое и противокражное оборудование', match: 'металлодетектор|досмотр|рентген|видеоконтроля днища|противокраж' },
+  { id: '990705', root: SEC, name: 'Шлагбаумы и ограждения', match: 'шлагбаум|ограждени|парковочн|боллард|привод (для )?ворот|откатн(ые|ых) ворот|распашн(ые|ых) ворот|калитк|ворот' },
+  { id: '990706', root: SEC, name: 'Домофоны и вызывные панели', match: 'домофон|вызывн(ая|ой|ые) панел' },
+  { id: '990704', root: SEC, name: 'Контроль доступа (СКУД)', match: 'турникет|считыватель|контроллер (доступа|замка)|контроля доступа|биометрическ|терминал (доступа|распознаван)|распознаван|(^|[\\s(])замок|электромагнитн|доводчик|rfid|mifare|скуд|(^|[\\s])ts[12]000|speedface|senseface|inbio|saturn t|контроллер лифта|контроллер регистрации|licon' },
+  { id: '990707', root: SEC, name: 'Пожарная и охранная сигнализация', match: 'ппку|извещател|пожарн|охранн|сигнализац|оповещател|сирена|датчик (движения|дыма|открытия|разбития|затопления)|приемно-контрольн|адресн|искробезопасн|болид|риэлта|спектрон|сибарс|эпотос|спецприбор|лунь|квазар|комком|(^|[\\s(])шс([\\s).,]|$)|(^|[\\s(])рип-?\\d|ax ?pro|starterkit|demostand|ajax hub|hub (kit|2|hybrid)|fibra|контроллер систем безопасности|motionprotect|doorprotect|keypad|doorbell|lifequality|waterstop|видеозвонок|тревожн' },
+  { id: '990708', root: SEC, name: 'Звук и оповещение', match: 'усилитель|громкоговорител|микшер|микшир|проигрыватель|тюнер|акустическ|звуков|микрофон|рупор|колонк|(^|[\\s(])itc([\\s)]|$)' },
+  { id: '990701', root: SEC, name: 'Видеокамеры', match: 'камер(а|ы|у|ой)|видеокамер|ip-?камер|(^|[^a-z])ptz([^a-z]|$)|bullet|купольн' },
+  // телеком и сети
+  { id: '990514', name: 'IP-телефония', match: 'fanvil|ip-?телефон|телефонный аппарат|(^|[^a-z])sip([^a-z]|$)' },
   { id: '990502', name: 'Оптические кабели и компоненты', match: 'оптическ|оптоволокон|fttx|(^|[\\s(])(sc|lc|fc|st)[\\/\\- ]|сплайс|пигтейл|pigtail|медиаконвертер' },
-  { id: '990501', name: 'Шкафы и стойки', match: '^(напольный |настенный |телекоммуникационный |серверный |мини-?)?(шкаф|стойка)' },
+  { id: '990501', name: 'Шкафы и стойки', match: '(^|[\\s(])шкаф([\\s)]|$)|^(напольная |настенная |телекоммуникационная |серверная )?стойка' },
   { id: '990503', name: 'Кабель витая пара', match: '^(?=.*(кабель|бухта))(?=.*(витая пара|utp|ftp|stp|cat ?[5-8]))' },
   { id: '990504', name: 'Патч-корды', match: 'патч-?корд' },
   { id: '990505', name: 'Патч-панели и кроссы', match: 'патч-?панел|кроссов|плинт' },
   { id: '990510', name: 'Инструмент и тестеры', match: 'инструмент|кримпер|тестер|обжим|стриппер|(^|[\\s(])нож([\\s)]|$)' },
-  { id: '990507', name: 'Сетевое оборудование', match: 'коммутатор|свитч|switch|маршрутизатор|роутер|точка доступа|access point|wi-?fi|sfp|poe|сетевая карта' },
+  { id: '990513', root: PWR, name: 'Зарядные станции для электромобилей', match: 'зарядн(ая|ые|ую) станци|электромобил|wallbox' },
+  { id: '990511', name: 'Принтеры, МФУ и офисная техника', match: 'принтер|(^|[\\s(])мфу([\\s)]|$)|плоттер|сканер|ламинатор|фальцовщик|брошюровщик|уничтожитель|копир|картридж|тонер' },
+  { id: '990515', name: 'Дисплеи и цифровые вывески', match: 'интерактивный дисплей|цифров(ая|ые|ую) вывеск|видеостен|дисплей|(^|[\\s(])монитор([\\s)]|$)' },
+  { id: '990512', name: 'Серверы и системы хранения', match: 'сервер|(^|[^a-z])схд([^a-z]|$)|storage' },
+  { id: '990507', name: 'Сетевое оборудование', match: 'коммутатор|свитч|switch|маршрутизатор|роутер|точка доступа|access point|wi-?fi|sfp|poe|сетевая карта|межсетевой экран|firewall|беспроводн(ой|ая|ое|ые) (передач|мост|точк)|(^|[\\s(])cpe|wi-tek|dptech|eltex' },
   { id: '990506', name: 'Розетки, модули и коннекторы', match: 'розетк|keystone|коннектор|rj-?45|разъ[её]м|джек|вставка|модуль' },
-  { id: '990508', name: 'Электропитание', match: '(^|[\\s(])(ибп|ups|pdu)([\\s)]|$)|блок питани|блок розеток|стабилизатор|аккумулятор|батаре' },
+  { id: '990508', root: PWR, name: 'Электропитание', match: '(^|[\\s(])(ибп|ups|pdu)([\\s)]|$)|бесперебойн|блок питани|источник питани|блок розеток|стабилизатор|аккумулятор|батаре' },
   { id: '990509', name: 'Кабельные трассы и крепёж', match: 'лоток|кабель-?канал|гофр|труба|стяжк|хомут|креп[её]ж|органайзер|держател|скоб|дюбел|винт|гайк|заглушк' },
+  // марки без уточнения в названии: в «Прочее (безопасность)»
+  { id: '990709', root: SEC, name: 'Прочее (безопасность)', match: 'hikvision|hilook|dahua|slinex|ezviz|ajax|zkteco|perco|ironlogic|yale|nice|forteza' },
 ];
-export const FALLBACK_CATEGORY = { id: '990599', name: 'Прочее (телеком)' };
+export const FALLBACK_CATEGORY = { id: '990599', name: 'Прочее' };
 
 export function compileCategories(config) {
+  const roots = new Map([[INTANT_ROOT.id, INTANT_ROOT], [INTANT_ROOT_SECURITY.id, INTANT_ROOT_SECURITY], [INTANT_ROOT_POWER.id, INTANT_ROOT_POWER]]);
+  for (const r of Array.isArray(config?.roots) ? config.roots : []) if (/^\d{4,8}$/.test(String(r?.id)) && r?.name) roots.set(String(r.id), { id: String(r.id), name: String(r.name) });
   const cats = Array.isArray(config?.categories) && config.categories.length ? config.categories : DEFAULT_CATEGORIES;
   const fb = config?.fallback?.id ? config.fallback : FALLBACK_CATEGORY;
-  return { rules: cats.filter(c => /^\d{4,8}$/.test(String(c.id)) && c.name && c.match).map(c => ({ id: String(c.id), name: String(c.name), re: new RegExp(c.match, 'i') })), fallback: { id: String(fb.id), name: String(fb.name) } };
+  const rootOf = (id) => roots.get(String(id)) || INTANT_ROOT;
+  return {
+    rules: cats.filter(c => /^\d{4,8}$/.test(String(c.id)) && c.name && c.match).map(c => ({ id: String(c.id), name: String(c.name), root: rootOf(c.root), re: new RegExp(c.match, 'i') })),
+    fallback: { id: String(fb.id), name: String(fb.name), root: rootOf(fb.root) },
+  };
 }
 const DEFAULT_COMPILED = compileCategories();
 export const categorize = (name, compiled = DEFAULT_COMPILED) => {
@@ -95,14 +124,14 @@ export function buildRows(prices, quantities, { cities = ['алматы'], categ
     const name = clean(p.Name, 200); if (name.length < 3) { skipped.bad++; continue; }
     const cat = categorize(name, categories);
     rows.push({ article: articleFor(p.GUID), name, full_name: name, brand: clean(s.brand, 80), price, price1: price, price2: price, price_usd: null,
-      quantity: String(Math.max(1, Math.floor(s.total))), isnew: 0, image_url: null, images: [], category_id: cat.id, root_category_id: INTANT_ROOT.id,
-      category_name: cat.name, root_category_name: INTANT_ROOT.name, description: null, unit: unitOf(p.Unit), supplier: INTANT_SUPPLIER, source: 'manual', raw_data: {}, synced_at: now });
+      quantity: String(Math.max(1, Math.floor(s.total))), isnew: 0, image_url: null, images: [], category_id: cat.id, root_category_id: cat.root.id,
+      category_name: cat.name, root_category_name: cat.root.name, description: null, unit: unitOf(p.Unit), supplier: INTANT_SUPPLIER, source: 'manual', raw_data: {}, synced_at: now });
   }
   return { rows, skipped };
 }
 
 const numSig = (v) => (v == null || v === '' ? '' : String(Number(v)));
-export const rowSig = (r) => [r.name, r.brand, numSig(r.price), r.unit, r.quantity, r.category_id].map(v => (v == null ? '' : String(v))).join('\u0001');
+export const rowSig = (r) => [r.name, r.brand, numSig(r.price), r.unit, r.quantity, r.category_id, r.category_name, r.root_category_id, r.root_category_name].map(v => (v == null ? '' : String(v))).join('\u0001');
 
 /** Синхронизация: пишем только изменившееся, исчезнувшее и обнулившееся прячем (quantity '0'). */
 export async function syncIntant({ client, supabase, dbCall, cities, categories, log = console, now = () => new Date().toISOString(), pauseMs = 100, sleep = (ms) => new Promise(r => setTimeout(r, ms)) }) {
@@ -114,7 +143,7 @@ export async function syncIntant({ client, supabase, dbCall, cities, categories,
   // что уже лежит в базе от Intant
   const snapshot = new Map();
   for (let from = 0, prevFirst = null; from < 200000; ) {
-    const data = await dbCall('чтение товаров Intant', () => supabase.from('products').select('article,name,brand,price,unit,quantity,category_id')
+    const data = await dbCall('чтение товаров Intant', () => supabase.from('products').select('article,name,brand,price,unit,quantity,category_id,category_name,root_category_id,root_category_name')
       .eq('supplier', INTANT_SUPPLIER).eq('source', 'manual').order('article').range(from, from + 999));
     if (!data?.length || data[0].article === prevFirst) break;
     prevFirst = data[0].article; for (const r of data) snapshot.set(r.article, { sig: rowSig(r), active: r.quantity !== '0' }); from += data.length;
