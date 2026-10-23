@@ -445,13 +445,8 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
   if (errors.length) return res.status(400).json({ error: 'В файле есть ошибки, ничего не загружено', errors: errors.slice(0, 30), errorsTotal: errors.length });
   if (new Set(rows.map(r => r.article)).size !== rows.length) return res.status(400).json({ error: 'В файле повторяются артикулы' });
   try {
-    for (let i = 0; i < rows.length; i += 200) {
-      const { error } = await supabaseAdmin.from('products').upsert(rows.slice(i, i + 200), { onConflict: 'article' });
-      if (error) throw new Error(error.message);
-    }
-    // Скрываем позиции этого поставщика, которых нет в новом файле. Читаем постранично (Supabase отдаёт не больше 1000 строк за запрос),
-    // ошибки не глотаем, а считаем реально скрытые строки.
-    let hidden = 0;
+    // 1) Сначала читаем, что у каждого поставщика уже лежит, и считаем, что исчезнет из-за этой загрузки (постранично: Supabase отдаёт не больше 1000 строк за запрос).
+    const plan = [];
     for (const supplier of [...new Set(rows.map(r => r.supplier).filter(Boolean))]) {
       const keep = new Set(rows.filter(r => r.supplier === supplier).map(r => r.article));
       const old = [];
@@ -463,7 +458,20 @@ app.post('/api/admin/import-products', express.json({ limit: '10mb' }), async (r
         if (!data?.length || data[0].article === prevFirst) break;   // пусто или та же страница повторилась: читать дальше нечего
         prevFirst = data[0].article; old.push(...data); from += data.length;
       }
-      const gone = old.map(o => o.article).filter(a => !keep.has(a));
+      plan.push({ supplier, gone: old.map(o => o.article).filter(a => !keep.has(a)), active: old.length });
+    }
+    // 2) Защита от ошибки «второй файл того же поставщика спрятал первый»: если загрузка прячет больше половины позиций поставщика, нужно подтверждение (?confirm=1).
+    const risky = plan.filter(x => x.gone.length >= 20 && x.gone.length > x.active * 0.5);
+    if (risky.length && req.query.confirm !== '1') return res.status(409).json({
+      error: 'Загрузка спрятала бы много позиций поставщика: ничего не изменено. Если это нужно (обновление прайса целиком), повторите с ?confirm=1. Если вы грузите часть прайса, объедините файлы поставщика в один.',
+      wouldHide: risky.map(x => ({ supplier: x.supplier, wouldHide: x.gone.length, ofActive: x.active })) });
+    // 3) Записываем и скрываем исчезнувшие (считаем реально скрытые строки, ошибки не глотаем)
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await supabaseAdmin.from('products').upsert(rows.slice(i, i + 200), { onConflict: 'article' });
+      if (error) throw new Error(error.message);
+    }
+    let hidden = 0;
+    for (const { gone } of plan) {
       for (let i = 0; i < gone.length; i += 100) {
         const { data: done, error } = await supabaseAdmin.from('products').update({ quantity: '0' }).in('article', gone.slice(i, i + 100)).select('article');
         if (error) throw new Error('Не удалось скрыть старые позиции: ' + error.message);
