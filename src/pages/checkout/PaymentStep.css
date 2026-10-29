@@ -1,0 +1,135 @@
+/* Экран оплаты Kaspi после оформления заказа. Только переменные темы. */
+.pay-step {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 56px 24px;
+  text-align: center;
+}
+.pay-step h2 { margin-bottom: var(--space-3); }
+.pay-step p { margin-bottom: var(--space-4); color: var(--text-secondary); }
+
+.pay-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto var(--space-5);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--gold);
+  background: var(--accent-light);
+  border-radius: 50%;
+}
+.pay-icon-ok   { color: var(--text-inverse); background: var(--success); }
+.pay-icon-warn { color: var(--text-inverse); background: var(--warning); }
+
+.pay-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-medium);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: rotate 0.8s linear infinite;
+}
+
+.pay-amount {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--gold) !important;
+  font-variant-numeric: tabular-nums;
+}
+.pay-hint { font-size: 14px; color: var(--text-muted) !important; }
+
+.pay-sandbox {
+  margin-bottom: var(--space-5);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--badge-warning-text, #8a5e12);
+  background: rgba(214, 154, 58, 0.15);
+  border: 1px solid rgba(214, 154, 58, 0.35);
+  border-radius: var(--radius-md);
+}
+
+.pay-phone {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--space-3);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 16px;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-medium);
+  border-radius: var(--radius-md);
+}
+.pay-phone:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px var(--accent-glow); }
+
+.pay-step .btn { display: flex; width: 100%; margin-top: var(--space-3); }
+
+/* ── Оплата по ссылке Kaspi Pay ── */
+.pay-icon-kaspi { color: var(--text-inverse); background: var(--gold); }
+.pay-copy {
+  display: inline-block;
+  margin: 0 0 var(--space-5);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.pay-copy:hover { background: var(--accent-light); }
+.pay-steps {
+  max-width: 400px;
+  margin: 0 auto var(--space-5);
+  padding-left: 22px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.pay-steps li { margin-bottom: var(--space-2); }
+.pay-steps b { color: var(--text-primary); }
+.pay-actions { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-4); }
+.pay-actions .btn { width: 100%; text-align: center; text-decoration: none; }
+.pay-later {
+  padding: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.pay-error { color: var(--error, #c0392b) !important; font-size: 14px; }
+
+/* ── Оплата по реквизитам ── */
+.pay-hint { max-width: 420px; margin: 0 auto var(--space-5); font-size: 15px; line-height: 1.5; color: var(--text-secondary); }
+.pay-hint b { color: var(--text-primary); }
+.pay-req { max-width: 440px; margin: 0 auto var(--space-5); text-align: left; }
+.pay-req-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--space-3);
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle, var(--border-medium));
+}
+.pay-req-row dt { grid-column: 1; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.pay-req-row dd { grid-column: 1; margin: 2px 0 0; font-size: 16px; color: var(--text-primary); word-break: break-word; }
+.pay-req-copy {
+  grid-column: 2; grid-row: 1 / span 2;
+  padding: 6px 12px; font: inherit; font-size: 13px;
+  color: var(--gold); background: transparent;
+  border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+  cursor: pointer; min-width: 92px;
+}
+.pay-req-copy:hover { background: var(--accent-light); }

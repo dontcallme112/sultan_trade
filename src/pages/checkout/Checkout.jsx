@@ -7,6 +7,7 @@ import { BACKEND_URL } from '../../api/client';
 import { formatNumber } from '../../utils/priceUtils.js';
 import { formatPhone, validateCustomer, mapServerFields } from '../../utils/customerValidation';
 import { openAuthModal } from '../../utils/authModal';
+import PaymentStep from './PaymentStep';
 import './Checkout.css';
 
 export default function Checkout() {
@@ -18,6 +19,7 @@ export default function Checkout() {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [paying, setPaying] = useState(null);   // созданный заказ -> экран оплаты Kaspi
   const formRef = useRef(null);
 
   const totalPrice = getCartTotal ? getCartTotal() : 0;
@@ -120,8 +122,10 @@ export default function Checkout() {
         localStorage.setItem('orders', JSON.stringify(orders));
       } catch (err) { console.error('localStorage error:', err); }
 
+      // Заказ сохранён: очищаем корзину и переходим к оплате Kaspi (если оплата недоступна, экран предложит продолжить без неё)
       clearCart();
-      navigate(`/order-confirmation/${orderId}`);
+      if (data.order?.id) setPaying({ id: data.order.id, orderId, total: confirmedTotal, phone: formData.phone });
+      else navigate(`/order-confirmation/${orderId}`);
     } catch (err) {
       console.error('❌ Order error:', err);
       setSubmitError('Нет связи с сервером. Заказ не отправлен, проверьте интернет и попробуйте ещё раз.');
@@ -129,6 +133,12 @@ export default function Checkout() {
       setLoading(false);
     }
   };
+
+  // ── Оплата заказа через Kaspi (ApiPay) ──
+  if (paying) {
+    const done = () => navigate(`/order-confirmation/${paying.orderId}`);
+    return <PaymentStep orderId={paying.id} total={paying.total} phone={paying.phone} onPaid={done} onLater={done} />;
+  }
 
   // ── Корзина пуста ──
   if (!cart || cart.length === 0) {

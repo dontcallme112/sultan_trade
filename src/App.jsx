@@ -10,6 +10,7 @@ import Catalog from './pages/catalog/Catalog.jsx';
 import Product from './pages/product/Product.jsx';
 import Cart from './pages/cart/Cart.jsx';
 import Checkout from './pages/checkout/Checkout.jsx';
+import Invoice from './pages/invoice/Invoice.jsx';
 import NotFound from './pages/NotFound/NotFound.jsx';
 import OrderConfirmation from './pages/OrderConfirmation/OrderConfirmation';
 import NewProducts from './pages/NewProducts/NewProducts';
@@ -35,6 +36,7 @@ function App() {
               <Route path="/product/:id" element={<Product />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/invoice/:orderId" element={<Invoice />} />
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
               <Route path="/new" element={<NewProducts />} />
               <Route path="/profile" element={<Profile />} />
