@@ -879,15 +879,21 @@ const payMode = () => (apipaySvc.configured ? 'apipay' : REQ.ok ? 'requisites' :
 const linkMode = () => payMode() === 'link';
 const publicRequisites = () => { const c = REQ.company; return { name: c.name, bin: c.bin, iban: formatIban(c.iban), bank: c.bank, bic: c.bic, kbe: c.kbe || '', address: c.address, phone: c.phone }; };
 const orderRef = (id) => String(id).slice(0, 8).toUpperCase();
+// Контакты клиента: если в таблице нет колонок customer_name/phone, они лежат в комментарии («Имя: … | Тел: …»)
+const contactOf = (o) => ({
+  name: o.customer_name || (String(o.comment || '').match(/Имя:\s*([^|]+?)\s*(?:\||$)/) || [])[1] || '',
+  phone: o.phone || (String(o.comment || '').match(/Тел:\s*([^|]+?)\s*(?:\||$)/) || [])[1] || '',
+});
 async function ownOrder(orderId, userId) {   // сумму берём только из заказа в базе и только для его владельца
-  const { data } = await supabaseAdmin.from('orders').select('id,user_id,total_price,phone,customer_name').eq('id', orderId).eq('user_id', userId).maybeSingle();
-  return data || null;
+  const { data, error } = await supabaseAdmin.from('orders').select('*').eq('id', orderId).eq('user_id', userId).maybeSingle();
+  if (error) console.warn('⚠️ Не удалось прочитать заказ для оплаты:', error.message);
+  return data ? { ...data, customer_name: contactOf(data).name, phone: contactOf(data).phone } : null;
 }
 app.get('/api/orders/:id/invoice', rateLimit({windowMs:60000,max:30,message:'Слишком много запросов'}), requireAuth, async (req,res) => {
   try {
     if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
     if (!REQ.ok) return res.status(503).json({ error: 'Счёт на оплату не настроен' });
-    const { data: order } = await supabaseAdmin.from('orders').select('id,user_id,items,total_price,customer_name,phone,address_text,created_at').eq('id', req.params.id).eq('user_id', req.user.id).maybeSingle();
+    const order = await ownOrder(req.params.id, req.user.id);
     if (!order) return res.status(404).json({ error: 'Заказ не найден' });
     res.set('Cache-Control', 'private, no-store').json(buildInvoice(order, REQ, { scrub: (t) => privacy.scrubText(t) }));
   } catch (e) { res.status(500).json({ error: e.message }); }
