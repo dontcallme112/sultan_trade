@@ -1,0 +1,15 @@
+{
+  "company": {
+    "name": "ИП «SSS»",
+    "bin": "791031303356",
+    "iban": "KZ40722S000002174444",
+    "bank": "АО «Kaspi Bank»",
+    "bic": "CASPKZKA",
+    "kbe": "19",
+    "address": "Талгарский район, г. Талгар, ул. Лермонтова, дом 55, кв/офис 8",
+    "phone": "",
+    "email": ""
+  },
+  "vat": "none",
+  "paymentDays": 3
+}

@@ -78,8 +78,12 @@ export function createPrivacy({ publicBackendUrl = '', idSecret = '' } = {}) {
     return file;
   };
 
-  const scrubText = (s) =>
-    typeof s === 'string' ? s.replace(SUPPLIER_WORDS_RE, '').replace(/[ \t]{2,}/g, ' ').trim() : s;
+  // убирает название поставщика и то, что от него остаётся: пустые скобки «()», «[]» и «: » в начале или конце
+  const scrubText = (s) => {
+    if (typeof s !== 'string') return s;
+    if (!new RegExp(SUPPLIER_WORDS_RE.source, 'i').test(s)) return s.replace(/[ \t]{2,}/g, ' ').trim();     // название поставщика не встречается: текст не трогаем (кроме пробелов)
+    return s.replace(SUPPLIER_WORDS_RE, '').replace(/[(\[{«"]\s*[)\]}»"]/g, '').replace(/^[\s:;,.\-–—|/]+|[\s:;,\-–—|/]+$/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+  };
 
   // возвращает копию: исходный объект (он может лежать в кеше) не меняется
   const publicProduct = (p) => {

@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { pickPopular, DEFAULT_POPULAR_CONFIG } from './popular.js';
 import { buildIndex, matchLot } from './matcher.js';
 import { createIntantClient, syncIntant, compileCategories, parseCities } from './intant.js';
+import { loadRequisites, buildInvoice, formatIban } from './requisites.js';
 
 dotenv.config();
 
@@ -138,7 +139,7 @@ const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 async function sendTelegramNotification(text) {
   if (!TG_TOKEN || !TG_CHAT_ID) return;
   try {
-    await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, { chat_id: TG_CHAT_ID, text, parse_mode: 'HTML' });
+    await axios.post(`${process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'}/bot${TG_TOKEN}/sendMessage`, { chat_id: TG_CHAT_ID, text, parse_mode: 'HTML' });   // TELEGRAM_API_BASE нужен только для тестов
     console.log('📱 Telegram уведомление отправлено');
   } catch (e) { console.warn('⚠️ Telegram ошибка:', e.message); }
 }
@@ -547,7 +548,7 @@ app.get('/media/:file', rateLimit({windowMs:60000,max:1500}), async (req,res) =>
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
-app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, intant: Boolean(intantClient), markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, kaspiLink: Boolean(parseKaspiLink(process.env.KASPI_PAY_LINK)), requisites: REQ.ok, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, intant: Boolean(intantClient), markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
 // Поиск: ё=е, регистр не важен, запрос из нескольких слов = все слова должны встретиться (в названии, полном названии или бренде)
 const normSearch = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -806,7 +807,7 @@ app.post('/api/orders', rateLimit({windowMs:60000,max:60}), requireAuth, async (
     if (error) return res.status(500).json({ error: error.message });
 
     const orderItems = priced.map(i => `• ${esc(i.name || 'Товар')} × ${i.quantity} ${esc(i.unit || 'шт.')} — ${(i.price * i.quantity).toLocaleString('ru-RU')} ₸`).join('\n');
-    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${apipaySvc.configured ? '💳 Оплата: ожидается (Kaspi)\n' : ''}${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
+    const msg = `🛒 <b>Новый заказ #${data.id?.slice(0,8).toUpperCase()}</b>\n\n👤 ${esc(customer.customer_name)}\n📱 ${esc(customer.phone)}\n📧 ${esc(req.user.email || '')}\n📍 ${esc(customer.address_text)}\n${apipaySvc.configured ? '💳 Оплата: ожидается (Kaspi)\n' : (payMode() === 'requisites' ? '💳 Оплата: по реквизитам (в назначении платежа номер заказа)\n' : linkMode() ? '💳 Оплата: Kaspi по ссылке (в сообщении к платежу должен быть номер заказа)\n' : '')}${base.comment ? `💬 ${esc(base.comment)}\n` : ''}\n📦 <b>Товары:</b>\n${orderItems}\n\n💰 <b>Итого: ${total_price.toLocaleString('ru-RU')} ₸</b>`;
     sendTelegramNotification(msg).catch(()=>{});
     res.json({ success: true, order: privacy.publicOrder(data) });
   } catch(e){res.status(500).json({error:e.message});}
@@ -855,10 +856,74 @@ const sendPayError = (res, e) => {
   return res.status(500).json({ error: 'Не удалось обработать оплату. Заказ сохранён, менеджер свяжется с вами.' });
 };
 
+// ═══ Оплата по ссылке Kaspi Pay (без посредников) ═══
+// Ссылка берётся в приложении Kaspi Pay: «Удалённая оплата» → «Ссылка для оплаты». Переменная Railway: KASPI_PAY_LINK.
+// Покупатель открывает ссылку в приложении Kaspi.kz, сам вводит сумму (мы показываем её крупно) и номер заказа в сообщении.
+// Поступление менеджер видит в Kaspi Pay. Если задан ключ ApiPay, работает счёт ApiPay, а не ссылка.
+function parseKaspiLink(raw) {
+  if (!raw) return null;
+  try { const u = new URL(String(raw).trim()); return u.protocol === 'https:' && /(^|\.)kaspi\.kz$/i.test(u.hostname) ? u.toString() : null; } catch { return null; }
+}
+const KASPI_PAY_LINK = parseKaspiLink(process.env.KASPI_PAY_LINK);
+if (process.env.KASPI_PAY_LINK && !KASPI_PAY_LINK) console.warn('⚠️ KASPI_PAY_LINK проигнорирована: нужна ссылка вида https://pay.kaspi.kz/... (https и домен kaspi.kz)');
+// Оплата по реквизитам (payment-config.json): клиент видит реквизиты компании и сумму, может открыть печатный счёт; поступление менеджер сверяет по банку.
+// Пока в файле есть «ЗАПОЛНИТЬ» или ошибка (например, опечатка в IBAN), способ выключен, а причина пишется в журнал.
+let REQ = loadRequisites({});
+try {
+  const cfgPath = process.env.PAYMENT_CONFIG_FILE || new URL('./payment-config.json', import.meta.url);
+  REQ = loadRequisites(JSON.parse(readFileSync(cfgPath, 'utf8')));
+  if (!REQ.ok) console.warn('⚠️ Оплата по реквизитам выключена: ' + REQ.problems.join('; '));
+} catch (e) { if (e.code !== 'ENOENT') console.warn('⚠️ payment-config.json не прочитан:', e.message); }
+// Способ оплаты по приоритету: счёт ApiPay > реквизиты > ссылка Kaspi Pay
+const payMode = () => (apipaySvc.configured ? 'apipay' : REQ.ok ? 'requisites' : KASPI_PAY_LINK ? 'link' : 'off');
+const linkMode = () => payMode() === 'link';
+const publicRequisites = () => { const c = REQ.company; return { name: c.name, bin: c.bin, iban: formatIban(c.iban), bank: c.bank, bic: c.bic, kbe: c.kbe || '', address: c.address, phone: c.phone }; };
+const orderRef = (id) => String(id).slice(0, 8).toUpperCase();
+async function ownOrder(orderId, userId) {   // сумму берём только из заказа в базе и только для его владельца
+  const { data } = await supabaseAdmin.from('orders').select('id,user_id,total_price,phone,customer_name').eq('id', orderId).eq('user_id', userId).maybeSingle();
+  return data || null;
+}
+app.get('/api/orders/:id/invoice', rateLimit({windowMs:60000,max:30,message:'Слишком много запросов'}), requireAuth, async (req,res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
+    if (!REQ.ok) return res.status(503).json({ error: 'Счёт на оплату не настроен' });
+    const { data: order } = await supabaseAdmin.from('orders').select('id,user_id,items,total_price,customer_name,phone,address_text,created_at').eq('id', req.params.id).eq('user_id', req.user.id).maybeSingle();
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    res.set('Cache-Control', 'private, no-store').json(buildInvoice(order, REQ, { scrub: (t) => privacy.scrubText(t) }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+const claimedAt = new Map();                 // не больше одного уведомления «клиент оплатил» на заказ в 10 минут
+
+app.post('/api/orders/:id/paid-claim', rateLimit({windowMs:60000,max:20,message:'Слишком много попыток'}), requireAuth, async (req,res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
+    if (!['link', 'requisites'].includes(payMode())) return res.status(503).json({ error: 'Оплата по реквизитам или ссылке не подключена' });
+    const order = await ownOrder(req.params.id, req.user.id);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    const last = claimedAt.get(order.id) || 0;
+    if (Date.now() - last > 10 * 60 * 1000) {
+      claimedAt.set(order.id, Date.now());
+      await sendTelegramNotification(`💳 <b>Клиент сообщает об оплате</b>\nЗаказ #${orderRef(order.id)} на сумму <b>${Number(order.total_price).toLocaleString('ru-RU')} ₸</b>\n👤 ${esc(order.customer_name || '')} ${esc(order.phone || '')}\nСпособ: ${payMode() === 'requisites' ? 'по реквизитам (в назначении платежа номер заказа)' : 'по ссылке Kaspi Pay (в сообщении номер заказа)'}.\nПроверьте поступление и подтвердите клиенту.`).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Выставить счёт Kaspi по заказу (сумму и телефон берём из заказа в базе, не от клиента)
 app.post('/api/orders/:id/pay', rateLimit({windowMs:60000,max:20,message:'Слишком много попыток оплаты'}), requireAuth, async (req,res) => {
   try {
     if (!UUID_RE.test(req.params.id)) return res.status(400).json({ error: 'Некорректный номер заказа' });
+    if (payMode() === 'requisites') {
+      const order = await ownOrder(req.params.id, req.user.id);
+      if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+      return res.json({ mode: 'requisites', amount: Number(order.total_price), order_ref: orderRef(order.id), purpose: `Оплата заказа ${orderRef(order.id)}`, requisites: publicRequisites(), payment_status: 'pending' });
+    }
+    if (linkMode()) {
+      const order = await ownOrder(req.params.id, req.user.id);
+      if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+      return res.json({ mode: 'link', link: KASPI_PAY_LINK, amount: Number(order.total_price), order_ref: orderRef(order.id), payment_status: 'pending' });
+    }
     const kaspiPhone = typeof req.body?.kaspi_phone === 'string' ? req.body.kaspi_phone.slice(0, 30) : undefined;
     res.json(await apipaySvc.startPayment({ orderId: req.params.id, userId: req.user.id, kaspiPhone }));
   } catch (e) { sendPayError(res, e); }
