@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeApp, listen } from './helpers.js';
+const token='token:u1:boss@example.com';
+test('React main contract: metadata, catalog, filters, detail, PATCH, logs; native contract retained',async t=>{
+  const app=makeApp(); const http=await listen(app.app); t.after(http.close);
+  const call=(method,path,body)=>http.call(method,'/api/tenders'+path,{token,body});
+  assert.equal((await http.call('GET','/api/tenders/connection')).status,401);
+  assert.equal((await http.call('GET','/api/tenders/connection',{token:'token:u2:shopper@example.com'})).status,403);
+  assert.equal((await call('GET','/connection')).json.demo,false);
+  assert.ok((await call('GET','/connection')).json.sources.every(s=>typeof s.label==='string'));
+  assert.equal((await call('POST','/sync',{source:'demo'})).status,200);
+  const list=(await call('GET','?search=видеокамер&category=security&active=true')).json;
+  assert.ok(list.items.length>0); assert.ok(list.summary.total===12);
+  assert.ok(list.regions.length>0 && list.methods.length>0 && list.pages>=1);
+  const row=list.items[0];
+  assert.equal(row.customer,row.customer_name);assert.equal(row.amount,row.total_price);
+  assert.equal(row.rating.score,row.score); assert.equal(row.rating.coverage,row.score_confidence/100);
+  assert.equal(row.demo,true);assert.equal(row.history_available,false);
+  assert.ok((await call('GET','?min=5000000&max=10000000')).json.items.every(l=>l.amount>=5000000 && l.amount<=10000000));
+  assert.equal((await call('GET','?customer=заказчик%20№999')).json.total,0);
+  assert.equal((await call('GET','?min=oops')).status,400);
+  assert.equal((await call('GET','?before=oops')).status,400);
+  const fav=await call('PATCH','/'+row.id,{favorite:true,workflow:'analysis'});
+  assert.equal(fav.status,200);assert.equal(fav.json.favorite,true);assert.equal(fav.json.work_status,'review');assert.equal(fav.json.workflow,'analysis');
+  assert.equal((await call('GET','?favorite=true&status=analysis')).json.total,1);
+  assert.equal((await call('GET','/'+row.id)).json.favorite,true);
+  assert.equal((await call('PATCH','/'+row.id,{favorite:'yes'})).status,400);
+  assert.equal((await call('PATCH','/'+row.id,{favorite:false,workflow:'invalid'})).status,400);
+  assert.equal((await call('GET','/'+row.id)).json.favorite,true);
+  assert.equal((await call('PATCH','/missing',{favorite:true})).status,404);
+  const log=(await call('GET','/sync-runs')).json;
+  assert.equal(log.runs[0].status,'success');assert.equal(log.runs[0].changed,12);assert.ok(log.last_success);
+  // Existing master UI clients keep their endpoints and fields.
+  assert.equal((await call('GET','/meta')).status,200);
+  assert.equal((await call('GET','/dashboard')).json.found,12);
+  assert.equal((await call('GET','?direction=cctv')).json.items[0].is_demo,true);
+});

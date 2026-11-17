@@ -1,3 +1,4 @@
+import { uiQuery, uiLot } from './compat.js';
 import { createHash } from 'node:crypto';
 import { scoreLot, isClosed, mergeScoring, validateScoring } from './scoring.js';
 import { DIRECTION_IDS } from './directions.js';
@@ -56,14 +57,17 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       extra: l.extra || {}, score: l.score, score_confidence: l.score_confidence, score_detail: l.score_detail,
       is_open: !isClosed(l, t), is_new: !!l.first_seen_at && t - new Date(l.first_seen_at).getTime() < 3 * 86400000,
       favorite: favs.has(l.id), work_status: st?.status || 'new', note: st?.note || null,
+      first_seen: l.first_seen_at,
     };
   };
 
   async function ctxFor(user) { return { favs: user ? await store.favorites(user) : new Set(), states: await store.states(), t: now() }; }
 
   async function list(user, q = {}) {
+    q = uiQuery(q);
     const ctx = await ctxFor(user);
     let rows = (await store.listLots()).map(l => view(l, ctx));
+    const all = [...rows];
     const text = String(q.q || '').trim().toLowerCase();
     const num = v => (v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
     const dirs = String(q.direction || '').split(',').filter(d => DIRECTION_IDS.includes(d));
@@ -73,6 +77,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       if (text && !`${r.title} ${r.description || ''} ${r.customer_name || ''} ${r.number || ''}`.toLowerCase().includes(text)) return false;
       if (dirs.length && !r.directions.some(d => dirs.includes(d))) return false;
       if (q.source && r.source !== q.source) return false;
+      if (q.customer && !String(r.customer_name || '').toLowerCase().includes(String(q.customer).toLowerCase())) return false;
       if (q.method && r.method !== q.method) return false;
       if (q.region && !String(r.region_name || '').toLowerCase().includes(String(q.region).toLowerCase())) return false;
       if (q.workStatus && r.work_status !== q.workStatus) return false;
@@ -93,12 +98,16 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     rows.sort(sorts[q.sort] || sorts.score);
     const limit = Math.min(Math.max(parseInt(q.limit, 10) || 25, 1), 100);
     const page = Math.max(parseInt(q.page, 10) || 1, 1);
-    return { total: rows.length, page, limit, items: rows.slice((page - 1) * limit, page * limit) };
+    return { total: rows.length, page, limit, pages:Math.ceil(rows.length/limit), items: rows.slice((page - 1) * limit, page * limit).map(uiLot),
+      regions:[...new Set(all.map(r=>r.region_name).filter(Boolean))], methods:[...new Set(all.map(r=>r.method).filter(Boolean))],
+      summary:{total:all.length,new:all.filter(r=>r.is_new).length, favorites:all.filter(r=>r.favorite).length,
+        high:all.filter(r=>r.is_open && r.score >= 80).length,
+        upcoming:all.filter(r=>r.is_open && r.deadline_at && Date.parse(r.deadline_at)>ctx.t && Date.parse(r.deadline_at)<=ctx.t+7*86400000).length} };
   }
 
   async function get(user, id) {
     const l = await store.getLot(id); if (!l) return null;
-    return view(l, await ctxFor(user));
+    return uiLot(view(l, await ctxFor(user)));
   }
 
   async function dashboard(user) {
@@ -166,5 +175,10 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return { rescored: rows.length };
   }
 
-  return { sync, list, get, dashboard, sources, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  async function syncRuns() {
+    const log = await store.listLog(50);
+    return {runs:log.map(e=>({...e, source:e.source, status:e.ok ? 'success' : 'error', changed:(e.inserted || 0)+(e.updated || 0)})), last_success:log.find(e=>e.ok)?.finished_at || null};
+  }
+
+  return { sync, list, get, dashboard, sources, syncRuns, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }
