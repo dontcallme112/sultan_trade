@@ -1,3 +1,4 @@
+import { createDocumentAI } from './ai.js';
 import { runDocumentExtraction } from './document-jobs.js';
 import { calculateFinance } from './finance.js';
 import { uiSource } from './compat.js';
@@ -8,7 +9,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [] }) {
+export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
   const allow = new Set(allowedEmails.map(e => e.trim().toLowerCase()).filter(Boolean));
@@ -37,6 +38,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   r.use('/api/tenders', (_req,res,next)=>{res.set('Cache-Control','no-store');next();}, rl);
   // ВАЖНО: глобальный парсер на сервере ограничен 200kb. Для импорта файла используем отдельный лимит (см. server.js).
   r.get('/api/tenders/access', gate, wrap(async (req, res) => res.json({ allowed: true, admin: !!req.tenderAdmin })));
+  r.get('/api/tenders/capabilities', gate, wrap(async (_req,res)=>res.json({ai:ai.status()})));
   r.get('/api/tenders/meta', gate, wrap(async (req, res) => res.json({
     directions: DIRECTIONS.map(d => ({ id: d.id, ru: d.ru, kk: d.kk })),
     statuses: LOT_STATUSES.map(s => ({ id: s, ru: LOT_STATUS_LABELS.ru[s], kk: LOT_STATUS_LABELS.kk[s] })),
@@ -78,7 +80,17 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   r.post('/api/tenders/:id/documents/extract', gate, big, wrap(async (req,res)=> {
     if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
-    extracting=true;try{res.json(await runDocumentExtraction(req.body));}finally{extracting=false;}
+    extracting=true;try{res.json({...await runDocumentExtraction(req.body),ai:ai.status()});}finally{extracting=false;}
+  }));
+  r.post('/api/tenders/:id/documents/analyze', gate, big, wrap(async (req,res)=> {
+    if(!uid(req))return res.status(401).json({error:'Войдите в аккаунт'});
+    if(req.body?.consent!==true)return res.status(400).json({error:'Подтвердите отправку текста в OpenAI'});
+    if(ai.status().status!=='ready')return res.status(409).json({error:ai.status().message,code:'NOT_CONNECTED'});
+    if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается'});
+    if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
+    extracting=true;let document;
+    try{document=await runDocumentExtraction(req.body);}finally{extracting=false;}
+    res.json(await ai.analyze(document,uid(req)));
   }));
   r.get('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.getWorkspace(uid(req),req.params.id))));
   r.put('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.saveWorkspace(uid(req),req.params.id,req.body || {}))));
