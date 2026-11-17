@@ -1,5 +1,5 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../api/supabaseClient';
 
 const AuthContext = createContext(null);
@@ -109,10 +109,10 @@ const signInWithGoogle = async () => {
   };
 
   // Получить JWT токен для запросов к нашему Express серверу
-  const getToken = async () => {
+  const getToken = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? null;
-  };
+  }, []);
 
   const value = {
     user,
