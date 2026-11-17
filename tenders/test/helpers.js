@@ -11,7 +11,7 @@ export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', sto
   const service = createTenderService({ store, adapters: createAdapters({ env, now: () => NOW }), now: () => NOW });
   const app = express();
   const jsonSmall = express.json({ limit: '200kb' });
-  app.use((req, res, next) => (req.path === '/api/tenders/import' ? next() : jsonSmall(req, res, next)));
+  app.use((req, res, next) => ((req.path === '/api/tenders/import' || req.path === '/api/tenders/import/preview' || /^\/api\/tenders\/[^/]+\/documents\/extract$/.test(req.path)) ? next() : jsonSmall(req, res, next)));
   // тестовая авторизация: токен "token:<id>:<email>"
   const requireAuth = (req, res, next) => {
     const m = /^Bearer token:([^:]+):(.+)$/.exec(req.headers.authorization || '');
