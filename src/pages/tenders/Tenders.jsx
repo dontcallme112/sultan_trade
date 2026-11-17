@@ -1,3 +1,4 @@
+import TenderReport from './TenderReport';
 import TenderExtendedRating from './TenderExtendedRating';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -64,6 +65,7 @@ export default function Tenders() {
       <div className="tender-stats">{[[t('Всего','Барлығы'),data.summary.total],[t('Новые','Жаңа'),data.summary.new],[t('Соответствие ≥80','Сәйкестік ≥80'),data.summary.high],[t('Избранные','Таңдаулылар'),data.summary.favorites],[t('Срок ≤7 дней','Мерзім ≤7 күн'),data.summary.upcoming]].map(([label,n]) => <div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>
       {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
         <p>{t('Базовое соответствие','Негізгі сәйкестік')}: <strong>{detail.rating.score}/100</strong> · {t('Полнота оценки','Бағалау толықтығы')}: {detail.rating.coverage*100}%</p><p>{detail.rating.formula}</p><p>{t('Неизвестно','Белгісіз')}: {detail.rating.unknown.join(', ')}</p>
+        <TenderReport key={'report:'+id} request={request} id={id} lang={lang} />
         <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} onTransferred={inputs=>setSupplierSeed({id,inputs})} />
         <TenderExtendedRating key={'rating:'+id} request={request} id={id} />
         <TenderFinance supplierSeed={supplierSeed?.id===id?supplierSeed.inputs:null} key={'finance:'+id} request={request} tender={detail} lang={lang} />
