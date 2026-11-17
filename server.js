@@ -14,6 +14,10 @@ import { pickPopular, DEFAULT_POPULAR_CONFIG } from './popular.js';
 import { buildIndex, matchLot } from './matcher.js';
 import { createIntantClient, syncIntant, compileCategories, parseCities } from './intant.js';
 import { loadRequisites, buildInvoice, formatIban } from './requisites.js';
+import { createSupabaseStore } from './tenders/store.js';
+import { createTenderService } from './tenders/service.js';
+import { createAdapters } from './tenders/adapters/index.js';
+import { createTendersRouter } from './tenders/router.js';
 
 dotenv.config();
 
@@ -129,7 +133,7 @@ app.use(cors({
   credentials: true,
 }));
 const jsonSmall = express.json({ limit: '200kb' });
-app.use((req, res, next) => (req.path === '/api/admin/import-products' ? next() : jsonSmall(req, res, next)));
+app.use((req, res, next) => (req.path === '/api/admin/import-products' || req.path === '/api/tenders/import' ? next() : jsonSmall(req, res, next)));
 app.use((req, res, next) => { if (!req.path.startsWith('/media/') && !(req.method === 'GET' && req.path === '/api/chat/messages')) console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -548,7 +552,7 @@ app.get('/media/:file', rateLimit({windowMs:60000,max:1500}), async (req,res) =>
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
-app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, kaspiLink: Boolean(parseKaspiLink(process.env.KASPI_PAY_LINK)), requisites: REQ.ok, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, intant: Boolean(intantClient), markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
+app.get('/health', (req,res) => res.json({ status:'OK', token:!!ALSTYLE_TOKEN, supabase:!!supabaseAdmin, apipay: apipaySvc.configured, kaspiLink: Boolean(parseKaspiLink(process.env.KASPI_PAY_LINK)), requisites: REQ.ok, hideSupplier: privacy.enabled, hideIds: privacy.codecOn, chat: chatSvc.configured, intant: Boolean(intantClient), tenders: Boolean(supabaseAdmin) && TENDERS_ALLOWED.length > 0, markupOnServer: MARKUP_ON_SERVER, cache:cache.size, usdRate: usdRate ? Math.round(usdRate*100)/100 : null, usdRateSource }));
 
 // Поиск: ё=е, регистр не важен, запрос из нескольких слов = все слова должны встретиться (в названии, полном названии или бренде)
 const normSearch = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -1112,6 +1116,14 @@ async function warmupCache() {
     console.log('ℹ️  Redis пустой — поиск будет читать из Supabase до следующей синхронизации');
     loadAllProductsForSearch().catch(e=>console.warn('⚠️ Фоновая загрузка:',e.message));
   } catch(e){console.warn('⚠️ Прогрев не удался:',e.message);}
+}
+
+// ─── Tender Intelligence (раздел /tenders). Нужна миграция tenders/migrations/001_tenders.sql ───
+const TENDERS_ALLOWED = (process.env.TENDERS_ALLOWED_EMAILS || '').split(',').map(x => x.trim()).filter(Boolean);
+if (supabaseAdmin) {
+  const tenderService = createTenderService({ store: createSupabaseStore(supabaseAdmin, { dbCall, maxRows: Number(process.env.TENDERS_MAX_ROWS) || 5000 }), adapters: createAdapters({ env: process.env }) });
+  app.use(createTendersRouter({ service: tenderService, requireAuth, rateLimit, syncSecret: SYNC_SECRET, allowedEmails: TENDERS_ALLOWED }));
+  console.log(`🧾 Тендеры: ${TENDERS_ALLOWED.length ? `✅ доступ для ${TENDERS_ALLOWED.length} почт` : '⚠️  TENDERS_ALLOWED_EMAILS не задан — раздел закрыт'}`);
 }
 
 app.listen(PORT, () => {
