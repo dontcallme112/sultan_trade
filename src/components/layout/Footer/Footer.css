@@ -248,3 +248,6 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+/* Keep the newsletter inside its grid column on narrow screens. */
+.footer-column { min-width: 0; }
+.newsletter-input { min-width: 0; }

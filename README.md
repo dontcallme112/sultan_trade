@@ -1,282 +1,30 @@
-<<<<<<< HEAD
-# 🛍️ LUXE - Премиум интернет-магазин
+# Stockera / Sultan Trade AI
 
-Современный интернет-магазин с темной темой, премиум-дизайном и интеграцией с API al-style.kz (казахстанский дистрибьютор электроники).
+Существующий интернет-магазин ТОО «Султан Trade LD»: React + Vite, Express, Supabase, серверная интеграция al-style.kz.
 
-## ✨ Особенности
+Добавлен MVP Tender Intelligence: `/tenders` — каталог закупок, фильтры, избранное, рабочие статусы, базовая оценка и журнал синхронизации.
 
-- 🎨 **Премиум дизайн** - темная тема с золотыми акцентами
-- ⚡ **Быстрая производительность** - оптимизирован для скорости
-- 📱 **Responsive** - адаптивный дизайн для всех устройств
-- 🎭 **Анимации** - плавные переходы и эффекты
-- 🔍 **Умный поиск** - с дебаунсом и фильтрацией
-- 🛒 **Корзина** - интеграция с API корзины al-style
-- 📦 **Модульная архитектура** - легко расширяется
-- 🔌 **API Integration** - полная интеграция с al-style.kz API
+- [Запуск и границы тендерного MVP](docs/TENDER-MVP.md)
+- [Аудит существующего проекта](docs/AUDIT-2026-11-17.md)
+- [Backend магазина](backend/README.md)
 
-## 🚀 Быстрый старт
+## Разработка магазина
 
-### Требования
-
-- Node.js 16.0+
-- npm или yarn
-- Access Token от al-style.kz
-
-### Установка
+Node.js 22.12+:
 
 ```bash
-# 1. Установите зависимости
 npm install
-
-# 2. Создайте .env файл из примера
-cp .env.example .env
-
-# 3. Добавьте ваш access-token в .env
-# VITE_ALSTYLE_ACCESS_TOKEN=ваш_токен_здесь
-```
-
-### Получение Access Token
-
-1. Зарегистрируйтесь на [al-style.kz](https://al-style.kz)
-2. Войдите в личный кабинет
-3. Перейдите в раздел "API"
-4. Скопируйте ваш access-token
-5. Вставьте его в файл `.env`
-
-### Запуск в режиме разработки
-
-```bash
+npm --prefix backend install
 npm run dev
 ```
 
-Приложение откроется по адресу `http://localhost:5173`
+Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (публичный anon ключ), `VITE_BACKEND_URL` (production/staging). Локальный Vite proxy магазина по умолчанию направлен на существующий Railway backend; для тендерного demo см. отдельную инструкцию выше.
 
-### Сборка для продакшена
+Backend: `ALSTYLE_ACCESS_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`; остальные настройки в backend/README.md. Секреты поставщиков и AI нельзя хранить в `VITE_*` или коммитить в Git.
 
 ```bash
 npm run build
+npm --prefix backend test
 ```
 
-### Предпросмотр продакшен-сборки
-
-```bash
-npm run preview
-```
-
-## 🎯 Интеграция с вашим API
-
-По умолчанию проект использует API al-style.kz - казахстанского дистрибьютора электроники.
-
-### API al-style.kz
-
-#### Доступные методы:
-
-**Товары:**
-- `GET /api/elements-pagination` - список товаров с пагинацией
-- `GET /api/element-info` - информация о товаре
-- `GET /api/images` - изображения товара
-- `GET /api/categories` - список категорий
-- `GET /api/brands` - список брендов
-- `GET /api/quantity-price` - остатки и цены
-- `GET /api/properties` - свойства товаров
-
-**Корзина:**
-- `GET /cart-api/add` - добавить в корзину
-- `GET /cart-api/remove` - удалить из корзины
-- `GET /cart-api/get` - получить корзину
-- `GET /cart-api/clear` - очистить корзину
-- `POST /cart-api/submit` - создать заказ
-
-**Заказы:**
-- `GET /api/orders` - список заказов
-- `GET /api/order` - детали заказа
-- `POST /api/order-confirm` - выписать накладную
-- `GET /cart-api/cancel` - отменить заказ
-
-**Справочники:**
-- `GET /api/warehouses` - список складов
-- `GET /api/user-data` - персональные данные
-
-#### Структура проекта для работы с API:
-
-```
-src/
-├── api/
-│   ├── client.js          # Axios instance с access-token
-│   └── services/
-│       ├── products.js    # Работа с товарами
-│       ├── cart.js        # Работа с корзиной
-│       ├── orders.js      # Работа с заказами
-│       └── reference.js   # Справочники (склады, user-data)
-├── hooks/
-│   ├── useProducts.js     # Hook для списка товаров
-│   ├── useProduct.js      # Hook для одного товара
-│   ├── useCategories.js   # Hook для категорий
-│   └── useBrands.js       # Hook для брендов
-```
-
-#### Пример использования:
-
-```javascript
-// Получение товаров
-import { useProducts } from './hooks/useProducts';
-
-const { products, loading, pagination } = useProducts({
-  category: 3638,
-  limit: 50,
-  exclude_missing: true
-});
-
-// Получение одного товара
-import { useProduct } from './hooks/useProduct';
-
-const { product, loading } = useProduct(20908); // article
-
-// Добавление в корзину
-import { cartAPI } from './api/services/cart';
-
-await cartAPI.add([20908, 20932], [2, 1]); // articles, quantities
-```
-
-### Замена на другое API
-
-Если хотите использовать другое API:
-
-1. Откройте `src/api/client.js`
-2. Измените `API_BASE_URL` и логику авторизации
-3. Адаптируйте сервисы в `src/api/services/` под вашу структуру данных
-4. Обновите утилиты маппинга `productUtils.mapProduct()`
-
-## 📁 Структура проекта
-
-```
-src/
-├── api/                  # API интеграция
-│   ├── client.js        # Axios конфигурация
-│   └── services/        # API сервисы
-├── components/          # React компоненты
-│   ├── common/         # UI компоненты
-│   ├── layout/         # Header, Footer
-│   └── features/       # ProductCard и др.
-├── pages/              # Страницы
-├── hooks/              # Custom hooks
-├── context/            # React Context
-├── styles/             # Глобальные стили
-└── utils/              # Утилиты
-```
-
-## 🎨 Кастомизация дизайна
-
-### Цвета
-
-Все цвета определены в `src/styles/variables.css`:
-
-```css
-:root {
-  --bg-primary: #0a0a0f;
-  --accent-gold: #d4af37;
-  /* ... */
-}
-```
-
-Измените эти переменные для смены цветовой схемы.
-
-### Шрифты
-
-Используются три шрифта:
-- **Playfair Display** - заголовки
-- **Inter** - основной текст
-- **Cormorant Garamond** - акценты
-
-Измените в `src/styles/variables.css`:
-
-```css
---font-display: 'Your Display Font', serif;
---font-body: 'Your Body Font', sans-serif;
-```
-
-## 🔧 Доступные хуки
-
-### useProducts
-```javascript
-const { products, loading, error } = useProducts({
-  category: 'electronics',
-  limit: 10,
-  sort: 'asc'
-});
-```
-
-### useProduct
-```javascript
-const { product, loading, error } = useProduct(productId);
-```
-
-### useCart
-```javascript
-const { 
-  cartItems, 
-  addToCart, 
-  removeFromCart, 
-  updateQuantity,
-  getCartTotal 
-} = useCart();
-```
-
-## 📱 Адаптивность
-
-- **Mobile**: < 768px
-- **Tablet**: 768px - 1024px
-- **Desktop**: > 1024px
-
-## 🎯 Основные компоненты
-
-### ProductCard
-Карточка товара с hover эффектами, quick view и добавлением в корзину.
-
-### Header
-Sticky header с поиском, корзиной и навигацией.
-
-### Filters
-Фильтрация по категориям, цене и рейтингу.
-
-## 🔐 Безопасность
-
-- Валидация всех вводов
-- Защита от XSS
-- HTTPS only
-- Безопасное хранение токенов
-
-## 📈 Производительность
-
-- Lazy loading изображений
-- Code splitting
-- Мемоизация вычислений
-- Debounce для поиска
-- Оптимизированные изображения
-
-## 🤝 Разработка
-
-### Добавление новой страницы
-
-1. Создайте компонент в `src/pages/`
-2. Добавьте роут в `src/App.jsx`
-3. Создайте соответствующие стили
-
-### Добавление нового API метода
-
-1. Добавьте метод в `src/api/services/`
-2. Создайте hook в `src/hooks/` (опционально)
-3. Используйте в компонентах
-
-## 📄 Лицензия
-
-MIT
-
-## 💬 Поддержка
-
-Если возникли вопросы, создайте issue в репозитории.
-
----
-
-**Создано с ❤️ для премиум e-commerce**
-=======
+Демо-закупки вымышлены. Официальные источники отключены до подтверждения доступа. Миграция новых таблиц подготовлена для отдельной dev/staging базы; production не изменялся. Развёртывание требует подтверждения владельца.

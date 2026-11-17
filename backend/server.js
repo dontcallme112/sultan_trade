@@ -1,3 +1,6 @@
+import { createTenderRouter } from './tenders/router.js';
+import { SupabaseStore } from './tenders/store.js';
+import { tenderAuth } from './tenders/auth.js';
 import express from 'express';
 import compression from 'compression';
 import cors from 'cors';
@@ -120,6 +123,10 @@ function rateLimit({ windowMs=60000, max=100, message='Слишком много
   };
 }
 setInterval(() => { const c=Date.now()-60000; for(const[ip,t]of rateLimitMap){const f=t.filter(x=>x>c);if(!f.length)rateLimitMap.delete(ip);else rateLimitMap.set(ip,f);} }, 5*60*1000);
+
+app.use('/api/tenders', rateLimit({ max: 120 }), createTenderRouter({
+  store: new SupabaseStore(supabaseAdmin), authenticate: tenderAuth(supabaseAdmin),
+}));
 
 // ─── Auth middleware ──────────────────────────────────────────
 const requireAuth = async (req, res, next) => {
