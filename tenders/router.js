@@ -1,3 +1,4 @@
+import { uiSource } from './compat.js';
 import express from 'express';
 import { LOT_STATUSES, LOT_STATUS_LABELS } from './service.js';
 import { DIRECTIONS } from './directions.js';
@@ -30,7 +31,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   const big = express.json({ limit: '10mb' });
   const uid = req => req.user?.id || null;
 
-  r.use('/api/tenders', rl);
+  r.use('/api/tenders', (_req,res,next)=>{res.set('Cache-Control','no-store');next();}, rl);
   // ВАЖНО: глобальный парсер на сервере ограничен 200kb. Для импорта файла используем отдельный лимит (см. server.js).
   r.get('/api/tenders/access', gate, wrap(async (req, res) => res.json({ allowed: true, admin: !!req.tenderAdmin })));
   r.get('/api/tenders/meta', gate, wrap(async (req, res) => res.json({
@@ -50,6 +51,25 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   }));
   r.post('/api/tenders/import', gate, big, wrap(async (req, res) => res.json(await service.sync('portal-file', req.body))));
   r.get('/api/tenders', gate, wrap(async (req, res) => res.json(await service.list(uid(req), req.query))));
+  // Aliases required by the React UI in main. Keep before /:id.
+  r.get('/api/tenders/connection', gate, wrap(async (_req,res)=>res.json({demo:false, sources:(await service.sources()).map(uiSource)})));
+  r.get('/api/tenders/sync-runs', gate, wrap(async (_req,res)=>res.json(await service.syncRuns())));
+  r.post('/api/tenders/sync', gate, express.json({limit:'20kb'}), wrap(async (req,res)=> {
+    if (!req.body?.source || req.body.source === 'portal-file') return res.status(400).json({error:'Укажите источник синхронизации'});
+    res.json(await service.sync(req.body.source));
+  }));
+  r.patch('/api/tenders/:id', gate, express.json({limit:'20kb'}), wrap(async (req,res)=> {
+    const patch = req.body;
+    if (!patch || !Object.keys(patch).length || Object.keys(patch).some(k=>!['favorite','workflow'].includes(k)) ||
+      ('favorite' in patch && typeof patch.favorite !== 'boolean') ||
+      ('workflow' in patch && !['new','analysis','interesting','preparing','participating','won','lost','rejected'].includes(patch.workflow)))
+      return res.status(400).json({error:'Некорректный статус или избранное'});
+    if (!(await service.get(uid(req),req.params.id))) return res.status(404).json({error:'Лот не найден'});
+    if ('favorite' in patch && !uid(req)) return res.status(400).json({error:'Войдите в аккаунт'});
+    if ('workflow' in patch) await service.setWorkState(uid(req),req.params.id,{status:patch.workflow==='analysis'?'review':patch.workflow});
+    if ('favorite' in patch) await service.setFavorite(uid(req),req.params.id,patch.favorite);
+    res.json(await service.get(uid(req),req.params.id));
+  }));
   r.get('/api/tenders/:id', gate, wrap(async (req, res) => {
     const l = await service.get(uid(req), req.params.id);
     return l ? res.json(l) : res.status(404).json({ error: 'Лот не найден' });
