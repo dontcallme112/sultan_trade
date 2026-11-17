@@ -1,3 +1,4 @@
+import {createDocumentWorkspace} from './document-workspace.js';
 import {compareSuppliers,calculateExtendedRating} from './suppliers.js';
 import { calculateFinance, validateOffers } from './finance.js';
 import { uiQuery, uiLot } from './compat.js';
@@ -15,6 +16,7 @@ const SIG_FIELDS = ['number', 'title', 'description', 'customer_name', 'customer
 export const lotSig = l => createHash('sha1').update(SIG_FIELDS.map(f => (l[f] == null ? '' : String(l[f]))).join('\u0001') + '\u0002' + (l.directions || []).join(',')).digest('hex').slice(0, 16);
 
 export function createTenderService({ store, adapters, now = () => Date.now(), maxRows = 5000 }) {
+  const documentWorkspace=createDocumentWorkspace({store,now});
   let scoringCache = null;
   const getScoring = async () => scoringCache || (scoringCache = mergeScoring(await store.getSetting('scoring')));
 
@@ -206,5 +208,21 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     await store.setSetting('workspace:'+user+':'+id,value);return value;
   }
 
-  return { sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  async function transferDocumentRequirements(user,id,{sha256,revision,rows}) {
+    const saved=await documentWorkspace.get(user,id);
+    if(!saved.document||saved.document.sha256!==sha256||saved.revision!==revision)throw Object.assign(new Error('Документ изменился. Обновите карточку.'),{status:409});
+    if(!Array.isArray(rows)||!rows.length||rows.length>30)throw Object.assign(new Error('Выберите от 1 до 30 параметров'),{status:400});
+    const workspace=await getWorkspace(user,id),previous=workspace.supplierAnalysis?.inputs||{model:'',requirements:[],offers:[]};
+    const additions=rows.map(row=>{
+      if(!row||typeof row!=='object')throw Object.assign(new Error('Некорректное требование'),{status:400});
+      const r=Number.isInteger(row.index)&&saved.document.requirements[row.index];
+      if(!r)throw Object.assign(new Error('Требование не найдено'),{status:400});
+      return {key:row.key,op:row.op,value:row.value,unit:row.unit,evidence:{documentSha256:sha256,line:r.evidence.line,quote:r.evidence.quote,mapping:'manual_review_required'}};
+    });
+    const keys=new Set(previous.requirements.map(r=>r.key));
+    for(const r of additions){if(keys.has(r.key))throw Object.assign(new Error('Параметр с таким названием уже есть. Задайте другое название.'),{status:409});keys.add(r.key);}
+    return saveWorkspace(user,id,{supplierAnalysis:{...previous,requirements:[...previous.requirements,...additions]}});
+  }
+
+  return { transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }

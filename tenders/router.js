@@ -1,3 +1,4 @@
+import {createDocumentAI} from './ai.js';
 import {compareSuppliers,calculateExtendedRating,supplierSources} from './suppliers.js';
 import { runDocumentExtraction } from './document-jobs.js';
 import { calculateFinance } from './finance.js';
@@ -9,7 +10,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null }) {
+export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
   const allow = new Set(allowedEmails.map(e => e.trim().toLowerCase()).filter(Boolean));
@@ -47,6 +48,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   }));
   r.post('/api/tenders/suppliers/compare', gate, wrap(async (req,res)=>res.json(compareSuppliers(req.body))));
   r.post('/api/tenders/rating/calculate', gate, wrap(async (req,res)=>res.json(calculateExtendedRating(req.body))));
+  r.get('/api/tenders/capabilities', gate, wrap(async (_req,res)=>res.json({ai:ai.status()})));
   r.get('/api/tenders/meta', gate, wrap(async (req, res) => res.json({
     directions: DIRECTIONS.map(d => ({ id: d.id, ru: d.ru, kk: d.kk })),
     statuses: LOT_STATUSES.map(s => ({ id: s, ru: LOT_STATUS_LABELS.ru[s], kk: LOT_STATUS_LABELS.kk[s] })),
@@ -88,8 +90,19 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   r.post('/api/tenders/:id/documents/extract', gate, big, wrap(async (req,res)=> {
     if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
-    extracting=true;try{res.json(await runDocumentExtraction(req.body));}finally{extracting=false;}
+    extracting=true;try{const document={...await runDocumentExtraction(req.body),ai:ai.status()};const saved=await service.documentWorkspace.save(uid(req),req.params.id,document);res.json({...document,...saved});}finally{extracting=false;}
   }));
+  r.get('/api/tenders/:id/documents', gate, wrap(async (req,res)=>res.json({...await service.documentWorkspace.get(uid(req),req.params.id),ai:ai.status()})));
+  r.put('/api/tenders/:id/documents/review', gate, wrap(async (req,res)=>res.json(await service.documentWorkspace.review(uid(req),req.params.id,req.body?.sha256,req.body?.revision,req.body?.rows))));
+  r.post('/api/tenders/:id/documents/use-imported', gate, wrap(async (req,res)=>res.json(await service.documentWorkspace.useImported(uid(req),req.params.id,req.body?.sha256))));
+  r.post('/api/tenders/:id/documents/analyze', gate, wrap(async (req,res)=>{
+    if(req.body?.consent!==true)return res.status(400).json({error:'Подтвердите отправку текста в OpenAI'});
+    const saved=await service.documentWorkspace.get(uid(req),req.params.id);
+    if(!saved.document||saved.document.sha256!==req.body.sha256||saved.revision!==req.body.revision)return res.status(409).json({error:'Документ изменился. Обновите карточку.'});
+    const document=await ai.analyze(saved.document,uid(req));
+    res.json(await service.documentWorkspace.save(uid(req),req.params.id,document,{expectedSha:req.body.sha256,expectedRevision:req.body.revision}));
+  }));
+  r.post('/api/tenders/:id/documents/requirements', gate, wrap(async (req,res)=>res.json(await service.transferDocumentRequirements(uid(req),req.params.id,req.body||{}))));
   r.get('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.getWorkspace(uid(req),req.params.id))));
   r.put('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.saveWorkspace(uid(req),req.params.id,req.body || {}))));
   r.get('/api/tenders/:id', gate, wrap(async (req, res) => {
