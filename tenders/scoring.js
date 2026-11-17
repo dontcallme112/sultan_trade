@@ -1,3 +1,5 @@
+import { DIRECTIONS } from './directions.js';
+
 // Оценка соответствия лота компании: 0–100.
 // Прозрачно: каждый фактор даёт 0..1 или null (данных нет). Итог = сумма(вес × значение) / сумма весов ИЗВЕСТНЫХ факторов.
 // Уверенность = доля веса, по которой данные были. Если данных мало, оценка помечается как предварительная.
@@ -51,7 +53,7 @@ function fDirection(lot, cfg) {
   if (!lot.title && !lot.description) return null;
   const real = dirs.filter(d => d !== 'other');
   if (!real.length) return { v: 0, why: 'ни одно направление компании не найдено в тексте' };
-  return { v: real.length >= 2 ? 1 : 0.75, why: `направления: ${real.join(', ')}` };
+  return { v: real.length >= 2 ? 1 : 0.75, why: `направления: ${real.map(id => DIRECTIONS.find(d => d.id === id)?.ru || id).join(', ')}` };
 }
 function fPrice(lot, cfg) {
   const p = Number(lot.total_price);
