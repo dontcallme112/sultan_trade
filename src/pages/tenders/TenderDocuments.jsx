@@ -14,7 +14,8 @@ export default function TenderDocuments({request,id,lang}){
   const update=(i,patch)=>setReview(rows=>({...rows,[i]:{status:'unknown',value:'',url:'',...rows[i],...patch}}));
   const download=()=>{
     setError('');const rows=result.requirements.map((r,i)=>({...r,...(review[i] || {status:'unknown',value:'',url:''})}));
-    for(const r of rows){if(r.status==='matches' && (!r.value.trim() || !/^https:\/\//i.test(r.url))){setError(t('Для отметки «соответствует» нужны значение параметра и ссылка на подтверждающий источник https://.','«Сәйкес» белгісі үшін параметр мәні мен https:// растау сілтемесі қажет.'));return;}}
+    const validUrl=value=>{try{const u=new URL(value);return u.protocol==='https:' && !u.username && !u.password;}catch{return false;}};
+    for(const r of rows){if(r.status==='matches' && (!r.value.trim() || !validUrl(r.url))){setError(t('Для отметки «соответствует» нужны значение параметра и ссылка на подтверждающий источник https://.','«Сәйкес» белгісі үшін параметр мәні мен https:// растау сілтемесі қажет.'));return;}}
     const report={document:{name:result.name,sha256:result.sha256,format:result.format},mode:'manual_compliance_review',requirements:rows,warnings:result.warnings,ai:result.ai};
     const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='tender-specification-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
