@@ -1,3 +1,4 @@
+import {compareSuppliers,calculateExtendedRating,supplierSources} from './suppliers.js';
 import { runDocumentExtraction } from './document-jobs.js';
 import { calculateFinance } from './finance.js';
 import { uiSource } from './compat.js';
@@ -8,7 +9,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [] }) {
+export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null }) {
   const r = express.Router();
   let extracting = false;
   const allow = new Set(allowedEmails.map(e => e.trim().toLowerCase()).filter(Boolean));
@@ -37,6 +38,15 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   r.use('/api/tenders', (_req,res,next)=>{res.set('Cache-Control','no-store');next();}, rl);
   // ВАЖНО: глобальный парсер на сервере ограничен 200kb. Для импорта файла используем отдельный лимит (см. server.js).
   r.get('/api/tenders/access', gate, wrap(async (req, res) => res.json({ allowed: true, admin: !!req.tenderAdmin })));
+  r.get('/api/tenders/supplier-sources', gate, wrap(async (_req,res)=>res.json({sources:supplierSources(Boolean(searchCatalog))})));
+  r.get('/api/tenders/suppliers/search', gate, wrap(async (req,res)=>{
+    const q=String(req.query.q||'').trim();
+    if(q.length<2||q.length>80)return res.status(400).json({error:'Введите модель или артикул от 2 до 80 символов'});
+    if(!searchCatalog)return res.status(409).json({error:'Каталог не подключён'});
+    res.json({items:await searchCatalog(q),priceKind:'catalog_reference',notice:'Цены каталога не подтверждают закупочную себестоимость, наличие и соответствие.'});
+  }));
+  r.post('/api/tenders/suppliers/compare', gate, wrap(async (req,res)=>res.json(compareSuppliers(req.body))));
+  r.post('/api/tenders/rating/calculate', gate, wrap(async (req,res)=>res.json(calculateExtendedRating(req.body))));
   r.get('/api/tenders/meta', gate, wrap(async (req, res) => res.json({
     directions: DIRECTIONS.map(d => ({ id: d.id, ru: d.ru, kk: d.kk })),
     statuses: LOT_STATUSES.map(s => ({ id: s, ru: LOT_STATUS_LABELS.ru[s], kk: LOT_STATUS_LABELS.kk[s] })),

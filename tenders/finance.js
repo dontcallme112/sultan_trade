@@ -17,11 +17,15 @@ export function calculateFinance(input) {
     const inputVat = input.vatPayer && c.recoverable ? gross*rate/(1+rate) : 0;
     return {key,gross,net:gross-inputVat,inputVat};
   });
+  const importVatPaid=num(input.importVat?.amount??0,'Импортный НДС');
+  if(input.importVat && typeof input.importVat.recoverable!=='boolean')fail('Укажите право на зачёт импортного НДС');
+  const importVatCredit=input.vatPayer && input.importVat?.recoverable===true?importVatPaid:0;
+  const importVatCost=importVatPaid-importVatCredit;
   const sum=keys=>costs.filter(c=>keys.includes(c.key)).reduce((n,c)=>n+c.net,0);
   const outputVat=input.vatPayer ? grossRevenue*vat/(1+vat) : 0;
   const revenueNet=grossRevenue-outputVat;
-  const directCost=sum(['equipment','delivery','customs']);
-  const costTotal=sum(COST_KEYS), grossProfit=revenueNet-directCost, preTax=revenueNet-costTotal;
+  const directCost=sum(['equipment','delivery','customs'])+importVatCost;
+  const costTotal=sum(COST_KEYS)+importVatCost, grossProfit=revenueNet-directCost, preTax=revenueNet-costTotal;
   // A forecast risk reserve is not automatically a tax deduction.
   const adjustments=num(input.taxAddBack || 0,'Налоговые корректировки')+sum(['reserve']);
   const taxable=Math.max(0,preTax+adjustments), corporateTax=taxable*cit;
@@ -29,14 +33,15 @@ export function calculateFinance(input) {
   const target=num(input.targetNetProfit || 0,'Целевая чистая прибыль');
   const minPreTax=target+adjustments>0 ? (target+cit*adjustments)/(1-cit) : target;
   const minNet=costTotal+minPreTax;
-  const inputVat=costs.reduce((n,c)=>n+c.inputVat,0);
-  return {currency:'KZT',revenueNet:round(revenueNet),directCost:round(directCost),costTotal:round(costTotal),grossProfit:round(grossProfit),
+  const inputVat=costs.reduce((n,c)=>n+c.inputVat,0)+importVatCredit;
+  return {currency:'KZT',importVatPaid:round(importVatPaid),importVatCredit:round(importVatCredit),cashExpenses:round(costs.reduce((n,c)=>n+c.gross,0)+importVatPaid),revenueNet:round(revenueNet),directCost:round(directCost),costTotal:round(costTotal),grossProfit:round(grossProfit),
     preTax:round(preTax),taxableProfit:round(taxable),corporateTax:round(corporateTax),netProfit:round(netProfit),
     marginPercent:revenueNet ? round(netProfit/revenueNet*100) : null,roiPercent:costTotal ? round(netProfit/costTotal*100) : null,
     minimumBidGross:Math.ceil((minNet*(input.vatPayer?1+vat:1)-1e-9)*100)/100,outputVat:round(outputVat),inputVat:round(inputVat),vatBalance:round(outputVat-inputVat),
     costs:costs.map(c=>Object.fromEntries(Object.entries(c).map(([k,v])=>[k,typeof v==='number'?round(v):v]))),
     taxPeriod:{from:tax.from,to:tax.to},
-    assumptions:['Ставки и период введены пользователем; законодательство автоматически не проверяется.',
+    assumptions:['Импортный НДС вводится отдельно от пошлины и сборов: не включайте его повторно в таможенные или прочие расходы. Зачёт влияет на себестоимость, но не отменяет первоначальную оплату НДС.',
+      'Ставки и период введены пользователем; законодательство автоматически не проверяется.',
       'Все расходы вводятся с включённым НДС. Входной НДС вычитается из себестоимости только при выбранном праве на зачёт.',
       'Резерв на риски включён в прогноз расходов, но добавлен обратно в налоговую базу КПН.',
       'КПН рассчитан по этой сделке без учёта убытков и других операций компании. Таможенные платежи вводятся отдельной суммой.',
