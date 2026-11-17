@@ -1,3 +1,4 @@
+import {reportWorkbook} from './report.js';
 import {createDocumentAI} from './ai.js';
 import {compareSuppliers,calculateExtendedRating,supplierSources} from './suppliers.js';
 import { runDocumentExtraction } from './document-jobs.js';
@@ -13,6 +14,7 @@ import { DIRECTIONS } from './directions.js';
 export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
+  let exporting = false;
   const allow = new Set(allowedEmails.map(e => e.trim().toLowerCase()).filter(Boolean));
   const isSecret = req => Boolean(syncSecret) && req.headers['x-sync-secret'] === syncSecret;
 
@@ -103,6 +105,16 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
     res.json(await service.documentWorkspace.save(uid(req),req.params.id,document,{expectedSha:req.body.sha256,expectedRevision:req.body.revision}));
   }));
   r.post('/api/tenders/:id/documents/requirements', gate, wrap(async (req,res)=>res.json(await service.transferDocumentRequirements(uid(req),req.params.id,req.body||{}))));
+  r.get('/api/tenders/:id/report.json', gate, wrap(async (req,res)=>res.json(await service.report(uid(req),req.params.id))));
+  r.get('/api/tenders/:id/report.xlsx', gate, wrap(async (req,res)=>{
+    if(exporting)return res.status(429).json({error:'Другой отчёт формируется. Повторите позже.'});
+    exporting=true;try{
+      const report=await service.report(uid(req),req.params.id),buffer=await reportWorkbook(report);
+      const name='tender-report-'+String(req.params.id).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)+'.xlsx';
+      res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.set('Content-Disposition','attachment; filename="'+name+'"');res.send(Buffer.from(buffer));
+    }finally{exporting=false;}
+  }));
   r.get('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.getWorkspace(uid(req),req.params.id))));
   r.put('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.saveWorkspace(uid(req),req.params.id,req.body || {}))));
   r.get('/api/tenders/:id', gate, wrap(async (req, res) => {

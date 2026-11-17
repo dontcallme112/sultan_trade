@@ -1,3 +1,4 @@
+import {buildTenderReport} from './report.js';
 import {createDocumentWorkspace} from './document-workspace.js';
 import {compareSuppliers,calculateExtendedRating} from './suppliers.js';
 import { calculateFinance, validateOffers } from './finance.js';
@@ -219,10 +220,17 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       if(!r)throw Object.assign(new Error('Требование не найдено'),{status:400});
       return {key:row.key,op:row.op,value:row.value,unit:row.unit,evidence:{documentSha256:sha256,line:r.evidence.line,quote:r.evidence.quote,mapping:'manual_review_required'}};
     });
-    const keys=new Set(previous.requirements.map(r=>r.key));
+    const existingRequirements=Array.isArray(previous.requirements)?previous.requirements:[];
+    const keys=new Set(existingRequirements.map(r=>r.key));
     for(const r of additions){if(keys.has(r.key))throw Object.assign(new Error('Параметр с таким названием уже есть. Задайте другое название.'),{status:409});keys.add(r.key);}
-    return saveWorkspace(user,id,{supplierAnalysis:{...previous,requirements:[...previous.requirements,...additions]}});
+    return saveWorkspace(user,id,{supplierAnalysis:{...previous,requirements:[...existingRequirements,...additions]}});
   }
 
-  return { transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  async function report(user,id){
+    const [lot,workspace,document]=await Promise.all([get(user,id),getWorkspace(user,id),documentWorkspace.get(user,id)]);
+    if(!lot)throw Object.assign(new Error('Лот не найден'),{status:404});
+    return buildTenderReport({lot,workspace,documentWorkspace:document,generatedAt:new Date(now()).toISOString()});
+  }
+
+  return { report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }

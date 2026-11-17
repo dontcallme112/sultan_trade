@@ -21,6 +21,7 @@ export function calculateExtendedRating(input={}){
 }
 export function compareSuppliers(input,{now=Date.now()}={}){
  if(!input||!Array.isArray(input.offers)||input.offers.length>30)fail('Нужно не более 30 предложений');
+ if(input.requirements!=null&&!Array.isArray(input.requirements))fail('Требования должны быть массивом');
  const requirements=Array.isArray(input.requirements)?input.requirements:[];if(requirements.length>30)fail('Не более 30 параметров');
  for(const r of requirements){if(!r||typeof r.key!=='string'||!r.key.trim()||r.key.length>100||!['eq','min','max'].includes(r.op)||typeof r.value!=='string'||!r.value.trim()||r.value.length>200||typeof r.unit!=='string'||r.unit.length>30)fail('Проверьте требования');if(r.op!=='eq')numeric(r.value,r.key);}
  if(typeof input.model!=='string'||input.model.length>200)fail('Проверьте точную модель');

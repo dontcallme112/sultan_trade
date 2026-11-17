@@ -59,3 +59,7 @@ test('catalog uses dealer source field through existing mapper; USD and source t
  const rows=await search('123');assert.equal(rows[0].price,500);assert.equal(rows[0].updatedAt,'2026-01-01T00:00:00Z');assert.equal(rows[1].price,10);assert.equal(rows[1].currency,'USD');assert.equal(rows[1].updatedAt,null);assert.deepEqual(calls[0],['article','123']);
  await search('A%_');assert.equal(calls[1][0],'name');assert.equal(calls[1][1],'%A'+String.fromCharCode(92)+'%'+String.fromCharCode(92)+'_%');
 });
+
+test('malformed requirement collections reject instead of silently losing constraints',()=>{
+ assert.throws(()=>compareSuppliers({model:'',offers:[],requirements:{power:'16'}}),{status:400});
+});
