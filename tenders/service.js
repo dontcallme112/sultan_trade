@@ -1,3 +1,4 @@
+import {compareSuppliers,calculateExtendedRating} from './suppliers.js';
 import { calculateFinance, validateOffers } from './finance.js';
 import { uiQuery, uiLot } from './compat.js';
 import { createHash } from 'node:crypto';
@@ -197,7 +198,9 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     const previous=await getWorkspace(user,id);
     const offers='offers' in input ? validateOffers(input.offers) : previous.offers;
     const finance='finance' in input ? (input.finance ? {inputs:input.finance,results:calculateFinance(input.finance)} : null) : previous.finance;
-    const value={offers,finance,savedAt:new Date(now()).toISOString(),savedBy:user,
+    const supplierAnalysis='supplierAnalysis' in input ? {inputs:input.supplierAnalysis,results:compareSuppliers(input.supplierAnalysis,{now:now()})} : previous.supplierAnalysis;
+    const extendedRating='extendedRating' in input ? {inputs:input.extendedRating,results:calculateExtendedRating(input.extendedRating)} : previous.extendedRating;
+    const value={...previous,offers,finance,...(supplierAnalysis?{supplierAnalysis}:{}),...(extendedRating?{extendedRating}:{}),savedAt:new Date(now()).toISOString(),savedBy:user,
       audit:[...(previous.audit || []).slice(-19),{at:new Date(now()).toISOString(),actor:user,action:'save_workspace'}]};
     if(JSON.stringify(value).length>100000)throw Object.assign(new Error('Рабочие данные слишком велики'),{status:400});
     await store.setSetting('workspace:'+user+':'+id,value);return value;

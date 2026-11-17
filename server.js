@@ -1,3 +1,4 @@
+import {createTenderCatalogSearch} from './tenders/catalog.js';
 import express from 'express';
 import compression from 'compression';
 import cors from 'cors';
@@ -1122,7 +1123,8 @@ async function warmupCache() {
 const TENDERS_ALLOWED = (process.env.TENDERS_ALLOWED_EMAILS || '').split(',').map(x => x.trim()).filter(Boolean);
 if (supabaseAdmin) {
   const tenderService = createTenderService({ store: createSupabaseStore(supabaseAdmin, { dbCall, maxRows: Number(process.env.TENDERS_MAX_ROWS) || 5000 }), adapters: createAdapters({ env: process.env }) });
-  app.use(createTendersRouter({ service: tenderService, requireAuth, rateLimit, syncSecret: SYNC_SECRET, allowedEmails: TENDERS_ALLOWED }));
+  const searchTenderCatalog=createTenderCatalogSearch({db:supabaseAdmin,normalizePrice});
+  app.use(createTendersRouter({ searchCatalog:searchTenderCatalog, service: tenderService, requireAuth, rateLimit, syncSecret: SYNC_SECRET, allowedEmails: TENDERS_ALLOWED }));
   console.log(`🧾 Тендеры: ${TENDERS_ALLOWED.length ? `✅ доступ для ${TENDERS_ALLOWED.length} почт` : '⚠️  TENDERS_ALLOWED_EMAILS не задан — раздел закрыт'}`);
 }
 
