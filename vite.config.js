@@ -9,6 +9,10 @@ export default defineConfig({
     port: 5173,
     open: true,
     proxy: {
+      '/api/tenders': {
+        target: process.env.TENDER_API_TARGET || 'https://sultantrade-production.up.railway.app',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'https://sultantrade-production.up.railway.app',
         changeOrigin: true,

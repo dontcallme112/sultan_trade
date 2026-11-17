@@ -35,3 +35,5 @@ Thumbs.db
 
 # Vite
 .vite/
+# Local tender demo data
+backend/data/

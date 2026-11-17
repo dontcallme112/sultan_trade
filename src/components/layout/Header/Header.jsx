@@ -52,8 +52,9 @@ const Header = () => {
               <span className="logo-text"><span>S</span>tockera</span>
             </Link>
 
-            {/* Navigation — Sale убран */}
+            {/* Navigation */}
             <nav className={`nav ${mobileMenu ? 'active' : ''}`}>
+              <Link to="/tenders" className="nav-link" onClick={handleLinkClick}>Тендеры</Link>
               <Link to="/" className="nav-link" onClick={handleLinkClick}>
                 <span>Главная</span>
                 <div className="nav-link-glow"></div>

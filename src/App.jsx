@@ -1,4 +1,5 @@
 import React from 'react';
+import Tenders from './pages/tenders/Tenders.jsx';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext.jsx';
 import Header from './components/layout/Header/Header.jsx';
@@ -31,6 +32,8 @@ function App() {
           <main style={{ paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' }}>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/tenders" element={<Tenders />} />
+              <Route path="/tenders/:id" element={<Tenders />} />
               <Route path="/catalog" element={<Catalog />} />
               <Route path="/products" element={<ProductGrid />} />
               <Route path="/product/:id" element={<Product />} />
