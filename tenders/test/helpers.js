@@ -7,7 +7,7 @@ import { createTendersRouter } from '../router.js';
 
 export const NOW = Date.parse('2026-09-30T00:00:00Z');
 
-export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', store = createMemoryStore(), env = {}, searchCatalog = null, now = () => NOW } = {}) {
+export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', store = createMemoryStore(), env = {}, searchCatalog = null, now = () => NOW, ai } = {}) {
   const service = createTenderService({ store, adapters: createAdapters({ env, now }), now });
   const app = express();
   const jsonSmall = express.json({ limit: '200kb' });
@@ -19,7 +19,7 @@ export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', sto
     req.user = { id: m[1], email: m[2] }; next();
   };
   const rateLimit = () => (req, res, next) => next();
-  app.use(createTendersRouter({ service, searchCatalog, requireAuth, rateLimit, syncSecret: secret, allowedEmails: allowed }));
+  app.use(createTendersRouter({ service, searchCatalog, ai, requireAuth, rateLimit, syncSecret: secret, allowedEmails: allowed }));
   return { app, service, store };
 }
 
