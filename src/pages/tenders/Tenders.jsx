@@ -1,3 +1,4 @@
+import TenderExtendedRating from './TenderExtendedRating';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import apiClient from '../../api/client';
@@ -63,6 +64,7 @@ export default function Tenders() {
       {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
         <p>{t('Базовое соответствие','Негізгі сәйкестік')}: <strong>{detail.rating.score}/100</strong> · {t('Полнота оценки','Бағалау толықтығы')}: {detail.rating.coverage*100}%</p><p>{detail.rating.formula}</p><p>{t('Неизвестно','Белгісіз')}: {detail.rating.unknown.join(', ')}</p>
         <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} />
+        <TenderExtendedRating key={'rating:'+id} request={request} id={id} />
         <TenderFinance key={'finance:'+id} request={request} tender={detail} lang={lang} />
         <button disabled={busy} onClick={() => mutate(`/${encodeURIComponent(id)}`,'PATCH',{favorite:!detail.favorite})}>{detail.favorite ? '★' : '☆'} {t('Избранное','Таңдаулы')}</button> <label>{t('Рабочий статус','Жұмыс күйі')}<select disabled={busy} value={detail.workflow} onChange={e => mutate(`/${encodeURIComponent(id)}`,'PATCH',{workflow:e.target.value})}>{Object.entries(workflow).map(([key,label]) => <option key={key} value={key}>{label[lang]}</option>)}</select></label>
         {detail.source_url && <a href={detail.source_url} target="_blank" rel="noreferrer">{t('Первоисточник','Бастапқы дереккөз')}</a>}
