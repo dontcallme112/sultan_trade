@@ -56,3 +56,8 @@ test('consented AI route uses saved server text and persists only the current re
  const stale=await http.call('POST',`/api/tenders/${id}/documents/analyze`,{token:'token:u1:boss@example.com',body:{consent:true,sha256:saved.document.sha256,revision:saved.revision}});assert.equal(stale.status,409);
  }finally{await http.close();}
 });
+
+test('parameter transfer accepts a saved comparison that omitted optional requirements',async()=>{
+ const {service,id}=await fixture();await service.saveWorkspace('u1',id,{supplierAnalysis:{model:'',offers:[]}});const d=await service.documentWorkspace.save('u1',id,doc());
+ const result=await service.transferDocumentRequirements('u1',id,{sha256:d.document.sha256,revision:d.revision,rows:[{index:0,key:'Quantity',op:'min',value:'16',unit:'шт.'}]});assert.equal(result.supplierAnalysis.inputs.requirements.length,1);
+});
