@@ -64,7 +64,7 @@ insert into public.ti_members(user_id,role) values ('UUID-ПОЛЬЗОВАТЕЛ
 
 ## Границы этапа
 
-Рейтинг 0/100 определяет только совпадение ключевых слов направлений компании. Полнота 20% — фиксированное допущение MVP (один из пяти укрупнённых блоков), не статистическая уверенность. Итоговый AI-рейтинг, настраиваемые веса, извлечение документов/OCR, финансовый калькулятор, коммерческие предложения, уведомления и планировщик не реализованы в этапе 2. Новые таблицы резервируют структуру будущих модулей, но не изображают работающие функции. Существующая интеграция al-style магазина сохранена; цены поставщиков и прибыль не выдумываются.
+Базовый рейтинг рассчитывает соответствие по известным факторам и показывает полноту данных. Расширенный рейтинг использует настраиваемые веса и введённые основания оценок; это не автоматическое AI-заключение. Извлечение документов, ручная проверка, сравнение предложений и финансовый калькулятор реализованы. OCR, уведомления и планировщик не подключены. Существующая интеграция al-style магазина сохранена; цены поставщиков и прибыль не выдумываются.
 
 Фоновая регулярная синхронизация будет иметь смысл после подключения официального источника; текущий MVP запускает синхронизацию вручную. Для больших объёмов нужно перенести фильтрацию/пагинацию из backend в SQL и ограничить чтение истории на уровне запросов. Сейчас SupabaseStore читает страницы по 1000 строк без молчаливого усечения; это подходит для малого MVP, не для национального архива.
 
@@ -109,7 +109,7 @@ Preview Vercel может быть отдельно защищён Vercel Authen
 
 Интерфейс источников принимает JSON официального портала: выбор файла → серверная проверка без записи → предварительные строки/дубликаты/пропуски → явный импорт. Автоматический поиск без подтверждённого официального доступа не включается. Демо не загружается автоматически в рабочую БД.
 
-Карточка тендера получила извлечение текста PDF/DOCX/XLSX/TXT до 5 МБ и ручную таблицу соответствия. По каждой найденной фразе есть номер строки исходного текста; соответствие требует характеристики предлагаемой модели и HTTPS-подтверждения для экспорта. Результат JSON скачивается локально, таблица/оригинал не сохраняются на сервере. AI и OCR не настроены: это явно обозначенный предварительный разбор по правилам, скан возвращает OCR_REQUIRED.
+Карточка тендера получила извлечение текста PDF/DOCX/XLSX/TXT до 5 МБ и ручную таблицу соответствия. По каждой найденной фразе есть номер строки исходного текста; соответствие требует характеристики предлагаемой модели и HTTPS-подтверждения для экспорта. Результат JSON скачивается локально. Извлечённый текст и требования сохраняются в аккаунте, ручная таблица — по кнопке сохранения; оригинал не хранится. AI опционален и требует серверной настройки с согласием пользователя. Без AI доступен предварительный разбор по правилам; скан без текста возвращает OCR_REQUIRED.
 
 Предложения поставщиков сохраняются отдельно для пользователя: модель, цена/дата, валюта, курс/дата, количество, источник. Есть поиск существующего каталога Stockera; цена магазина явно маркируется как розничная и не выдаётся за закупочную. Формула прибыли разделяет выручку без НДС, себестоимость, валовую/до-КПН/чистую прибыль, КПН, входной/исходящий НДС и минимальную цену. Ставки и даты действия вводятся явно, резерв добавляется обратно для расчёта КПН. Допущения и неподтверждённые исходные данные видны пользователю. Никаких автоматических цен Китая, таможенных тарифов или налоговых ставок не придумано.
 
@@ -124,3 +124,11 @@ The tender card adds a private supplier comparison with an existing-catalogue se
 The comparison table can transfer goods, shipping, duty/fees and import VAT separately into the existing finance form. Import VAT credit must be explicitly confirmed; initial cash outlay stays visible. Review all tax rates, periods, valuation bases, shipping and costs before using a result. Specific/combined tariffs and legal treatment need broker/accounting confirmation.
 
 A nine-factor expanded rating uses configurable weights and evidenced manual scores. Unknown criteria are excluded from the score denominator but lower the separately displayed coverage. This does not replace the baseline catalogue ranking or claim that an AI provider is connected. Saved comparison/rating fields are personal and preserved when offers or finance are edited. Backend deployment must precede frontend; production deployment still requires confirmation.
+
+### Saved specification workflow
+
+The document panel loads each employee's current saved text and review. Users may explicitly open an existing specification already attached to the lot, or upload a new PDF/DOCX/XLSX/TXT. The UI states that extracted text/requirements persist in the employee's account; original bytes do not. Manual review statuses and supporting HTTPS sources can be saved or exported. File hash plus server revision protect against stale tabs, including reprocessing the same file.
+
+Selected requirements can be mapped into supplier-comparison parameters with an exact source quote. The employee specifies and reviews operator/value/unit; provenance does not certify the interpretation or model compliance. Existing finance drafts stay open during transfer and requirements are scoped to the current lot.
+
+AI analysis is optional and needs server `OPENAI_API_KEY` and `OPENAI_MODEL`. The UI requires explicit consent to sending saved extracted text to OpenAI. Provider failures keep the previous review. Successful re-analysis may change requirements and clear manual marks; the UI prompts exporting first. No OCR provider, full document-version archive or supplier API is implied. These changes supersede the earlier standalone AI-control PR while preserving supplier/import functionality. Publish backend first after owner confirmation.
