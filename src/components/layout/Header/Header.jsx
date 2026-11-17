@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
 import { useAuth } from '../../../context/AuthContext';
 import SearchBar from '../../features/SearchBar/SearchBar';
+import { tendersAPI } from '../../../api/services/tenders';
 import AuthModal from '../../features/AuthModal/AuthModal';
 import './Header.css';
 
@@ -13,7 +14,16 @@ const Header = () => {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [canTenders, setCanTenders] = useState(false);
   const location = useLocation();
+
+  // Ссылка «Тендеры» видна только аккаунтам, которым бэкенд открыл раздел (TENDERS_ALLOWED_EMAILS)
+  useEffect(() => {
+    if (!isAuthenticated) { setCanTenders(false); return; }
+    let alive = true;
+    tendersAPI.access().then(() => alive && setCanTenders(true)).catch(() => alive && setCanTenders(false));
+    return () => { alive = false; };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -70,6 +80,12 @@ const Header = () => {
                 <span>Товары</span>
                 <div className="nav-link-glow"></div>
               </Link>
+              {canTenders && (
+                <Link to="/tenders" className="nav-link" onClick={handleLinkClick}>
+                  <span>Тендеры</span>
+                  <div className="nav-link-glow"></div>
+                </Link>
+              )}
             </nav>
 
             {/* Search Bar - Desktop */}

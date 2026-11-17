@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext.jsx';
 import Header from './components/layout/Header/Header.jsx';
@@ -18,6 +18,7 @@ import Profile from './pages/Profile/Profile.jsx';
 import AuthCallback from './pages/AuthCallback/AuthCallback.jsx';
 import ProductGrid from './components/features/ProductGrid/ProductGrid.jsx';
 import ChatWidget from './components/features/ChatWidget/ChatWidget';
+const Tenders = lazy(() => import('./pages/tenders/Tenders.jsx'));
 import './styles/globals.css';
 import './styles/variables.css';
 import './styles/animations.css';
@@ -40,6 +41,7 @@ function App() {
               <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
               <Route path="/new" element={<NewProducts />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/tenders" element={<Suspense fallback={null}><Tenders /></Suspense>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/telegram" element={<AuthCallback />} />
               <Route path="*" element={<NotFound />} />
