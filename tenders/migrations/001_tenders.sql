@@ -79,3 +79,11 @@ alter table public.tender_favorites  enable row level security;
 alter table public.tender_lot_state  enable row level security;
 alter table public.tender_sync_log   enable row level security;
 alter table public.tender_settings   enable row level security;
+
+-- These tables are server-only; do not inherit client exposure from default grants.
+revoke all on table public.tender_lots, public.tender_favorites, public.tender_lot_state, public.tender_sync_log, public.tender_settings from public, anon, authenticated;
+grant select, insert, update, delete on table public.tender_lots, public.tender_favorites, public.tender_lot_state, public.tender_sync_log, public.tender_settings to service_role;
+revoke all on sequence public.tender_sync_log_id_seq from public, anon, authenticated;
+grant usage, select on sequence public.tender_sync_log_id_seq to service_role;
+create index if not exists tender_favorites_lot_idx on public.tender_favorites(lot_id);
+notify pgrst, 'reload schema';
