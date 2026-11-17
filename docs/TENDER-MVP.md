@@ -124,3 +124,11 @@ The tender card adds a private supplier comparison with an existing-catalogue se
 The comparison table can transfer goods, shipping, duty/fees and import VAT separately into the existing finance form. Import VAT credit must be explicitly confirmed; initial cash outlay stays visible. Review all tax rates, periods, valuation bases, shipping and costs before using a result. Specific/combined tariffs and legal treatment need broker/accounting confirmation.
 
 A nine-factor expanded rating uses configurable weights and evidenced manual scores. Unknown criteria are excluded from the score denominator but lower the separately displayed coverage. This does not replace the baseline catalogue ranking or claim that an AI provider is connected. Saved comparison/rating fields are personal and preserved when offers or finance are edited. Backend deployment must precede frontend; production deployment still requires confirmation.
+
+### Saved specification workflow
+
+The document panel loads each employee's current saved text and review. Users may explicitly open an existing specification already attached to the lot, or upload a new PDF/DOCX/XLSX/TXT. The UI states that extracted text/requirements persist in the employee's account; original bytes do not. Manual review statuses and supporting HTTPS sources can be saved or exported. File hash plus server revision protect against stale tabs, including reprocessing the same file.
+
+Selected requirements can be mapped into supplier-comparison parameters with an exact source quote. The employee specifies and reviews operator/value/unit; provenance does not certify the interpretation or model compliance. Existing finance drafts stay open during transfer and requirements are scoped to the current lot.
+
+AI analysis is optional and needs server `OPENAI_API_KEY` and `OPENAI_MODEL`. The UI requires explicit consent to sending saved extracted text to OpenAI. Provider failures keep the previous review. Successful re-analysis may change requirements and clear manual marks; the UI prompts exporting first. No OCR provider, full document-version archive or supplier API is implied. These changes supersede the earlier standalone AI-control PR while preserving supplier/import functionality. Publish backend first after owner confirmation.

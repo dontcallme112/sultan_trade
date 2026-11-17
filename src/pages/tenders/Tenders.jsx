@@ -14,6 +14,7 @@ const date = s => s && Number.isFinite(Date.parse(s)) ? new Date(s).toLocaleStri
 export default function Tenders() {
   const { id } = useParams();
   const { getToken } = useAuth();
+  const [supplierSeed,setSupplierSeed]=useState(null);
   const [lang, setLang] = useState(0);
   const t = (ru, kk) => lang ? kk : ru;
   const [connection, setConnection] = useState(null);
@@ -63,9 +64,9 @@ export default function Tenders() {
       <div className="tender-stats">{[[t('Всего','Барлығы'),data.summary.total],[t('Новые','Жаңа'),data.summary.new],[t('Соответствие ≥80','Сәйкестік ≥80'),data.summary.high],[t('Избранные','Таңдаулылар'),data.summary.favorites],[t('Срок ≤7 дней','Мерзім ≤7 күн'),data.summary.upcoming]].map(([label,n]) => <div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>
       {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
         <p>{t('Базовое соответствие','Негізгі сәйкестік')}: <strong>{detail.rating.score}/100</strong> · {t('Полнота оценки','Бағалау толықтығы')}: {detail.rating.coverage*100}%</p><p>{detail.rating.formula}</p><p>{t('Неизвестно','Белгісіз')}: {detail.rating.unknown.join(', ')}</p>
-        <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} />
+        <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} onTransferred={inputs=>setSupplierSeed({id,inputs})} />
         <TenderExtendedRating key={'rating:'+id} request={request} id={id} />
-        <TenderFinance key={'finance:'+id} request={request} tender={detail} lang={lang} />
+        <TenderFinance supplierSeed={supplierSeed?.id===id?supplierSeed.inputs:null} key={'finance:'+id} request={request} tender={detail} lang={lang} />
         <button disabled={busy} onClick={() => mutate(`/${encodeURIComponent(id)}`,'PATCH',{favorite:!detail.favorite})}>{detail.favorite ? '★' : '☆'} {t('Избранное','Таңдаулы')}</button> <label>{t('Рабочий статус','Жұмыс күйі')}<select disabled={busy} value={detail.workflow} onChange={e => mutate(`/${encodeURIComponent(id)}`,'PATCH',{workflow:e.target.value})}>{Object.entries(workflow).map(([key,label]) => <option key={key} value={key}>{label[lang]}</option>)}</select></label>
         {detail.source_url && <a href={detail.source_url} target="_blank" rel="noreferrer">{t('Первоисточник','Бастапқы дереккөз')}</a>}
         <h3>{t('История изменений','Өзгерістер тарихы')}</h3>{detail.history_available === false && <p>{t('История изменений не предоставляется текущим сервером.','Ағымдағы сервер өзгерістер тарихын ұсынбайды.')}</p>}{detail.history.length ? detail.history.map((h,i) => <details key={h.id || i}><summary>{date(h.created_at)} · {h.user_id ? t('Рабочие изменения','Жұмыс өзгерістері') : t('Данные источника','Дереккөз деректері')}</summary><pre>{JSON.stringify({before:h.before,after:h.after},null,2)}</pre></details>) : <p>—</p>}
