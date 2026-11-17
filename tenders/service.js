@@ -1,3 +1,4 @@
+import { calculateFinance, validateOffers } from './finance.js';
 import { uiQuery, uiLot } from './compat.js';
 import { createHash } from 'node:crypto';
 import { scoreLot, isClosed, mergeScoring, validateScoring } from './scoring.js';
@@ -22,7 +23,8 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     const logId = await store.addLog({ source: sourceId, ok: false });
     const stat = { fetched: 0, inserted: 0, updated: 0, unchanged: 0 };
     try {
-      const lots = await ad.fetch(input);
+      const preview = sourceId === 'portal-file' ? ad.parse(input) : null;
+      const lots = preview ? preview.lots : await ad.fetch(input);
       stat.fetched = lots.length;
       if (lots.length > maxRows) throw new Error(`Слишком много лотов (${lots.length} > ${maxRows}) для MVP`);
       const cfg = await getScoring();
@@ -39,7 +41,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       }
             if (rows.length) await store.upsertLots(rows);
       await store.finishLog(logId, { ok: true, ...stat });
-      return { ok: true, ...stat };
+      return { ok: true, ...stat, ...(preview ? {skipped:preview.skipped,duplicates:preview.duplicates} : {}) };
     } catch (e) {
       await store.finishLog(logId, { ok: false, ...stat, error: String(e.message || e).slice(0, 500) }).catch(() => {});
       throw e;
@@ -180,5 +182,26 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return {runs:log.map(e=>({...e, source:e.source, status:e.ok ? 'success' : 'error', changed:(e.inserted || 0)+(e.updated || 0)})), last_success:log.find(e=>e.ok)?.finished_at || null};
   }
 
-  return { sync, list, get, dashboard, sources, syncRuns, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  async function previewImport(input) {
+    const parsed=adapters.get('portal-file').parse(input);
+    if(parsed.lots.length>maxRows)throw Object.assign(new Error('Слишком много лотов для одного импорта'),{status:400});
+    return {total:parsed.total,accepted:parsed.lots.length,skipped:parsed.skipped,duplicates:parsed.duplicates,
+      sample:parsed.lots.slice(0,5),warnings:['Файл загружен пользователем. Подлинность и актуальность нужно сверить с порталом.']};
+  }
+  async function getWorkspace(user,id) {
+    if(!user)throw Object.assign(new Error('Нужен вход пользователя'),{status:401});
+    if(!(await store.getLot(id)))throw Object.assign(new Error('Лот не найден'),{status:404});
+    return await store.getSetting('workspace:'+user+':'+id) || {offers:[],finance:null,savedAt:null};
+  }
+  async function saveWorkspace(user,id,input) {
+    const previous=await getWorkspace(user,id);
+    const offers='offers' in input ? validateOffers(input.offers) : previous.offers;
+    const finance='finance' in input ? (input.finance ? {inputs:input.finance,results:calculateFinance(input.finance)} : null) : previous.finance;
+    const value={offers,finance,savedAt:new Date(now()).toISOString(),savedBy:user,
+      audit:[...(previous.audit || []).slice(-19),{at:new Date(now()).toISOString(),actor:user,action:'save_workspace'}]};
+    if(JSON.stringify(value).length>100000)throw Object.assign(new Error('Рабочие данные слишком велики'),{status:400});
+    await store.setSetting('workspace:'+user+':'+id,value);return value;
+  }
+
+  return { sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }

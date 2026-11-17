@@ -133,7 +133,7 @@ app.use(cors({
   credentials: true,
 }));
 const jsonSmall = express.json({ limit: '200kb' });
-app.use((req, res, next) => (req.path === '/api/admin/import-products' || req.path === '/api/tenders/import' ? next() : jsonSmall(req, res, next)));
+app.use((req, res, next) => (req.path === '/api/admin/import-products' || (req.path === '/api/tenders/import' || req.path === '/api/tenders/import/preview' || /^\/api\/tenders\/[^/]+\/documents\/extract$/.test(req.path)) ? next() : jsonSmall(req, res, next)));
 app.use((req, res, next) => { if (!req.path.startsWith('/media/') && !(req.method === 'GET' && req.path === '/api/chat/messages')) console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

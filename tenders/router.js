@@ -1,3 +1,5 @@
+import { runDocumentExtraction } from './document-jobs.js';
+import { calculateFinance } from './finance.js';
 import { uiSource } from './compat.js';
 import express from 'express';
 import { LOT_STATUSES, LOT_STATUS_LABELS } from './service.js';
@@ -8,6 +10,7 @@ import { DIRECTIONS } from './directions.js';
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
 export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [] }) {
   const r = express.Router();
+  let extracting = false;
   const allow = new Set(allowedEmails.map(e => e.trim().toLowerCase()).filter(Boolean));
   const isSecret = req => Boolean(syncSecret) && req.headers['x-sync-secret'] === syncSecret;
 
@@ -70,6 +73,15 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
     if ('favorite' in patch) await service.setFavorite(uid(req),req.params.id,patch.favorite);
     res.json(await service.get(uid(req),req.params.id));
   }));
+  r.post('/api/tenders/import/preview', gate, big, wrap(async (req,res)=>res.json(await service.previewImport(req.body))));
+  r.post('/api/tenders/finance/calculate', gate, wrap(async (req,res)=>res.json(calculateFinance(req.body))));
+  r.post('/api/tenders/:id/documents/extract', gate, big, wrap(async (req,res)=> {
+    if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
+    if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
+    extracting=true;try{res.json(await runDocumentExtraction(req.body));}finally{extracting=false;}
+  }));
+  r.get('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.getWorkspace(uid(req),req.params.id))));
+  r.put('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.saveWorkspace(uid(req),req.params.id,req.body || {}))));
   r.get('/api/tenders/:id', gate, wrap(async (req, res) => {
     const l = await service.get(uid(req), req.params.id);
     return l ? res.json(l) : res.status(404).json({ error: 'Лот не найден' });
