@@ -38,3 +38,13 @@ Railway использует корневой backend ветки master. Его 
 Backend требует свою миграцию `tenders/migrations/001_tenders.sql` с таблицами `tender_*`, а не только миграцию `ti_*` ветки main. Production БД в рамках исправления не изменялась; наличие таблиц нужно подтвердить при проверке действующего сервера после открытия доступа.
 
 Проверено: 24/24 тестов `npm run test:tenders`, включая совместимость контрактов и изоляцию доступа. Реальный локальный HTTP-сценарий Chromium: React main → этот Express router → memory store; каталог, поиск, карточка, избранное, статус analysis и сохранение после перезагрузки. Подменена только авторизация, данные API в браузерном сценарии не подменялись.
+
+## Применение production-миграции 17.11.2026
+
+С разрешения владельца в проекте Supabase `ytokshoopodyqtmpbost` организации `ppmfdzroxosftdwmbtnx` применена миграция `20261117140627_create_tender_backend_tables`. Созданы только `tender_lots`, `tender_favorites`, `tender_lot_state`, `tender_sync_log`, `tender_settings`. Таблицы магазина и `ti_*` не изменялись. Данные и demo-записи не добавлялись.
+
+RLS включён на всех пяти таблицах. Клиентские права anon/authenticated/PUBLIC отозваны, service_role явно получил SELECT/INSERT/UPDATE/DELETE и доступ к sequence журнала; добавлен индекс FK tender_favorites(lot_id). SQL в 001_tenders.sql приведён к применённому варианту. Прямой Data API-запрос с публичным ключом возвращает 42501, чтение таблиц под service_role успешно. Точный SQL дважды применён в изолированном PGlite перед production, проверены схема и права. Запись миграции подтверждена через Supabase MCP.
+
+[Информационное замечание Supabase «RLS Enabled No Policy»](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) для этих таблиц ожидаемо: клиентских политик намеренно нет, все операции идут через защищённый backend. Остальные прежние замечания проекта к существующим функциям и Auth не изменялись в этой задаче.
+
+Railway `/health`: status OK, tenders true. Учётная запись владельца существует в Auth, email подтверждён; TENDERS_ALLOWED_EMAILS настроен ранее. Полный вход владельца в его браузере не воспроизводился от его имени. Каталог пока пустой: официальные источники не подключены. Этот PR меняет только SQL-инструкцию и документацию; перезапуск backend для уже применённой миграции не требуется.
