@@ -27,9 +27,9 @@ export default function Tenders() {
   // getToken belongs to the existing auth context and is recreated on auth changes.
   useEffect(() => {
     let current = true;
-    apiClient.get('/api/tenders/connection').then(r => { if (current) setConnection(r.data); }).catch(() => { if (current) setError('Тендерный backend недоступен / Тендер сервері қолжетімсіз'); });
+    request('/connection').then(data => { if (current) setConnection(data); }).catch(() => { if (current) setError('Тендерный backend недоступен / Тендер сервері қолжетімсіз'); });
     return () => { current = false; };
-  }, []);
+  }, [request]);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let current = true;

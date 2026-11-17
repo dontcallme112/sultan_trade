@@ -5,8 +5,10 @@ import { scoreTender, filterTenders, demoTenders, sources, statuses } from './do
 export function createTenderRouter({ store, authenticate, demo = false }) {
   const router = express.Router();
   let syncing = false;
-  router.get('/connection', (_req, res) => res.json({ demo, sources }));
+  router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   router.use(authenticate);
+  router.get('/access', (req, res) => res.json({ allowed: true, role: req.user.role }));
+  router.get('/connection', (_req, res) => res.json({ demo, sources }));
   const handle = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
   const rowsFor = async userId => {
     const [rows, preferences] = await Promise.all([store.all('tenders'), store.all('preferences')]);

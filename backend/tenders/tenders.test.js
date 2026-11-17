@@ -40,6 +40,9 @@ test('API: sync, deduplication, persistence, isolation, history, failure log, RB
     return {status:response.status,body:response.status===401?null:await response.json()};
   };
   assert.equal((await call('','GET',null,null)).status,401);
+  assert.equal((await call('/access','GET',null,null)).status,401);
+  assert.equal((await call('/connection','GET',null,null)).status,401);
+  assert.equal((await call('/access')).body.allowed,true);
   assert.equal((await call('/sync','POST',{source:'demo'},'a','viewer')).status,403);
   assert.equal((await call('/sync','POST',{source:'demo'})).body.changed,4);
   assert.equal((await call('/sync','POST',{source:'demo'})).body.changed,0);
@@ -65,4 +68,26 @@ test('production authentication fails closed and ignores self-claimed roles',asy
   const client={auth:{getUser:async()=>({data:{user:{id:'u',user_metadata:{role:'admin'}}}})},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null,error:null})})})})};
   await tenderAuth(client)({headers:{authorization:'Bearer test'}},res,()=>{nextCalled=true;});
   assert.equal(res.code,403);assert.equal(nextCalled,false);
+});
+
+test('employee access uses server membership, including revocation and expired sessions', async () => {
+  let membership = { role: 'viewer' };
+  let expired = false;
+  const client = {
+    auth: { getUser: async () => ({ data: { user: expired ? null : { id: 'employee', user_metadata: { role: 'admin' } } }, error: expired ? new Error('expired') : null }) },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: membership, error: null }) }) }) }),
+  };
+  const auth = tenderAuth(client);
+  const res = { status(code) { this.code = code; return this; }, json() { return this; } };
+  const req = { headers: { authorization: 'Bearer valid' } };
+  let allowed = false;
+  await auth(req, res, () => { allowed = true; });
+  assert.equal(allowed, true);
+  assert.equal(req.user.role, 'viewer');
+  membership = null; allowed = false;
+  await auth(req, res, () => { allowed = true; });
+  assert.equal(allowed, false); assert.equal(res.code, 403);
+  expired = true;
+  await auth(req, res, () => { allowed = true; });
+  assert.equal(res.code, 401); assert.equal(allowed, false);
 });

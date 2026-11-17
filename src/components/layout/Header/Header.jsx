@@ -5,8 +5,10 @@ import { useAuth } from '../../../context/AuthContext';
 import SearchBar from '../../features/SearchBar/SearchBar';
 import AuthModal from '../../features/AuthModal/AuthModal';
 import './Header.css';
+import { useTenderAccess } from '../../../hooks/useTenderAccess';
 
 const Header = () => {
+  const { allowed: tenderAccess } = useTenderAccess();
   const { cartItems } = useCart();
   const { isAuthenticated, profile, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
@@ -54,7 +56,7 @@ const Header = () => {
 
             {/* Navigation */}
             <nav className={`nav ${mobileMenu ? 'active' : ''}`}>
-              <Link to="/tenders" className="nav-link" onClick={handleLinkClick}>Тендеры</Link>
+              {tenderAccess && <Link to="/tenders" className="nav-link" onClick={handleLinkClick}>Тендеры</Link>}
               <Link to="/" className="nav-link" onClick={handleLinkClick}>
                 <span>Главная</span>
                 <div className="nav-link-glow"></div>

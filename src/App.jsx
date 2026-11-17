@@ -1,5 +1,7 @@
-import React from 'react';
-import Tenders from './pages/tenders/Tenders.jsx';
+import React, { lazy, Suspense } from 'react';
+import { TenderAccessProvider, TenderStaffOnly } from './context/TenderAccessContext.jsx';
+const Tenders = lazy(() => import('./pages/tenders/Tenders.jsx'));
+const staffTenders = <TenderStaffOnly><Suspense fallback={<p>Загрузка…</p>}><Tenders /></Suspense></TenderStaffOnly>;
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext.jsx';
 import Header from './components/layout/Header/Header.jsx';
@@ -27,13 +29,14 @@ function App() {
   return (
     <CartProvider>
       <Router>
+        <TenderAccessProvider>
         <div className="App">
           <Header />
           <main style={{ paddingBottom: 'calc(60px + env(safe-area-inset-bottom))' }}>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/tenders" element={<Tenders />} />
-              <Route path="/tenders/:id" element={<Tenders />} />
+              <Route path="/tenders" element={staffTenders} />
+              <Route path="/tenders/:id" element={staffTenders} />
               <Route path="/catalog" element={<Catalog />} />
               <Route path="/products" element={<ProductGrid />} />
               <Route path="/product/:id" element={<Product />} />
@@ -52,6 +55,7 @@ function App() {
           <TabBar />
           <ChatWidget />
         </div>
+      </TenderAccessProvider>
       </Router>
     </CartProvider>
   );

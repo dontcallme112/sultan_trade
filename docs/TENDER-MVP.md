@@ -21,7 +21,7 @@ npm --prefix backend run tenders:demo
 В другом терминале:
 
 ```bash
-TENDER_API_TARGET=http://127.0.0.1:8081 VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=local-demo npm run dev
+VITE_TENDER_DEMO=true TENDER_API_TARGET=http://127.0.0.1:8081 VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=local-demo npm run dev
 ```
 
 Откройте `http://localhost:5173/tenders`, нажмите «Загрузить / обновить демоданные». Параметры Supabase в этой команде — явно нерабочие локальные значения, необходимые существующему AuthProvider магазина. Для демо вход не требуется, запросы к локальному Auth могут завершаться ошибкой; реальные аккаунты и оформление заказа требуют настоящего dev Supabase. Продакшен Supabase не нужен для тестового тендерного сценария.
@@ -52,7 +52,8 @@ insert into public.ti_members(user_id,role) values ('UUID-ПОЛЬЗОВАТЕЛ
 
 ## API
 
-`GET /api/tenders/connection` — состояние подключения без приватных данных.
+`GET /api/tenders/access` — проверка доступа сотрудника.
+`GET /api/tenders/connection` — состояние подключения, также только для сотрудников.
 Остальные требуют Bearer token в основном backend:
 
 - `GET /api/tenders` — search, customer, region, category, min, max, before, method, status, favorite=true, active=true, sort=deadline|amount|rating|newest, page (20 записей).
@@ -85,3 +86,9 @@ npx eslint src/pages/tenders/Tenders.jsx backend/tenders/*.js vite.config.js
 - Общий `npm run lint`: 48 существующих замечаний (43 errors, 5 warnings) в старых файлах магазина. Полная очистка старого кода не входила в изменение.
 - Headless Chromium: синхронизация demo, открытие карточки, избранное, статус, перезагрузка с сохранением, поиск, переключение KZ, ширина 390px — успешно, без необработанных JS ошибок. Исправлено переполнение поля подписки в существующем footer (min-width), обнаруженное мобильной проверкой.
 - `git diff --check`: успешно.
+
+## Видимость только сотрудникам
+
+Пункт меню и маршруты /tenders доступны только вошедшим пользователям, включённым владельцем в ti_members. Для остальных пункт скрыт, прямой переход возвращает на главную; данные и состояние подключения защищены серверной проверкой. Доступ перепроверяется при фокусе окна и каждую минуту. При выходе или смене пользователя интерфейс закрывается немедленно. Регистрация покупателя и user_metadata не дают доступа. Удаление записи из ti_members отзывает API-доступ при следующем запросе. Для явного локального demo добавлен VITE_TENDER_DEMO=true; этот флаг игнорируется production-сборкой. Production не изменялся.
+
+Проверка ограничения доступа: 6/6 backend тестов; целевой ESLint и production build успешны. В Chromium с подменёнными ответами тестовой авторизации проверены гость, покупатель, сотрудник, перезагрузка защищённой страницы и выход сотрудника: пункт меню скрывается, защищённый маршрут закрывается. Реальный Supabase staging по-прежнему требует настройки владельца.
