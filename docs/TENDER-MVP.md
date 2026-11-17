@@ -116,3 +116,11 @@ Preview Vercel может быть отдельно защищён Vercel Authen
 Backend этой версии — отдельный PR в master (ветка feat/tender-workbench). Нужна совместная публикация с frontend: новые эндпоинты `/import/preview`, `/finance/calculate`, `/:id/workspace`, `/:id/documents/extract`. Новых SQL-миграций для блока нет: личные рабочие данные хранятся в уже существующем tender_settings под серверным ключом пользователя/лота. Пределы и расчётные допущения — в tenders/README.md ветки backend.
 
 Проверки: frontend build и ESLint новых компонентов; 35 backend тестов; реальный локальный HTTP-сценарий в Chromium, включая импорт файла, извлечение/экспорт, выбор Stockera, расчёт и сохранение/перезагрузку, экран 390 px. Для Auth и поиска Stockera использованы тестовые ответы; финансовые и импортные API не подменялись. getToken в AuthContext стабилизирован, чтобы обновление профиля не запускало повторную загрузку редактора с потерей несохранённых полей.
+
+### Supplier comparison, import and expanded rating
+
+The tender card adds a private supplier comparison with an existing-catalogue search, manual Kazakhstan/1688 offers, dates/currencies/FX dates, pack multiples, explicit parameter/evidence matching, shipping and customs estimates. Pinduoduo stays disconnected; no external supplier API is fabricated. Unknown costs remain unknown. Catalogue references are not certified procurement quotes or stock reservations.
+
+The comparison table can transfer goods, shipping, duty/fees and import VAT separately into the existing finance form. Import VAT credit must be explicitly confirmed; initial cash outlay stays visible. Review all tax rates, periods, valuation bases, shipping and costs before using a result. Specific/combined tariffs and legal treatment need broker/accounting confirmation.
+
+A nine-factor expanded rating uses configurable weights and evidenced manual scores. Unknown criteria are excluded from the score denominator but lower the separately displayed coverage. This does not replace the baseline catalogue ranking or claim that an AI provider is connected. Saved comparison/rating fields are personal and preserved when offers or finance are edited. Backend deployment must precede frontend; production deployment still requires confirmation.
