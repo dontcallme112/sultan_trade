@@ -51,7 +51,7 @@ export function validateOffers(offers=[]) {
     const price=num(o.unitPrice,'Цена поставщика'), quantity=num(o.quantity,'Количество');if(quantity<=0)fail('Количество должно быть больше нуля');
     const rate=currency==='KZT'?1:num(o.fxRate,'Курс в тенге');if(rate<=0)fail('Курс должен быть больше нуля');
     if(currency!=='KZT' && !iso(o.fxDate))fail('Нужна дата курса');
-    const url=String(o.url || '');if(url){try{if(new URL(url).protocol!=='https:')fail('Ссылка должна начинаться с https://');}catch{fail('Некорректная ссылка поставщика');}}
+    const url=String(o.url || '');if(url){try{const u=new URL(url);if(u.protocol!=='https:' || u.username || u.password)fail('Ссылка должна начинаться с https://');}catch{fail('Некорректная ссылка поставщика');}}
     return {supplier:String(o.supplier).trim().slice(0,200),model:String(o.model).trim().slice(0,200),currency,unitPrice:price,quantity,fxRate:rate,fxDate:currency==='KZT'?o.observedAt:o.fxDate,
       observedAt:o.observedAt,url:url.slice(0,2000),totalKzt:round(price*quantity*rate),verification:'manual_unverified',
       notes:String(o.notes || '').slice(0,2000)};

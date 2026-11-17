@@ -6,13 +6,19 @@ const bad=(message,code='DOCUMENT_INVALID')=>Object.assign(new Error(message),{s
 async function validateZip(buffer){
   await new Promise((resolve,reject)=>yauzl.fromBuffer(buffer,{lazyEntries:true},(error,zip)=>{
     if(error)return reject(bad('Файл Office повреждён'));
-    let bytes=0,entries=0,done=false;
+    let bytes=0,expanded=0,entries=0,done=false;
     const fail=e=>{if(done)return;done=true;zip.close();reject(e);};
     zip.on('error',()=>fail(bad('Ошибка архива Office')));
     zip.on('entry',entry=>{
       bytes+=entry.uncompressedSize;entries++;
       if(bytes>25*1024*1024 || entries>2000 || (entry.generalPurposeBitFlag & 1))return fail(bad('Архив Office слишком большой или зашифрован'));
-      zip.readEntry();
+      if(entry.fileName.endsWith('/')){zip.readEntry();return;}
+      zip.openReadStream(entry,(error,stream)=>{
+        if(error)return fail(bad('Ошибка чтения архива Office'));
+        stream.on('data',chunk=>{expanded+=chunk.length;if(expanded>25*1024*1024){stream.destroy();fail(bad('Распакованный Office больше 25 МБ'));}});
+        stream.on('error',()=>fail(bad('Размер или структура архива Office не соответствует содержимому')));
+        stream.on('end',()=>{if(!done)zip.readEntry();});
+      });
     });
     zip.on('end',()=>{if(!done){done=true;resolve();}});zip.readEntry();
   }));
