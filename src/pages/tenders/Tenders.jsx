@@ -13,6 +13,11 @@ import TenderDocuments from './TenderDocuments';
 const workflow = { new: ['Новый','Жаңа'], analysis: ['На анализе','Талдауда'], interesting: ['Интересный','Қызықты'], preparing: ['Готовим заявку','Өтінім дайындау'], participating: ['Участвуем','Қатысамыз'], won: ['Выигран','Жеңдік'], lost: ['Проигран','Жеңілдік'], rejected: ['Отклонён','Қабылданбады'] };
 const money = n => n == null ? '—' : new Intl.NumberFormat('ru-KZ', { style: 'currency', currency: 'KZT', maximumFractionDigits: 0 }).format(n);
 const date = s => s && Number.isFinite(Date.parse(s)) ? new Date(s).toLocaleString('ru-KZ', { timeZone: 'Asia/Qyzylorda' }) : '—';
+function Availability({lot,lang}) {
+  const state=lot.availability?.state || 'unknown';
+  const labels={open:['Приём открыт','Өтінім қабылдау ашық'],closed:['Закрыта / срок подачи истёк','Жабық / өтінім мерзімі өткен'],unknown:['Приём заявок не подтверждён','Өтінім қабылдауы расталмаған']};
+  return <p className={'tender-availability '+state}>{labels[state]?.[lang?1:0] || labels.unknown[lang?1:0]}</p>;
+}
 export default function Tenders() {
   const { id } = useParams();
   const { getToken } = useAuth();
@@ -25,7 +30,7 @@ export default function Tenders() {
   const [runs, setRuns] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [filters, setFilters] = useState({ search: '', active: 'true', sort: 'deadline', page: 1 });
+  const [filters, setFilters] = useState({ search: '', availability: '', sort: 'deadline', page: 1 });
   const request = useCallback(async (path = '', options = {}) => {
     const token = await getToken();
     return (await apiClient.request({ url: `/api/tenders${path}`, ...options,
@@ -64,7 +69,8 @@ export default function Tenders() {
     {busy && <p role="status">{t('Загрузка…','Жүктелуде…')}</p>}
     {data && <>
       <div className="tender-stats">{[[t('Всего','Барлығы'),data.summary.total],[t('Новые','Жаңа'),data.summary.new],[t('Соответствие ≥80','Сәйкестік ≥80'),data.summary.high],[t('Избранные','Таңдаулылар'),data.summary.favorites],[t('Срок ≤7 дней','Мерзім ≤7 күн'),data.summary.upcoming]].map(([label,n]) => <div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>
-      {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><TenderReport key={'report:'+id} request={request} id={id} lang={lang} /><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
+      {data.summary.unknown > 0 && <p className="tender-banner">{t('Приём заявок не подтверждён у','Өтінім қабылдауы расталмаған')}: {data.summary.unknown}. {t('Проверьте статус и срок подачи в первоисточнике.','Бастапқы дереккөздегі күй мен мерзімді тексеріңіз.')}</p>}
+      {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><Availability lot={detail} lang={lang} /><TenderReport key={'report:'+id} request={request} id={id} lang={lang} /><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
         <p>{t('Базовое соответствие','Негізгі сәйкестік')}: <strong>{detail.rating.score}/100</strong> · {t('Полнота оценки','Бағалау толықтығы')}: {detail.rating.coverage*100}%</p><p>{detail.rating.formula}</p><p>{t('Неизвестно','Белгісіз')}: {detail.rating.unknown.join(', ')}</p>
         <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} onTransferred={inputs=>setSupplierSeed({id,inputs})} />
         <TenderExtendedRating key={'rating:'+id} request={request} id={id} />
@@ -76,14 +82,15 @@ export default function Tenders() {
         <div className="tender-filters"><label>{t('Поиск','Іздеу')}<input value={filters.search} onChange={e => change('search',e.target.value)} placeholder={t('Название, заказчик, ключевые слова','Атауы, тапсырыс беруші, кілт сөздер')} /></label>
           {select('region',t('Регион','Өңір'),data.regions.map(v=>[v,v]))}
           {select('category',t('Направление','Бағыт'),[['security',t('Безопасность','Қауіпсіздік')],['it','IT'],['display',t('Экраны и аудио','Экрандар және аудио')],['electrical',t('Электрика','Электр')],['construction',t('Строительство','Құрылыс')],['other',t('Прочее','Басқа')]])}
+          {select('availability',t('Приём заявок','Өтінім қабылдау'),[['open',t('Открыт','Ашық')],['unknown',t('Не подтверждено','Расталмаған')],['closed',t('Закрыта / срок истёк','Жабық / мерзімі өткен')]])}
           {select('method',t('Способ','Тәсіл'),data.methods.map(v=>[v,v]))}{select('status',t('Статус','Күй'),Object.entries(workflow).map(([k,v])=>[k,v[lang]]))}
           <label>{t('Заказчик','Тапсырыс беруші')}<input value={filters.customer || ''} onChange={e=>change('customer',e.target.value)} /></label>
           {['min','max'].map((key,i)=><label key={key}>{i ? t('Сумма до','Сома дейін') : t('Сумма от','Сома бастап')}<input type="number" min="0" value={filters[key] || ''} onChange={e=>change(key,e.target.value)} /></label>)}
           <label>{t('Срок подачи до','Өтінім мерзімі дейін')}<input type="date" value={filters.before?.slice(0,10) || ''} onChange={e=>change('before',e.target.value ? `${e.target.value}T23:59:59+05:00` : '')} /></label>
           {select('sort',t('Сортировка','Сұрыптау'),[['deadline',t('Ближайший срок','Ең жақын мерзім')],['amount',t('Сумма','Сома')],['rating',t('Соответствие','Сәйкестік')],['newest',t('Новые','Жаңа')]])}
-          <label className="tender-check"><input type="checkbox" checked={filters.active==='true'} onChange={e=>change('active',String(e.target.checked))} />{t('Только активные','Тек белсенді')}</label><label className="tender-check"><input type="checkbox" checked={filters.favorite==='true'} onChange={e=>change('favorite',String(e.target.checked))} />{t('Избранные','Таңдаулылар')}</label>
+          <label className="tender-check"><input type="checkbox" checked={filters.favorite==='true'} onChange={e=>change('favorite',String(e.target.checked))} />{t('Избранные','Таңдаулылар')}</label>
         </div>
-        <p>{t('Найдено','Табылды')}: {data.total}</p><div className="tender-grid">{data.items.map(row => <article key={row.id}><div className="tender-card-top"><small>{row.demo ? 'DEMO' : row.source} · {row.region}</small><button disabled={busy} aria-label={t('Избранное','Таңдаулы')} onClick={()=>mutate(`/${encodeURIComponent(row.id)}`,'PATCH',{favorite:!row.favorite})}>{row.favorite ? '★' : '☆'}</button></div><h2><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{row.title}</Link></h2><p>{row.customer}</p><strong>{money(row.amount)}</strong><p>{date(row.deadline)} (UTC+5)</p><p>{workflow[row.workflow]?.[lang]} · {t('Соответствие','Сәйкестік')} {row.rating.score}/100</p><small>{t('Полнота оценки','Бағалау толықтығы')}: {Math.round((row.rating.coverage || 0)*100)}% · {t('Прибыль неизвестна','Пайда белгісіз')}</small><div className="tender-actions"><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{t('Открыть карточку','Карточканы ашу')}</Link><Link to={`/tenders/${encodeURIComponent(row.id)}#tender-report`}>{t('Отчёт Excel / JSON','Excel / JSON есебі')}</Link></div></article>)}</div>
+        <p>{t('Найдено','Табылды')}: {data.total}</p><div className="tender-grid">{data.items.map(row => <article key={row.id}><div className="tender-card-top"><small>{row.demo ? 'DEMO' : row.source} · {row.region}</small><button disabled={busy} aria-label={t('Избранное','Таңдаулы')} onClick={()=>mutate(`/${encodeURIComponent(row.id)}`,'PATCH',{favorite:!row.favorite})}>{row.favorite ? '★' : '☆'}</button></div><h2><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{row.title}</Link></h2><p>{row.customer}</p><Availability lot={row} lang={lang} /><strong>{money(row.amount)}</strong><p>{date(row.deadline)} (UTC+5)</p><p>{workflow[row.workflow]?.[lang]} · {t('Соответствие','Сәйкестік')} {row.rating.score}/100</p><small>{t('Полнота оценки','Бағалау толықтығы')}: {Math.round((row.rating.coverage || 0)*100)}% · {t('Прибыль неизвестна','Пайда белгісіз')}</small><div className="tender-actions"><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{t('Открыть карточку','Карточканы ашу')}</Link><Link to={`/tenders/${encodeURIComponent(row.id)}#tender-report`}>{t('Отчёт Excel / JSON','Excel / JSON есебі')}</Link></div></article>)}</div>
         {!data.items.length && <p>{t('Закупок нет. Измените фильтры или импортируйте официальную выгрузку в разделе источников.','Сатып алулар жоқ. Сүзгілерді өзгертіңіз немесе дереккөздер бөлімінде ресми экспортты импорттаңыз.')}</p>}
         <div className="tender-pagination"><button disabled={busy || data.page<=1} onClick={()=>setFilters(f=>({...f,page:f.page-1}))}>←</button><span>{data.page} / {Math.max(1,data.pages)}</span><button disabled={busy || data.page>=data.pages} onClick={()=>setFilters(f=>({...f,page:f.page+1}))}>→</button></div>
       </>}
