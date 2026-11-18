@@ -4,7 +4,7 @@ import {compareSuppliers,calculateExtendedRating} from './suppliers.js';
 import { calculateFinance, validateOffers } from './finance.js';
 import { uiQuery, uiLot } from './compat.js';
 import { createHash } from 'node:crypto';
-import { scoreLot, isClosed, mergeScoring, validateScoring } from './scoring.js';
+import { scoreLot, procurementAvailability, mergeScoring, validateScoring } from './scoring.js';
 import { DIRECTION_IDS } from './directions.js';
 
 export const LOT_STATUSES = ['new', 'review', 'interesting', 'preparing', 'participating', 'won', 'lost', 'rejected'];
@@ -55,22 +55,24 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
   const view = (l, ctx) => {
     const { favs, states, t } = ctx;
     const st = states.get(l.id);
+    const availability = procurementAvailability(l, t), currentScore = scoreLot(l, ctx.scoring, t);
     return {
       id: l.id, source: l.source, is_demo: !!l.is_demo, number: l.number, title: l.title, description: l.description,
       customer_name: l.customer_name, customer_bin: l.customer_bin, region_name: l.region_name, region_code: l.region_code,
       method: l.method, status_raw: l.status_raw, total_price: l.total_price == null ? null : Number(l.total_price), quantity: l.quantity == null ? null : Number(l.quantity),
       published_at: l.published_at, deadline_at: l.deadline_at, url: l.url, directions: l.directions || [],
-      extra: l.extra || {}, score: l.score, score_confidence: l.score_confidence, score_detail: l.score_detail,
-      is_open: !isClosed(l, t), is_new: !!l.first_seen_at && t - new Date(l.first_seen_at).getTime() < 3 * 86400000,
+      extra: l.extra || {}, score: currentScore.score, score_confidence: currentScore.confidence, score_detail: currentScore,
+      is_open: availability.state === 'open', availability, is_new: !!l.first_seen_at && t - new Date(l.first_seen_at).getTime() < 3 * 86400000,
       favorite: favs.has(l.id), work_status: st?.status || 'new', note: st?.note || null,
       first_seen: l.first_seen_at,
     };
   };
 
-  async function ctxFor(user) { return { favs: user ? await store.favorites(user) : new Set(), states: await store.states(), t: now() }; }
+  async function ctxFor(user) { return { favs: user ? await store.favorites(user) : new Set(), states: await store.states(), scoring: await getScoring(), t: now() }; }
 
   async function list(user, q = {}) {
     q = uiQuery(q);
+    if (q.availability && !['open','closed','unknown'].includes(q.availability)) throw Object.assign(new Error('Некорректный статус приёма заявок'), { status:400 });
     const ctx = await ctxFor(user);
     let rows = (await store.listLots()).map(l => view(l, ctx));
     const all = [...rows];
@@ -91,6 +93,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       if (maxP != null && !(r.total_price != null && r.total_price <= maxP)) return false;
       if (minS != null && !(r.score != null && r.score >= minS)) return false;
       if (before && !(r.deadline_at && new Date(r.deadline_at).getTime() <= before)) return false;
+      if (q.availability && r.availability.state !== q.availability) return false;
       if (q.onlyOpen === 'true' && !r.is_open) return false;
       if (q.onlyFav === 'true' && !r.favorite) return false;
       return true;
@@ -106,7 +109,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     const page = Math.max(parseInt(q.page, 10) || 1, 1);
     return { total: rows.length, page, limit, pages:Math.ceil(rows.length/limit), items: rows.slice((page - 1) * limit, page * limit).map(uiLot),
       regions:[...new Set(all.map(r=>r.region_name).filter(Boolean))], methods:[...new Set(all.map(r=>r.method).filter(Boolean))],
-      summary:{total:all.length,new:all.filter(r=>r.is_new).length, favorites:all.filter(r=>r.favorite).length,
+      summary:{total:all.length, open:all.filter(r=>r.availability.state==='open').length, closed:all.filter(r=>r.availability.state==='closed').length, unknown:all.filter(r=>r.availability.state==='unknown').length,new:all.filter(r=>r.is_new).length, favorites:all.filter(r=>r.favorite).length,
         high:all.filter(r=>r.is_open && r.score >= 80).length,
         upcoming:all.filter(r=>r.is_open && r.deadline_at && Date.parse(r.deadline_at)>ctx.t && Date.parse(r.deadline_at)<=ctx.t+7*86400000).length} };
   }
