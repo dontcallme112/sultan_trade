@@ -204,7 +204,12 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
   async function getWorkspace(user,id) {
     if(!user)throw Object.assign(new Error('Нужен вход пользователя'),{status:401});
     if(!(await store.getLot(id)))throw Object.assign(new Error('Лот не найден'),{status:404});
-    return await store.getSetting('workspace:'+user+':'+id) || {offers:[],finance:null,savedAt:null};
+    const saved=await store.getSetting('workspace:'+user+':'+id) || {offers:[],finance:null,savedAt:null};
+    if(!saved.supplierAnalysis)return saved;
+    let analysis;
+    try { analysis={inputs:saved.supplierAnalysis.inputs,results:compareSuppliers(saved.supplierAnalysis.inputs,{now:now()}),error:null}; }
+    catch { analysis={inputs:saved.supplierAnalysis.inputs,results:null,error:'Сохранённое сравнение требует проверки исходных данных. Пересчитайте предложения.'}; }
+    return {...saved,supplierAnalysis:analysis};
   }
   async function saveWorkspace(user,id,input) {
     const previous=await getWorkspace(user,id);

@@ -66,13 +66,13 @@ export function compareSuppliers(input,{now=Date.now()}={}){
   const modelMatch=input.model.trim()?canon(input.model)===canon(o.model):null;
   if(modelMatch===false)warnings.push('Точная модель не совпадает; допустимость эквивалента не подтверждена.');
   if(!requirements.length)unknown.push('requirements');
-  const ageDays=Math.floor((now-Date.parse(o.observedAt))/86400000);if(ageDays>7)warnings.push('Цена старше 7 дней. Обновите предложение.');
-  if(!o.availabilityConfirmed)unknown.push('availability');
-  if(!o.deliveryConfirmed)unknown.push('delivery_date');
+  const ageDays=Math.floor((now-Date.parse(o.observedAt))/86400000),stale=now-Date.parse(o.observedAt)>7*86400000;if(stale)warnings.push('Цена старше 7 дней. Обновите предложение.');
+  if(o.availabilityConfirmed!==true)unknown.push('availability');
+  if(o.deliveryConfirmed!==true)unknown.push('delivery_date');
   const complete=shipping!=null&&customs!=null;
-  return {index,supplier:o.supplier,model:o.model,url:o.url,currency:o.currency,unitPrice,observedAt:o.observedAt,fxDate:o.currency==='KZT'?o.observedAt:o.fxDate,ageDays,stale:ageDays>7,priceKind:o.priceKind==='catalog_reference'?'catalog_reference':'manual_unverified',quantity,purchaseQuantity,goodsKzt:round(goodsKzt),shippingKzt:shipping==null?null:round(shipping),customs,totalCashKzt:complete?round(goodsKzt+shipping+customs.total):null,costWithoutRecoverableImportVat:complete&&o.importVatRecoverable===true?round(goodsKzt+shipping+customs.total-customs.importVat):null,modelMatch,checks,unknown,warnings,fullCompliance:false,completeness:complete?'estimated':'incomplete'};
+  return {index,supplier:o.supplier,model:o.model,url:o.url,currency:o.currency,unitPrice,observedAt:o.observedAt,fxDate:o.currency==='KZT'?o.observedAt:o.fxDate,ageDays,stale,priceKind:o.priceKind==='catalog_reference'?'catalog_reference':'manual_unverified',quantity,purchaseQuantity,goodsKzt:round(goodsKzt),shippingKzt:shipping==null?null:round(shipping),customs,totalCashKzt:complete?round(goodsKzt+shipping+customs.total):null,costWithoutRecoverableImportVat:complete&&o.importVatRecoverable===true?round(goodsKzt+shipping+customs.total-customs.importVat):null,modelMatch,checks,unknown,warnings,fullCompliance:false,completeness:complete?'estimated':'incomplete'};
  });
- return {rows,notice:'Все предложения требуют проверки. Расчёт не подтверждает цену, наличие, подлинность документа или соответствие. Импортный НДС показан отдельно от прибыли; право на зачёт указывает пользователь.'};
+ return {rows,evaluatedAt:new Date(now).toISOString(),freshnessDays:7,notice:'Все предложения требуют проверки. Расчёт не подтверждает цену, наличие, подлинность документа или соответствие. Импортный НДС показан отдельно от прибыли; право на зачёт указывает пользователь.'};
 }
 export function supplierSources(catalogConnected=false){return [
  {id:'stockera',state:catalogConnected?'ready':'not_connected',message:'Каталог существующей интеграции Al-Style/Stockera. Даты обновления сохраняются; публичная цена магазина не является подтверждённой закупочной ценой.'},
