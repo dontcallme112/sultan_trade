@@ -1,3 +1,5 @@
+import WhatsAppPreparation from './WhatsAppPreparation';
+import TenderPortfolio from './TenderPortfolio';
 import TenderOneC from './TenderOneC';
 import TenderReadiness from './TenderReadiness';
 import TenderListReport from './TenderListReport';
@@ -5,7 +7,7 @@ import TenderHistory from './TenderHistory';
 import TenderReport from './TenderReport';
 import TenderExtendedRating from './TenderExtendedRating';
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import './Tenders.css';
@@ -23,6 +25,7 @@ function Availability({lot,lang}) {
 }
 export default function Tenders() {
   const { id } = useParams();
+  const location=useLocation();
   const { getToken } = useAuth();
   const [supplierSeed,setSupplierSeed]=useState(null);
   const [lang, setLang] = useState(0);
@@ -60,6 +63,10 @@ export default function Tenders() {
     }, 250);
     return () => { current = false; clearTimeout(timer); };
   }, [request, filters, id, revision]);
+  useEffect(()=>{
+    if(!location.hash)return;const target=document.getElementById(location.hash.slice(1));
+    if(target){let node=target;while(node){if(node.tagName==='DETAILS')node.open=true;node=node.parentElement;}target.scrollIntoView({block:'start'});}
+  },[location.hash,location.key,id,data?.total]);
   const change = (key, value) => setFilters(f => ({ ...f, [key]: value, page: 1 }));
   const mutate = async (path, method, body) => {
     setBusy(true); setError('');
@@ -69,7 +76,10 @@ export default function Tenders() {
   const select = (key, label, entries) => <label>{label}<select value={filters[key] || ''} onChange={e => change(key,e.target.value)}><option value="">{t('Все','Барлығы')}</option>{entries.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>;
   return <section className="tenders-page" aria-busy={busy}>
     <div className="tender-heading"><div><small>SULTAN TRADE AI · TENDER INTELLIGENCE</small><h1>{t('Тендеры','Тендерлер')}</h1><p>{t('Поиск и управление закупками','Сатып алуларды іздеу және басқару')}</p></div><button onClick={() => setLang(n => 1-n)}>{lang ? 'Русский' : 'Қазақша'}</button></div>
+    <nav className="tender-workspace-nav" aria-label="Рабочие разделы"><Link to="/tenders#financial-summary">Финансы и прибыль</Link><Link to="/tenders#tender-list-report">Скачать отчёт</Link><Link to="/tenders#whatsapp-preparation">WhatsApp · подготовка</Link><Link to="/tenders#tender-sources">Источники и импорт</Link><Link to="/tenders">Каталог тендеров</Link></nav>
+    <div className="tender-workspace-note">Рабочий кабинет сотрудников · финансовые расчёты, отчёты и подготовка связи собраны на этой странице.</div>
     {connection?.demo && <p className="tender-banner">{t('ДЕМО: все закупки вымышлены. Общий тестовый пользователь. Данные сохраняются локально на сервере.','ДЕМО: барлық сатып алулар ойдан шығарылған. Ортақ тест пайдаланушысы. Деректер серверде жергілікті сақталады.')}</p>}
+    <WhatsAppPreparation request={request} />
     <TenderSources request={request} onChanged={()=>setRevision(n=>n+1)} lang={lang} localDemo={connection?.demo === true} />
     {error && <div className="tender-error" role="alert">{error} <button onClick={() => setRevision(n => n+1)}>{t('Повторить','Қайталау')}</button> <Link to="/profile">{t('Вход / профиль','Кіру / профиль')}</Link></div>}
     {busy && <p role="status">{t('Загрузка…','Жүктелуде…')}</p>}
@@ -96,6 +106,7 @@ export default function Tenders() {
           {select('sort',t('Сортировка','Сұрыптау'),[['deadline',t('Ближайший срок','Ең жақын мерзім')],['amount',t('Сумма','Сома')],['rating',t('Соответствие','Сәйкестік')],['newest',t('Новые','Жаңа')]])}
           <label className="tender-check"><input type="checkbox" checked={filters.favorite==='true'} onChange={e=>change('favorite',String(e.target.checked))} />{t('Избранные','Таңдаулылар')}</label>
         </div>
+        <TenderPortfolio request={request} filters={filters} total={data.total} revision={savedRevision} />
         <TenderOneC request={request} filters={filters} total={data.total} />
         <TenderListReport request={request} filters={filters} total={data.total} lang={lang} />
         <p>{t('Найдено','Табылды')}: {data.total}</p><div className="tender-grid">{data.items.map(row => <article key={row.id}><div className="tender-card-top"><small>{row.demo ? 'DEMO' : row.source} · {row.region}</small><button disabled={busy} aria-label={t('Избранное','Таңдаулы')} onClick={()=>mutate(`/${encodeURIComponent(row.id)}`,'PATCH',{favorite:!row.favorite})}>{row.favorite ? '★' : '☆'}</button></div><h2><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{row.title}</Link></h2><p>{row.customer}</p><Availability lot={row} lang={lang} /><strong>{money(row.amount)}</strong><p>{date(row.deadline)} (UTC+5)</p><p>{workflow[row.workflow]?.[lang]} · {t('Соответствие','Сәйкестік')} {row.rating.score}/100</p><small>{t('Полнота оценки','Бағалау толықтығы')}: {Math.round((row.rating.coverage || 0)*100)}% · {t('Прибыль неизвестна','Пайда белгісіз')}</small><div className="tender-actions"><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{t('Открыть карточку','Карточканы ашу')}</Link><Link to={`/tenders/${encodeURIComponent(row.id)}#tender-report`}>{t('Отчёт Excel / JSON','Excel / JSON есебі')}</Link></div></article>)}</div>

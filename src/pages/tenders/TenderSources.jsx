@@ -22,7 +22,7 @@ export default function TenderSources({request,onChanged,lang,localDemo=false}){
     catch(e){setError(e.response?.data?.error || e.message);setRevision(n=>n+1);onChanged();}
     finally{setBusy(false);}
   };
-  return <details className="tender-sources"><summary>{t('Источники и импорт закупок','Дереккөздер және сатып алуларды импорттау')}</summary>
+  return <details id="tender-sources" className="tender-sources"><summary>{t('Источники и импорт закупок','Дереккөздер және сатып алуларды импорттау')}</summary>
     <p>{t('Загрузите JSON, сохранённый с официального портала. Сначала будет показан предварительный результат; запись начинается только после нажатия «Импортировать».','Ресми порталдан сақталған JSON жүктеңіз. Алдымен алдын ала нәтиже көрсетіледі; жазу «Импорттау» басылғанда басталады.')}</p>
     <label>{t('Файл выгрузки JSON (до 8 МБ)','JSON экспорт файлы (8 МБ дейін)')}<input type="file" accept=".json,application/json" disabled={busy} onChange={e=>choose(e.target.files[0])} /></label>
     {name && <p>{name}</p>}{busy && <p role="status">{t('Обработка…','Өңделуде…')}</p>}
