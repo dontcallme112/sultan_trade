@@ -1,3 +1,6 @@
+import {workflow} from './workflow';
+import TenderWorkBoard from './TenderWorkBoard';
+import TenderTeamNote from './TenderTeamNote';
 import WhatsAppPreparation from './WhatsAppPreparation';
 import TenderPortfolio from './TenderPortfolio';
 import TenderOneC from './TenderOneC';
@@ -15,7 +18,7 @@ import TenderSources from './TenderSources';
 import TenderFinance from './TenderFinance';
 import TenderDocuments from './TenderDocuments';
 
-const workflow = { new: ['Новый','Жаңа'], analysis: ['На анализе','Талдауда'], interesting: ['Интересный','Қызықты'], preparing: ['Готовим заявку','Өтінім дайындау'], participating: ['Участвуем','Қатысамыз'], won: ['Выигран','Жеңдік'], lost: ['Проигран','Жеңілдік'], rejected: ['Отклонён','Қабылданбады'] };
+
 const money = n => n == null ? '—' : new Intl.NumberFormat('ru-KZ', { style: 'currency', currency: 'KZT', maximumFractionDigits: 0 }).format(n);
 const date = s => s && Number.isFinite(Date.parse(s)) ? new Date(s).toLocaleString('ru-KZ', { timeZone: 'Asia/Qyzylorda' }) : '—';
 function Availability({lot,lang}) {
@@ -76,7 +79,7 @@ export default function Tenders() {
   const select = (key, label, entries) => <label>{label}<select value={filters[key] || ''} onChange={e => change(key,e.target.value)}><option value="">{t('Все','Барлығы')}</option>{entries.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>;
   return <section className="tenders-page" aria-busy={busy}>
     <div className="tender-heading"><div><small>SULTAN TRADE AI · TENDER INTELLIGENCE</small><h1>{t('Тендеры','Тендерлер')}</h1><p>{t('Поиск и управление закупками','Сатып алуларды іздеу және басқару')}</p></div><button onClick={() => setLang(n => 1-n)}>{lang ? 'Русский' : 'Қазақша'}</button></div>
-    <nav className="tender-workspace-nav" aria-label="Рабочие разделы"><Link to="/tenders#financial-summary">Финансы и прибыль</Link><Link to="/tenders#tender-list-report">Скачать отчёт</Link><Link to="/tenders#whatsapp-preparation">WhatsApp · подготовка</Link><Link to="/tenders#tender-sources">Источники и импорт</Link><Link to="/tenders">Каталог тендеров</Link></nav>
+    <nav className="tender-workspace-nav" aria-label="Рабочие разделы"><Link to="/tenders#tender-work-board">Рабочая доска</Link><Link to="/tenders#financial-summary">Финансы и прибыль</Link><Link to="/tenders#tender-list-report">Скачать отчёт</Link><Link to="/tenders#whatsapp-preparation">WhatsApp · подготовка</Link><Link to="/tenders#tender-sources">Источники и импорт</Link><Link to="/tenders">Каталог тендеров</Link></nav>
     <div className="tender-workspace-note">Рабочий кабинет сотрудников · финансовые расчёты, отчёты и подготовка связи собраны на этой странице.</div>
     {connection?.demo && <p className="tender-banner">{t('ДЕМО: все закупки вымышлены. Общий тестовый пользователь. Данные сохраняются локально на сервере.','ДЕМО: барлық сатып алулар ойдан шығарылған. Ортақ тест пайдаланушысы. Деректер серверде жергілікті сақталады.')}</p>}
     <WhatsAppPreparation request={request} />
@@ -93,6 +96,7 @@ export default function Tenders() {
         <TenderFinance supplierSeed={supplierSeed?.id===id?supplierSeed.inputs:null} key={'finance:'+id} request={request} tender={detail} lang={lang} />
         <button disabled={busy} onClick={() => mutate(`/${encodeURIComponent(id)}`,'PATCH',{favorite:!detail.favorite})}>{detail.favorite ? '★' : '☆'} {t('Избранное','Таңдаулы')}</button> <label>{t('Рабочий статус','Жұмыс күйі')}<select disabled={busy} value={detail.workflow} onChange={e => mutate(`/${encodeURIComponent(id)}`,'PATCH',{workflow:e.target.value})}>{Object.entries(workflow).map(([key,label]) => <option key={key} value={key}>{label[lang]}</option>)}</select></label>
         {detail.source_url && <a href={detail.source_url} target="_blank" rel="noreferrer">{t('Первоисточник','Бастапқы дереккөз')}</a>}
+        <TenderTeamNote key={'note:'+id} enabled={detail.team_notes_enabled===true} request={request} id={id} note={detail.note} onChanged={()=>setRevision(n=>n+1)} lang={lang} />
         <TenderHistory key={'history:'+id} request={request} id={id} lang={lang} revision={revision} />
       </article> : <>
         <div className="tender-filters"><label>{t('Поиск','Іздеу')}<input value={filters.search} onChange={e => change('search',e.target.value)} placeholder={t('Название, заказчик, ключевые слова','Атауы, тапсырыс беруші, кілт сөздер')} /></label>
@@ -106,6 +110,7 @@ export default function Tenders() {
           {select('sort',t('Сортировка','Сұрыптау'),[['deadline',t('Ближайший срок','Ең жақын мерзім')],['amount',t('Сумма','Сома')],['rating',t('Соответствие','Сәйкестік')],['newest',t('Новые','Жаңа')]])}
           <label className="tender-check"><input type="checkbox" checked={filters.favorite==='true'} onChange={e=>change('favorite',String(e.target.checked))} />{t('Избранные','Таңдаулылар')}</label>
         </div>
+        <TenderWorkBoard request={request} filters={filters} total={data.total} revision={revision} onChanged={()=>setRevision(n=>n+1)} lang={lang} />
         <TenderPortfolio request={request} filters={filters} total={data.total} revision={savedRevision} />
         <TenderOneC request={request} filters={filters} total={data.total} />
         <TenderListReport request={request} filters={filters} total={data.total} lang={lang} />
