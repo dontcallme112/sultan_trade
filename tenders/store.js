@@ -1,3 +1,4 @@
+import { historySnapshot, historyChanged } from './history.js';
 // Хранилище: два одинаковых по интерфейсу варианта. memory — для тестов и локальной проверки, supabase — для работы.
 // Фильтрация и сортировка делаются в сервисе (JS), чтобы логика была одна и та же. Объём MVP небольшой (до TENDERS_MAX_ROWS).
 
@@ -9,6 +10,11 @@ export function createMemoryStore() {
   const states = new Map();
   const log = [];
   const settings = new Map();
+  const events = [];
+  let eventSeq = 0;
+  const record = (lot, kind, before, after, actor = null) => {
+    if (historyChanged(before, after)) events.push({ id: ++eventSeq, lot_id: lot, kind, before_data: before, after_data: after, actor_id: actor, created_at: new Date().toISOString() });
+  };
   let seq = 0;
   return {
     kind: 'memory',
@@ -24,13 +30,20 @@ export function createMemoryStore() {
         const k = key(r.source, r.external_id), id = byKey.get(k) || `lot-${++seq}`;
         const prev = lots.get(id);
         lots.set(id, { ...(prev || { first_seen_at: new Date().toISOString() }), ...r, id, synced_at: new Date().toISOString() });
+        record(id, prev ? 'source_changed' : 'source_created', historySnapshot(prev), historySnapshot(lots.get(id)));
         byKey.set(k, id);
       }
     },
     async favorites(user) { return new Set([...favs].filter(x => x.startsWith(user + '|')).map(x => x.split('|')[1])); },
     async setFavorite(user, lot, on) { const k = `${user}|${lot}`; if (on) favs.add(k); else favs.delete(k); },
     async states() { return new Map([...states].map(([k, v]) => [k, { ...v }])); },
-    async setState(lot, patch) { states.set(lot, { ...(states.get(lot) || { status: 'new', note: null }), ...patch, lot_id: lot, updated_at: new Date().toISOString() }); },
+    async setState(lot, patch) {
+      const before = historySnapshot(states.get(lot) || { status: 'new', note: null }, ['status','note']);
+      const next = { ...(states.get(lot) || { status: 'new', note: null }), ...patch, lot_id: lot, updated_at: new Date().toISOString() };
+      record(lot, 'workflow_changed', before, historySnapshot(next, ['status','note']), patch.updated_by);
+      states.set(lot, next);
+    },
+    async history(lot) { return { available: true, items: structuredClone(events.filter(e => e.lot_id === lot).reverse().slice(0, 50)) }; },
     async addLog(entry) { const e = { id: ++seq, started_at: new Date().toISOString(), ...entry }; log.push(e); return e.id; },
     async finishLog(id, patch) { Object.assign(log.find(x => x.id === id) || {}, patch, { finished_at: new Date().toISOString() }); },
     async listLog(limit = 30) { return [...log].reverse().slice(0, limit).map(x => ({ ...x })); },
@@ -44,6 +57,12 @@ export function createSupabaseStore(sb, { dbCall, maxRows = 5000 } = {}) {
   const T = n => sb.from(n);
   return {
     kind: 'supabase',
+    async history(lot) {
+      const { data, error } = await T('tender_history').select('id,lot_id,kind,before_data,after_data,actor_id,created_at').eq('lot_id', lot).order('id', { ascending: false }).limit(50);
+      if (error && ['PGRST205','42P01'].includes(error.code)) return { available: false, items: [] };
+      if (error) throw new Error('Не удалось загрузить историю изменений');
+      return { available: true, items: data || [] };
+    },
     async listLots() {
       const out = [];
       for (let from = 0; from < maxRows; from += 1000) {

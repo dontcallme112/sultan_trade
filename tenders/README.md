@@ -33,7 +33,7 @@
 
 Railway использует корневой backend ветки master. Его доступ проверяется по `TENDERS_ALLOWED_EMAILS` (через подтверждённую Supabase-сессию). Запись в `ti_members` другого backend из `main/backend` сама по себе этот сервер не открывает. Пустой список почт закрывает раздел для всех.
 
-Добавлены защищённые алиасы `/api/tenders/connection`, `/sync-runs`, `POST /sync` и `PATCH /:id`, а также дополнительные поля ответа списка и карточки, которые ожидает React из main. Существующие маршруты и поля master сохранены. Рабочие статусы master остаются общими для команды, избранное — личным. `analysis` интерфейса преобразуется в `review` backend. Рейтинг и полнота берутся из реального расчёта master. История изменений в этом хранилище отсутствует: возвращается явный `history_available:false`, история не выдумывается.
+Добавлены защищённые алиасы `/api/tenders/connection`, `/sync-runs`, `POST /sync` и `PATCH /:id`, а также дополнительные поля ответа списка и карточки, которые ожидает React из main. Существующие маршруты и поля master сохранены. Рабочие статусы master остаются общими для команды, избранное — личным. `analysis` интерфейса преобразуется в `review` backend. Рейтинг и полнота берутся из реального расчёта master. История загружается отдельно через `GET /api/tenders/:id/history`; старое поле `history_available:false` в ответах списка сохранено для совместимости.
 
 Backend требует свою миграцию `tenders/migrations/001_tenders.sql` с таблицами `tender_*`, а не только миграцию `ti_*` ветки main. Production БД в рамках исправления не изменялась; наличие таблиц нужно подтвердить при проверке действующего сервера после открытия доступа.
 
@@ -106,3 +106,32 @@ The proposed amount is rounded `portal amount × 1.2`. This is the requested ari
 Access remains employee-private and read-only, with no-store headers and one active XLSX export per process. No schema migration, new dependency, external API or production data change is required. Untrusted text is written as literal string cells, not formulas, hyperlinks or macros.
 
 Validation: 63 tender tests. Tests parse the real workbook, verify exactly one sheet/eight headers and literal formula-looking text, and check 1,160 portal total → 1,392 proposed amount → 246 net profit under the explicit fixture tax/cost inputs. Missing data, grouped lots and unconfirmed costs stay unknown. A compiled-browser fixture verifies Excel/JSON downloads, excludes unsaved edits, and checks mobile/no page errors.
+
+
+## История закупки и рабочих изменений
+
+`GET /api/tenders/:id/history` доступен только через существующий серверный контроль
+доступа сотрудников. Возвращает `{available, items}`: последние 50 событий по
+убыванию id, с `kind`, временем, `before_data`, `after_data` и UUID сотрудника для
+рабочих изменений. Данные источника не имеют подтверждённого автора-сотрудника.
+Личные расчёты, предложения, файлы документов и избранное в общую историю не входят.
+
+После отдельного разрешения владельца примените один раз
+`tenders/migrations/20261118045958_tender_history.sql` к Supabase (через миграцию).
+Она добавляет только `tender_history`, индекс и два AFTER-триггера. История начинается
+в момент установки; старые события не восстанавливаются и существующие лоты не
+перезаписываются. Сначала миграция, затем backend, затем frontend. Если таблицы ещё
+нет, API отдаёт `available:false`; остальные функции продолжают работать.
+Ошибки прав доступа/сети не маскируются под отсутствие истории.
+
+Триггеры работают SECURITY INVOKER и записывают историю в той же транзакции.
+При ошибке записи истории исходное изменение откатывается. Пересчёт рейтинга,
+обновление времени синхронизации и неизменившиеся бизнес-поля не создают событий.
+RLS включён без клиентских политик; anon/authenticated не имеют прав. Серверная
+service_role имеет только SELECT/INSERT для истории, без UPDATE/DELETE. При удалении
+лота его история также удаляется по FK cascade: это рабочая история, не независимый
+архив с гарантией неизменяемости. Действующего удаления лотов через UI нет.
+
+Проверка: `npm ci && npm run test:tenders`. Включает локальный PostgreSQL через PGlite
+(только devDependency): реальные триггеры, отсутствие backfill, повторные записи,
+атомарный откат и запреты RLS/GRANT. Production-база для тестов не используется.
