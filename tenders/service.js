@@ -246,10 +246,10 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return saveWorkspace(user,id,{supplierAnalysis:{...previous,requirements:[...existingRequirements,...additions]}});
   }
 
-  async function listReport(user,query) {
+  async function listReport(user,query,{allowEmpty=false}={}) {
     if(!user)throw Object.assign(new Error('Нужен вход пользователя'),{status:401});
     const selected=await list(user,query,{exportAll:true});
-    if(!selected.total)throw Object.assign(new Error('Нет закупок для выгрузки. Измените фильтры.'),{status:422});
+    if(!selected.total&&!allowEmpty)throw Object.assign(new Error('Нет закупок для выгрузки. Измените фильтры.'),{status:422});
     const reports=[],generatedAt=new Date(now()).toISOString();
     for(let i=0;i<selected.items.length;i+=10) {
       const batch=await Promise.all(selected.items.slice(i,i+10).map(async lot=>{

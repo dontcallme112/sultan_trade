@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {PGlite} from '@electric-sql/pglite';
+test('prepared WhatsApp schema: durable/idempotent inbox, no automatic opt-in, exactly-once draft key, uncertain send reconciliation, RLS',async t=>{
+ const db=new PGlite();t.after(()=>db.close());await db.exec('create role anon;create role authenticated;create role service_role bypassrls;');await db.exec(readFileSync(new URL('../../messaging/whatsapp/migrations/20261118113937_whatsapp_architecture.sql',import.meta.url),'utf8'));await db.exec('set role service_role');
+ const process=async(key,data)=>{await db.query('insert into public.wa_inbox(event_key,payload) values($1,$2) on conflict(event_key) do nothing',[key,{}]);const item=(await db.query('select * from public.wa_claim_inbox()')).rows[0];if(item)await db.query('select public.wa_apply_inbox($1,$2,$3)',[item.id,item.lock_token,data]);};
+ const data={contacts:[{wa_id:'15555550100',display_name:'Fixture',last_inbound_at:'2026-11-18T00:00:00Z',opt_out:false}],messages:[{wa_id:'15555550100',provider_message_id:'wamid.in',kind:'text',text_body:'Fixture',provider_payload:{},provider_timestamp:'2026-11-18T00:00:00Z'}],statuses:[]};
+ await process('a'.repeat(64),data);await process('b'.repeat(64),data);assert.equal((await db.query('select * from public.wa_messages')).rows.length,1);const contact=(await db.query('select * from public.wa_contacts')).rows[0];assert.equal(contact.consent_status,'unknown');
+ const key='00000000-0000-4000-8000-000000000001',user='00000000-0000-4000-8000-000000000002',payload={to:'15555550100',kind:'text',text:'Fixture reply'};
+ const create=async (content=payload)=>(await db.query('select * from public.wa_create_draft($1,$2,$3,$4)',[key,contact.id,content,user])).rows[0];const draft=await create();assert.equal((await create()).id,draft.id);await assert.rejects(create({...payload,text:'Different'}));await db.query('select public.wa_approve_draft($1,$2)',[draft.id,user]);await assert.rejects(db.query('select public.wa_approve_draft($1,$2)',[draft.id,user]));
+ const claim=(await db.query('select * from public.wa_claim_outbox()')).rows[0];await db.query("select public.wa_finish_outbox($1,$2,'uncertain')",[claim.id,claim.lock_token]);assert.equal((await db.query('select * from public.wa_claim_outbox()')).rows.length,0);
+ await process('c'.repeat(64),{contacts:[],messages:[],statuses:[{provider_message_id:'wamid.out',status:'read',outbox_id:draft.id}]});assert.equal((await db.query('select state from public.wa_outbox where id=$1',[draft.id])).rows[0].state,'sent');
+ await process('d'.repeat(64),{contacts:[],messages:[],statuses:[{provider_message_id:'wamid.out',status:'sent',outbox_id:draft.id}]});assert.equal((await db.query("select delivery_status from public.wa_messages where provider_message_id='wamid.out'")).rows[0].delivery_status,'read');
+ await assert.rejects(db.exec('delete from public.wa_audit'),/permission denied/);await db.exec('reset role;set role anon');await assert.rejects(db.exec('select * from public.wa_messages'),/permission denied/);await assert.rejects(db.exec('select * from public.wa_claim_inbox()'),/permission denied/);await db.exec('reset role');
+ const tables=(await db.query("select relrowsecurity from pg_class where relname in ('wa_contacts','wa_templates','wa_inbox','wa_outbox','wa_messages','wa_audit')")).rows;assert.equal(tables.length,6);assert.ok(tables.every(r=>r.relrowsecurity));
+});
