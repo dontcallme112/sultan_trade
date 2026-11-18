@@ -21,7 +21,13 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
   let scoringCache = null;
   const getScoring = async () => scoringCache || (scoringCache = mergeScoring(await store.getSetting('scoring')));
 
-  async function sync(sourceId, input) {
+  const activeSyncs=new Set();
+  async function sync(sourceId,input){
+    if(activeSyncs.has(sourceId))throw Object.assign(new Error('Обновление этого источника уже выполняется'),{status:409});
+    activeSyncs.add(sourceId);
+    try{return await performSync(sourceId,input);}finally{activeSyncs.delete(sourceId);}
+  }
+  async function performSync(sourceId, input) {
     const ad = adapters.get(sourceId);
     if (!ad) throw Object.assign(new Error('Неизвестный источник'), { status: 404 });
     const logId = await store.addLog({ source: sourceId, ok: false });
