@@ -29,6 +29,7 @@
     "helmet": "^7.1.0",
     "mammoth": "1.13.0",
     "pdf-parse": "2.4.5",
+    "saxes": "6.0.0",
     "yauzl": "3.4.0"
   },
   "devDependencies": {
