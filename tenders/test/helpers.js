@@ -36,5 +36,5 @@ export async function listen(app) {
     let json = null; try { json = await res.json(); } catch {}
     return { status: res.status, json };
   };
-  return { call, close: () => new Promise(r => server.close(r)) };
+  return { base, call, close: () => new Promise(r => server.close(r)) };
 }
