@@ -1,3 +1,4 @@
+import {tenderReadiness} from './readiness.js';
 import {reportWorkbook,reportsWorkbook} from './report.js';
 import {createDocumentAI} from './ai.js';
 import {compareSuppliers,calculateExtendedRating,supplierSources} from './suppliers.js';
@@ -11,7 +12,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
+export function createTendersRouter({ scheduler=null, service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
   let exporting = false;
@@ -40,6 +41,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
 
   r.use('/api/tenders', (_req,res,next)=>{res.set('Cache-Control','no-store');next();}, rl);
   // ВАЖНО: глобальный парсер на сервере ограничен 200kb. Для импорта файла используем отдельный лимит (см. server.js).
+  r.get('/api/tenders/automation', gate, wrap(async (_req,res)=>res.json(scheduler?scheduler.status():{state:'not_configured',message:'Планировщик не подключён к этому серверу.'})));
   r.get('/api/tenders/access', gate, wrap(async (req, res) => res.json({ allowed: true, admin: !!req.tenderAdmin })));
   r.get('/api/tenders/supplier-sources', gate, wrap(async (_req,res)=>res.json({sources:supplierSources(Boolean(searchCatalog))})));
   r.get('/api/tenders/suppliers/search', gate, wrap(async (req,res)=>{
@@ -113,6 +115,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
     res.json(await service.documentWorkspace.save(uid(req),req.params.id,document,{expectedSha:req.body.sha256,expectedRevision:req.body.revision}));
   }));
   r.post('/api/tenders/:id/documents/requirements', gate, wrap(async (req,res)=>res.json(await service.transferDocumentRequirements(uid(req),req.params.id,req.body||{}))));
+  r.get('/api/tenders/:id/readiness', gate, wrap(async (req,res)=>res.json(tenderReadiness(await service.report(uid(req),req.params.id)))));
   r.get('/api/tenders/:id/report.json', gate, wrap(async (req,res)=>res.json(await service.report(uid(req),req.params.id))));
   r.get('/api/tenders/:id/report.xlsx', gate, wrap(async (req,res)=>{
     if(exporting)return res.status(429).json({error:'Другой отчёт формируется. Повторите позже.'});
