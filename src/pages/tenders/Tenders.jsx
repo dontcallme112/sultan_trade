@@ -1,3 +1,4 @@
+import TenderHistory from './TenderHistory';
 import TenderReport from './TenderReport';
 import TenderExtendedRating from './TenderExtendedRating';
 import { useCallback, useEffect, useState } from 'react';
@@ -70,7 +71,7 @@ export default function Tenders() {
         <TenderFinance supplierSeed={supplierSeed?.id===id?supplierSeed.inputs:null} key={'finance:'+id} request={request} tender={detail} lang={lang} />
         <button disabled={busy} onClick={() => mutate(`/${encodeURIComponent(id)}`,'PATCH',{favorite:!detail.favorite})}>{detail.favorite ? '★' : '☆'} {t('Избранное','Таңдаулы')}</button> <label>{t('Рабочий статус','Жұмыс күйі')}<select disabled={busy} value={detail.workflow} onChange={e => mutate(`/${encodeURIComponent(id)}`,'PATCH',{workflow:e.target.value})}>{Object.entries(workflow).map(([key,label]) => <option key={key} value={key}>{label[lang]}</option>)}</select></label>
         {detail.source_url && <a href={detail.source_url} target="_blank" rel="noreferrer">{t('Первоисточник','Бастапқы дереккөз')}</a>}
-        <h3>{t('История изменений','Өзгерістер тарихы')}</h3>{detail.history_available === false && <p>{t('История изменений не предоставляется текущим сервером.','Ағымдағы сервер өзгерістер тарихын ұсынбайды.')}</p>}{detail.history.length ? detail.history.map((h,i) => <details key={h.id || i}><summary>{date(h.created_at)} · {h.user_id ? t('Рабочие изменения','Жұмыс өзгерістері') : t('Данные источника','Дереккөз деректері')}</summary><pre>{JSON.stringify({before:h.before,after:h.after},null,2)}</pre></details>) : <p>—</p>}
+        <TenderHistory key={'history:'+id} request={request} id={id} lang={lang} revision={revision} />
       </article> : <>
         <div className="tender-filters"><label>{t('Поиск','Іздеу')}<input value={filters.search} onChange={e => change('search',e.target.value)} placeholder={t('Название, заказчик, ключевые слова','Атауы, тапсырыс беруші, кілт сөздер')} /></label>
           {select('region',t('Регион','Өңір'),data.regions.map(v=>[v,v]))}
