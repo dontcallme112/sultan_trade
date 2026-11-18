@@ -70,7 +70,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
 
   async function ctxFor(user) { return { favs: user ? await store.favorites(user) : new Set(), states: await store.states(), scoring: await getScoring(), t: now() }; }
 
-  async function list(user, q = {}) {
+  async function list(user, q = {}, { exportAll = false } = {}) {
     q = uiQuery(q);
     if (q.availability && !['open','closed','unknown'].includes(q.availability)) throw Object.assign(new Error('Некорректный статус приёма заявок'), { status:400 });
     const ctx = await ctxFor(user);
@@ -105,9 +105,10 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       published: (a, b) => (b.published_at ? new Date(b.published_at).getTime() : 0) - (a.published_at ? new Date(a.published_at).getTime() : 0),
     };
     rows.sort(sorts[q.sort] || sorts.score);
+    if (exportAll && rows.length > 200) throw Object.assign(new Error('В отчёте допускается до 200 закупок. Уточните фильтры.'), {status:422});
     const limit = Math.min(Math.max(parseInt(q.limit, 10) || 25, 1), 100);
     const page = Math.max(parseInt(q.page, 10) || 1, 1);
-    return { total: rows.length, page, limit, pages:Math.ceil(rows.length/limit), items: rows.slice((page - 1) * limit, page * limit).map(uiLot),
+    return { total: rows.length, page, limit, pages:Math.ceil(rows.length/limit), items: (exportAll ? rows : rows.slice((page - 1) * limit, page * limit)).map(uiLot),
       regions:[...new Set(all.map(r=>r.region_name).filter(Boolean))], methods:[...new Set(all.map(r=>r.method).filter(Boolean))],
       summary:{total:all.length, open:all.filter(r=>r.availability.state==='open').length, closed:all.filter(r=>r.availability.state==='closed').length, unknown:all.filter(r=>r.availability.state==='unknown').length,new:all.filter(r=>r.is_new).length, favorites:all.filter(r=>r.favorite).length,
         high:all.filter(r=>r.is_open && r.score >= 80).length,
@@ -234,11 +235,26 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return saveWorkspace(user,id,{supplierAnalysis:{...previous,requirements:[...existingRequirements,...additions]}});
   }
 
+  async function listReport(user,query) {
+    if(!user)throw Object.assign(new Error('Нужен вход пользователя'),{status:401});
+    const selected=await list(user,query,{exportAll:true});
+    if(!selected.total)throw Object.assign(new Error('Нет закупок для выгрузки. Измените фильтры.'),{status:422});
+    const reports=[],generatedAt=new Date(now()).toISOString();
+    for(let i=0;i<selected.items.length;i+=10) {
+      const batch=await Promise.all(selected.items.slice(i,i+10).map(async lot=>{
+        const saved=await store.getSetting('workspace:'+user+':'+lot.id);
+        return buildTenderReport({lot,workspace:{finance:saved?.finance||null},documentWorkspace:{},generatedAt});
+      }));
+      reports.push(...batch);
+    }
+    return reports;
+  }
+
   async function report(user,id){
     const [lot,workspace,document]=await Promise.all([get(user,id),getWorkspace(user,id),documentWorkspace.get(user,id)]);
     if(!lot)throw Object.assign(new Error('Лот не найден'),{status:404});
     return buildTenderReport({lot,workspace,documentWorkspace:document,generatedAt:new Date(now()).toISOString()});
   }
 
-  return { history, report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  return { listReport, history, report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }

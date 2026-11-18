@@ -1,4 +1,4 @@
-import {reportWorkbook} from './report.js';
+import {reportWorkbook,reportsWorkbook} from './report.js';
 import {createDocumentAI} from './ai.js';
 import {compareSuppliers,calculateExtendedRating,supplierSources} from './suppliers.js';
 import { runDocumentExtraction } from './document-jobs.js';
@@ -93,6 +93,14 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
     if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
     extracting=true;try{const document={...await runDocumentExtraction(req.body),ai:ai.status()};const saved=await service.documentWorkspace.save(uid(req),req.params.id,document);res.json({...document,...saved});}finally{extracting=false;}
+  }));
+  r.get('/api/tenders/report.xlsx', gate, wrap(async (req,res)=>{
+    if(exporting)return res.status(429).json({error:'Другой отчёт формируется. Повторите позже.'});
+    exporting=true;try{
+      const reports=await service.listReport(uid(req),req.query),buffer=await reportsWorkbook(reports);
+      res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.set('Content-Disposition','attachment; filename="tenders-report.xlsx"');res.send(Buffer.from(buffer));
+    }finally{exporting=false;}
   }));
   r.get('/api/tenders/:id/documents', gate, wrap(async (req,res)=>res.json({...await service.documentWorkspace.get(uid(req),req.params.id),ai:ai.status()})));
   r.put('/api/tenders/:id/documents/review', gate, wrap(async (req,res)=>res.json(await service.documentWorkspace.review(uid(req),req.params.id,req.body?.sha256,req.body?.revision,req.body?.rows))));

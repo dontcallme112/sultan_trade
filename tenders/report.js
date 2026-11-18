@@ -41,11 +41,16 @@ export function compactReportRow(report,index=1){
 }
 // Literal strings only: spreadsheet-looking input is never written as a formula.
 export async function reportWorkbook(report){
+ return reportsWorkbook([report]);
+}
+export async function reportsWorkbook(reports){
  const {default:ExcelJS}=await import('exceljs');const book=new ExcelJS.Workbook();book.creator='Sultan Trade';
  const sheet=book.addWorksheet('Отчёт',{views:[{state:'frozen',ySplit:1}]});sheet.addRow(COMPACT_REPORT_HEADERS);
- sheet.addRow(compactReportRow(report).map(v=>v==null||v===''?'—':typeof v==='number'?v:String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').slice(0,32767)));
+ for (const [i,report] of reports.entries()) {
+ sheet.addRow(compactReportRow(report,i+1).map(v=>v==null||v===''?'—':typeof v==='number'?v:String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').slice(0,32767)));
+ const row=sheet.lastRow;row.height=Math.min(409,Math.max(30,Math.ceil(String(row.getCell(2).value||'').length/60)*15));
+ }
  sheet.columns.forEach((column,i)=>{column.width=[10,65,16,14,24,22,30,24][i];});
- sheet.getRow(2).height=Math.min(409,Math.max(30,Math.ceil(String(sheet.getRow(2).getCell(2).value||'').length/60)*15));
  sheet.getRow(1).height=62;sheet.getRow(1).font={bold:true};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE6EDF1'}};
  sheet.eachRow(row=>row.eachCell(cell=>{cell.alignment={vertical:'middle',wrapText:true};cell.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};}));
  for(const c of [5,6,7,8])sheet.getColumn(c).numFmt='#,##0.00';
