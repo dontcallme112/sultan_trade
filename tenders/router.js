@@ -1,3 +1,6 @@
+import {whatsappPreparation} from '../messaging/whatsapp/service.js';
+import {validateDraft} from '../messaging/whatsapp/domain.js';
+import {financialPortfolio} from './portfolio.js';
 import {createOneCOData,parseODataMetadata} from './onec/odata.js';
 import {oneCStatus,oneCPackage} from './onec/exchange.js';
 import {readFile} from 'node:fs/promises';
@@ -15,7 +18,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ onec=createOneCOData(), scheduler=null, service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
+export function createTendersRouter({ whatsapp=null, onec=createOneCOData(), scheduler=null, service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
   let exporting = false;
@@ -99,6 +102,20 @@ export function createTendersRouter({ onec=createOneCOData(), scheduler=null, se
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
     extracting=true;try{const document={...await runDocumentExtraction(req.body),ai:ai.status()};const saved=await service.documentWorkspace.save(uid(req),req.params.id,document);res.json({...document,...saved});}finally{extracting=false;}
   }));
+  r.get('/api/tenders/whatsapp/status', gate, wrap(async (_req,res)=>res.json(whatsapp?await whatsapp.status():whatsappPreparation())));
+  r.post('/api/tenders/whatsapp/drafts/preview', gate, wrap(async (req,res)=>{
+    if(!uid(req))return res.status(401).json({error:'Нужен вход сотрудника'});
+    res.json({draft:validateDraft(req.body),queued:false,sent:false,notice:'Только проверка черновика. Отправка и сохранение не выполнялись.'});
+  }));
+  r.post('/api/tenders/whatsapp/drafts', gate, wrap(async (req,res)=>{
+    if(!whatsapp)return res.status(409).json({error:'Подключение WhatsApp отложено'});
+    res.json(await whatsapp.draft(req.body?.draft,uid(req),req.body?.idempotencyKey));
+  }));
+  r.post('/api/tenders/whatsapp/drafts/:draftId/approve', gate, wrap(async (req,res)=>{
+    if(!whatsapp)return res.status(409).json({error:'Подключение WhatsApp отложено'});
+    res.json(await whatsapp.approve(req.params.draftId,uid(req)));
+  }));
+  r.get('/api/tenders/portfolio', gate, wrap(async (req,res)=>{const reports=await service.listReport(uid(req),req.query,{allowEmpty:true});res.json(financialPortfolio(reports,{evaluatedAt:reports[0]?.generatedAt}));}));
   r.get('/api/tenders/onec/connection', gate, wrap(async (_req,res)=>res.json(onec.status())));
   r.post('/api/tenders/onec/metadata/preview', gate, express.json({limit:'2mb'}), wrap(async (req,res)=>{
     if(!uid(req))return res.status(401).json({error:'Нужен вход сотрудника'});

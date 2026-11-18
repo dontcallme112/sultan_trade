@@ -1,3 +1,6 @@
+import {createWhatsAppService} from './messaging/whatsapp/service.js';
+import {createWhatsAppStore} from './messaging/whatsapp/store.js';
+import {createWhatsAppWebhookRouter} from './messaging/whatsapp/router.js';
 import {createTenderScheduler} from './tenders/scheduler.js';
 import {createTenderCatalogSearch} from './tenders/catalog.js';
 import express from 'express';
@@ -134,6 +137,9 @@ app.use(cors({
   origin: (origin, cb) => cb(null, !origin || !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
 }));
+const whatsappService=createWhatsAppService({env:process.env,store:createWhatsAppStore(supabaseAdmin)});
+app.use(createWhatsAppWebhookRouter(whatsappService));
+whatsappService.start();
 const jsonSmall = express.json({ limit: '200kb' });
 app.use((req, res, next) => (req.path === '/api/admin/import-products' || (req.path === '/api/tenders/import' || req.path === '/api/tenders/import/preview' || req.path === '/api/tenders/onec/metadata/preview' || /^\/api\/tenders\/[^/]+\/documents\/extract$/.test(req.path)) ? next() : jsonSmall(req, res, next)));
 app.use((req, res, next) => { if (!req.path.startsWith('/media/') && !(req.method === 'GET' && req.path === '/api/chat/messages')) console.log(`${new Date().toLocaleTimeString()} ${req.method} ${req.path}`); next(); });
@@ -1127,7 +1133,7 @@ if (supabaseAdmin) {
   const tenderScheduler=createTenderScheduler({service:tenderService,intervalMinutes:process.env.TENDERS_SYNC_MINUTES ?? 60});
   tenderScheduler.start();
   const searchTenderCatalog=createTenderCatalogSearch({db:supabaseAdmin,normalizePrice});
-  app.use(createTendersRouter({ scheduler:tenderScheduler, searchCatalog:searchTenderCatalog, service: tenderService, requireAuth, rateLimit, syncSecret: SYNC_SECRET, allowedEmails: TENDERS_ALLOWED }));
+  app.use(createTendersRouter({ whatsapp:whatsappService, scheduler:tenderScheduler, searchCatalog:searchTenderCatalog, service: tenderService, requireAuth, rateLimit, syncSecret: SYNC_SECRET, allowedEmails: TENDERS_ALLOWED }));
   console.log(`🧾 Тендеры: ${TENDERS_ALLOWED.length ? `✅ доступ для ${TENDERS_ALLOWED.length} почт` : '⚠️  TENDERS_ALLOWED_EMAILS не задан — раздел закрыт'}`);
 }
 
