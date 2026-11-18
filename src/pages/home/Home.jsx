@@ -78,13 +78,21 @@ export default function Home() {
     }
   };
 
-  // Популярные — дорогие первыми (телефоны, ноутбуки)
+  // Популярные — ходовая электроника, по одному товару из группы (ноутбук, смартфон, мышь...). Подбор делает бэкенд: /api/popular.
+  // Если бэкенд ещё не обновлён или ответил пусто, показываем прежний вариант (дорогие первыми), чтобы блок не остался пустым.
   const loadPopularProducts = async () => {
     try {
       setLoadingPopular(true);
-      const response = await fetch(`${BACKEND_URL}/api/products?limit=8&offset=0&sortBy=price_desc`);
-      const data = await response.json();
-      setPopularProducts(data.elements || []);
+      let elements = [];
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/popular?limit=8`);
+        if (r.ok) elements = (await r.json()).elements || [];
+      } catch { /* пойдём в запасной вариант */ }
+      if (!elements.length) {
+        const r = await fetch(`${BACKEND_URL}/api/products?limit=8&offset=0&sortBy=price_desc`);
+        elements = (await r.json()).elements || [];
+      }
+      setPopularProducts(elements);
     } catch {
       setPopularProducts([]);
     } finally {
@@ -276,7 +284,7 @@ export default function Home() {
         title="Популярные товары"
         products={popularProducts}
         loading={loadingPopular}
-        linkTo="/products?sortBy=price_desc"
+        linkTo="/products"
         linkLabel="Все товары"
       />
 
