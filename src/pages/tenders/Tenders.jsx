@@ -1,3 +1,4 @@
+import TenderListReport from './TenderListReport';
 import TenderHistory from './TenderHistory';
 import TenderReport from './TenderReport';
 import TenderExtendedRating from './TenderExtendedRating';
@@ -90,6 +91,7 @@ export default function Tenders() {
           {select('sort',t('Сортировка','Сұрыптау'),[['deadline',t('Ближайший срок','Ең жақын мерзім')],['amount',t('Сумма','Сома')],['rating',t('Соответствие','Сәйкестік')],['newest',t('Новые','Жаңа')]])}
           <label className="tender-check"><input type="checkbox" checked={filters.favorite==='true'} onChange={e=>change('favorite',String(e.target.checked))} />{t('Избранные','Таңдаулылар')}</label>
         </div>
+        <TenderListReport request={request} filters={filters} total={data.total} lang={lang} />
         <p>{t('Найдено','Табылды')}: {data.total}</p><div className="tender-grid">{data.items.map(row => <article key={row.id}><div className="tender-card-top"><small>{row.demo ? 'DEMO' : row.source} · {row.region}</small><button disabled={busy} aria-label={t('Избранное','Таңдаулы')} onClick={()=>mutate(`/${encodeURIComponent(row.id)}`,'PATCH',{favorite:!row.favorite})}>{row.favorite ? '★' : '☆'}</button></div><h2><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{row.title}</Link></h2><p>{row.customer}</p><Availability lot={row} lang={lang} /><strong>{money(row.amount)}</strong><p>{date(row.deadline)} (UTC+5)</p><p>{workflow[row.workflow]?.[lang]} · {t('Соответствие','Сәйкестік')} {row.rating.score}/100</p><small>{t('Полнота оценки','Бағалау толықтығы')}: {Math.round((row.rating.coverage || 0)*100)}% · {t('Прибыль неизвестна','Пайда белгісіз')}</small><div className="tender-actions"><Link to={`/tenders/${encodeURIComponent(row.id)}`}>{t('Открыть карточку','Карточканы ашу')}</Link><Link to={`/tenders/${encodeURIComponent(row.id)}#tender-report`}>{t('Отчёт Excel / JSON','Excel / JSON есебі')}</Link></div></article>)}</div>
         {!data.items.length && <p>{t('Закупок нет. Измените фильтры или импортируйте официальную выгрузку в разделе источников.','Сатып алулар жоқ. Сүзгілерді өзгертіңіз немесе дереккөздер бөлімінде ресми экспортты импорттаңыз.')}</p>}
         <div className="tender-pagination"><button disabled={busy || data.page<=1} onClick={()=>setFilters(f=>({...f,page:f.page-1}))}>←</button><span>{data.page} / {Math.max(1,data.pages)}</span><button disabled={busy || data.page>=data.pages} onClick={()=>setFilters(f=>({...f,page:f.page+1}))}>→</button></div>
