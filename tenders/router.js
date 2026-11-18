@@ -117,6 +117,7 @@ export function createTendersRouter({ service, requireAuth, rateLimit, syncSecre
   }));
   r.get('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.getWorkspace(uid(req),req.params.id))));
   r.put('/api/tenders/:id/workspace', gate, wrap(async (req,res)=>res.json(await service.saveWorkspace(uid(req),req.params.id,req.body || {}))));
+  r.get('/api/tenders/:id/history', gate, wrap(async (req, res) => res.json(await service.history(req.params.id))));
   r.get('/api/tenders/:id', gate, wrap(async (req, res) => {
     const l = await service.get(uid(req), req.params.id);
     return l ? res.json(l) : res.status(404).json({ error: 'Лот не найден' });

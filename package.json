@@ -32,6 +32,7 @@
     "yauzl": "3.4.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
     "jszip": "3.10.1",
     "nodemon": "^3.0.2"
   },

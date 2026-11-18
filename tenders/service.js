@@ -146,6 +146,11 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     });
   }
 
+  async function history(id) {
+    if (!(await store.getLot(id))) throw Object.assign(new Error('Лот не найден'), { status: 404 });
+    return store.history(id);
+  }
+
   async function setWorkState(user, id, { status, note }) {
     if (status !== undefined && !LOT_STATUSES.includes(status)) throw Object.assign(new Error('Недопустимый статус'), { status: 400 });
     if (note !== undefined && String(note).length > 2000) throw Object.assign(new Error('Заметка длиннее 2000 символов'), { status: 400 });
@@ -232,5 +237,5 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return buildTenderReport({lot,workspace,documentWorkspace:document,generatedAt:new Date(now()).toISOString()});
   }
 
-  return { report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  return { history, report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }
