@@ -65,7 +65,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return {
       id: l.id, source: l.source, is_demo: !!l.is_demo, number: l.number, title: l.title, description: l.description,
       customer_name: l.customer_name, customer_bin: l.customer_bin, region_name: l.region_name, region_code: l.region_code,
-      method: l.method, status_raw: l.status_raw, total_price: l.total_price == null ? null : Number(l.total_price), quantity: l.quantity == null ? null : Number(l.quantity),
+      currency: l.currency || null, method: l.method, status_raw: l.status_raw, total_price: l.total_price == null ? null : Number(l.total_price), quantity: l.quantity == null ? null : Number(l.quantity),
       published_at: l.published_at, deadline_at: l.deadline_at, url: l.url, directions: l.directions || [],
       extra: l.extra || {}, score: currentScore.score, score_confidence: currentScore.confidence, score_detail: currentScore,
       is_open: availability.state === 'open', availability, is_new: !!l.first_seen_at && t - new Date(l.first_seen_at).getTime() < 3 * 86400000,

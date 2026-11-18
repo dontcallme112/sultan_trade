@@ -1,0 +1,13 @@
+import {createHash} from 'node:crypto';
+const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const decimal=value=>typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<1e21?value.toFixed(2):null;
+export const ONEC_SCHEMA='sultan-trade.onec-preparation.v1';
+export function oneCStatus(){return {configuration:'1С:Бухгалтерия для Казахстана',mode:'file_preparation',connected:false,postingEnabled:false,message:'Подготовка файлового обмена. Файл проверяет модуль чтения; для загрузки в учётную базу требуются сопоставления и настройка обработки 1С.',required:['Версия платформы и релиз конфигурации 1С','Тестовая копия информационной базы','Сопоставление организации, контрагентов, номенклатуры и единиц','Согласование видов документов и правил НДС с бухгалтером']};}
+export function oneCPackage(reports,{preparedByUserId=null}={}){
+ const items=reports.map(report=>{
+  const l=report.lot,f=report.finance;
+  const data={externalKey:'sultan-trade:lot:'+l.id,recordType:'tender_analysis_draft',number:l.number||null,title:l.title,customer:{name:l.customer||null,bin:l.customerBin||null},source:{system:l.source||null,url:l.sourceUrl||null,status:l.sourceStatus||null,deadline:l.deadline||null},referenceBudget:{amount:decimal(l.budget),currency:l.currency||null},quantity:typeof l.quantity==='number'&&Number.isFinite(l.quantity)?String(l.quantity):null,unit:l.unit||null,grouped:!!l.grouped,accountingMapping:{organizationRef:null,counterpartyRef:null,nomenclatureRef:null,unitRef:null},analysis:f?{calculationDate:f.inputs.date,costsConfirmed:f.inputs.confirmedCosts===true,netProfit:decimal(f.results.netProfit),currency:f.results.currency,costs:decimal(f.results.costTotal),taxAssumptions:{vatPercent:f.inputs.tax?.vatPercent??null,citPercent:f.inputs.tax?.citPercent??null,from:f.inputs.tax?.from??null,to:f.inputs.tax?.to??null},accountingDocument:false}:null};
+  return {...data,contentHash:hash(data)};
+ });
+ return {schema:ONEC_SCHEMA,preparedByUserId,sourceSystem:'Sultan Trade',targetConfiguration:'1С:Бухгалтерия для Казахстана',generatedAt:reports[0]?.generatedAt||null,contentHash:hash({preparedByUserId,items}),mode:'preparation_only',postingAllowed:false,items,warnings:['Это пакет анализа тендеров, не стандартная загрузка 1С, не CommerceML и не бухгалтерские документы.','Бюджет тендера не является суммой поступления, реализации или счёта.','Ссылки справочников 1С не назначаются автоматически. Требуется проверка сопоставлений.','Налоговые параметры отражают пользовательские допущения калькулятора, а не бухгалтерские проводки.','Повторный пакет сопоставляйте по externalKey и contentHash; автоматическое создание дублей запрещено.']};
+}

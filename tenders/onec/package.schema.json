@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sultan-trade:onec-preparation:v1",
+  "title": "Sultan Trade — подготовка обмена с 1С:Бухгалтерия для Казахстана",
+  "type": "object",
+  "required": [
+    "schema",
+    "mode",
+    "postingAllowed",
+    "items",
+    "contentHash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sultan-trade.onec-preparation.v1"
+    },
+    "mode": {
+      "const": "preparation_only"
+    },
+    "postingAllowed": {
+      "const": false
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "required": [
+          "externalKey",
+          "contentHash",
+          "recordType",
+          "title",
+          "referenceBudget",
+          "accountingMapping"
+        ],
+        "properties": {
+          "externalKey": {
+            "type": "string",
+            "pattern": "^sultan-trade:lot:.+"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recordType": {
+            "const": "tender_analysis_draft"
+          },
+          "title": {
+            "type": "string"
+          },
+          "referenceBudget": {
+            "type": "object",
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "properties": {
+              "amount": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+\\.[0-9]{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "currency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "accountingMapping": {
+            "type": "object",
+            "required": [
+              "organizationRef",
+              "counterpartyRef",
+              "nomenclatureRef",
+              "unitRef"
+            ],
+            "properties": {
+              "organizationRef": {
+                "type": "null"
+              },
+              "counterpartyRef": {
+                "type": "null"
+              },
+              "nomenclatureRef": {
+                "type": "null"
+              },
+              "unitRef": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

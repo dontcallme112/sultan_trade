@@ -1,3 +1,5 @@
+import {oneCStatus,oneCPackage} from './onec/exchange.js';
+import {readFile} from 'node:fs/promises';
 import {tenderReadiness} from './readiness.js';
 import {reportWorkbook,reportsWorkbook} from './report.js';
 import {createDocumentAI} from './ai.js';
@@ -95,6 +97,20 @@ export function createTendersRouter({ scheduler=null, service, requireAuth, rate
     if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
     extracting=true;try{const document={...await runDocumentExtraction(req.body),ai:ai.status()};const saved=await service.documentWorkspace.save(uid(req),req.params.id,document);res.json({...document,...saved});}finally{extracting=false;}
+  }));
+  r.get('/api/tenders/onec/status', gate, wrap(async (_req,res)=>res.json(oneCStatus())));
+  r.get('/api/tenders/onec/schema.json', gate, wrap(async (_req,res)=>{
+    res.set('Content-Disposition','attachment; filename="sultan-trade-1c.schema.json"');res.json(JSON.parse(await readFile(new URL('./onec/package.schema.json',import.meta.url),'utf8')));
+  }));
+  r.get('/api/tenders/onec/reader.bsl', gate, wrap(async (_req,res)=>{
+    res.set('Content-Disposition','attachment; filename="SultanTradePreparation.bsl"');res.type('text/plain').send(await readFile(new URL('./onec/reader.bsl',import.meta.url),'utf8'));
+  }));
+  r.get('/api/tenders/onec/package.json', gate, wrap(async (req,res)=>{
+    if(exporting)return res.status(429).json({error:'Другой отчёт формируется. Повторите позже.'});
+    exporting=true;try{
+      const reports=await service.listReport(uid(req),req.query);
+      res.set('Content-Disposition','attachment; filename="sultan-trade-1c-preparation.json"');res.json(oneCPackage(reports,{preparedByUserId:uid(req)}));
+    }finally{exporting=false;}
   }));
   r.get('/api/tenders/report.xlsx', gate, wrap(async (req,res)=>{
     if(exporting)return res.status(429).json({error:'Другой отчёт формируется. Повторите позже.'});
