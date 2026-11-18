@@ -1,3 +1,4 @@
+import {createOneCOData,parseODataMetadata} from './onec/odata.js';
 import {oneCStatus,oneCPackage} from './onec/exchange.js';
 import {readFile} from 'node:fs/promises';
 import {tenderReadiness} from './readiness.js';
@@ -14,7 +15,7 @@ import { DIRECTIONS } from './directions.js';
 // Подключение: app.use(createTendersRouter({...})). Все маршруты — под /api/tenders.
 // Доступ: вошедший пользователь, чья почта есть в TENDERS_ALLOWED_EMAILS, либо заголовок x-sync-secret (для администрирования).
 // Если список пустой и секрета нет — раздел закрыт для всех (безопасное значение по умолчанию).
-export function createTendersRouter({ scheduler=null, service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
+export function createTendersRouter({ onec=createOneCOData(), scheduler=null, service, requireAuth, rateLimit, syncSecret, allowedEmails = [], searchCatalog = null, ai = createDocumentAI() }) {
   const r = express.Router();
   let extracting = false;
   let exporting = false;
@@ -98,6 +99,14 @@ export function createTendersRouter({ scheduler=null, service, requireAuth, rate
     if(!(await service.get(uid(req),req.params.id)))return res.status(404).json({error:'Лот не найден'});
     extracting=true;try{const document={...await runDocumentExtraction(req.body),ai:ai.status()};const saved=await service.documentWorkspace.save(uid(req),req.params.id,document);res.json({...document,...saved});}finally{extracting=false;}
   }));
+  r.get('/api/tenders/onec/connection', gate, wrap(async (_req,res)=>res.json(onec.status())));
+  r.post('/api/tenders/onec/metadata/preview', gate, express.json({limit:'2mb'}), wrap(async (req,res)=>{
+    if(!uid(req))return res.status(401).json({error:'Нужен вход сотрудника'});
+    if(typeof req.body?.xml!=='string')return res.status(400).json({error:'Нужен XML-файл метаданных OData.'});
+    try{res.json({...parseODataMetadata(req.body.xml),origin:'file',postingEnabled:false});}
+    catch{return res.status(400).json({error:'Файл не является поддерживаемыми метаданными OData (UTF-8, до 1 МБ, без DTD).'});}
+  }));
+  r.post('/api/tenders/onec/probe', gate, wrap(async (req,res)=>res.json(await onec.probe(uid(req)))));
   r.get('/api/tenders/onec/status', gate, wrap(async (_req,res)=>res.json(oneCStatus())));
   r.get('/api/tenders/onec/schema.json', gate, wrap(async (_req,res)=>{
     res.set('Content-Disposition','attachment; filename="sultan-trade-1c.schema.json"');res.json(JSON.parse(await readFile(new URL('./onec/package.schema.json',import.meta.url),'utf8')));
