@@ -1,3 +1,4 @@
+import {financeScenarios} from './finance-scenarios.js';
 import {whatsappPreparation} from '../messaging/whatsapp/service.js';
 import {validateDraft} from '../messaging/whatsapp/domain.js';
 import {financialPortfolio} from './portfolio.js';
@@ -96,6 +97,7 @@ export function createTendersRouter({ whatsapp=null, onec=createOneCOData(), sch
     res.json(await service.get(uid(req),req.params.id));
   }));
   r.post('/api/tenders/import/preview', gate, big, wrap(async (req,res)=>res.json(await service.previewImport(req.body))));
+  r.post('/api/tenders/finance/scenarios', gate, wrap(async (req,res)=>res.json(financeScenarios(req.body))));
   r.post('/api/tenders/finance/calculate', gate, wrap(async (req,res)=>res.json(calculateFinance(req.body))));
   r.post('/api/tenders/:id/documents/extract', gate, big, wrap(async (req,res)=> {
     if(extracting)return res.status(429).json({error:'Другой документ уже обрабатывается. Повторите позже.'});
