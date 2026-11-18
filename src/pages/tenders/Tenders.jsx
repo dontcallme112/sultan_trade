@@ -96,7 +96,7 @@ export default function Tenders() {
         <TenderFinance supplierSeed={supplierSeed?.id===id?supplierSeed.inputs:null} key={'finance:'+id} request={request} tender={detail} lang={lang} />
         <button disabled={busy} onClick={() => mutate(`/${encodeURIComponent(id)}`,'PATCH',{favorite:!detail.favorite})}>{detail.favorite ? '★' : '☆'} {t('Избранное','Таңдаулы')}</button> <label>{t('Рабочий статус','Жұмыс күйі')}<select disabled={busy} value={detail.workflow} onChange={e => mutate(`/${encodeURIComponent(id)}`,'PATCH',{workflow:e.target.value})}>{Object.entries(workflow).map(([key,label]) => <option key={key} value={key}>{label[lang]}</option>)}</select></label>
         {detail.source_url && <a href={detail.source_url} target="_blank" rel="noreferrer">{t('Первоисточник','Бастапқы дереккөз')}</a>}
-        <TenderTeamNote key={'note:'+id} request={request} id={id} note={detail.note} onChanged={()=>setRevision(n=>n+1)} lang={lang} />
+        <TenderTeamNote key={'note:'+id} enabled={detail.team_notes_enabled===true} request={request} id={id} note={detail.note} onChanged={()=>setRevision(n=>n+1)} lang={lang} />
         <TenderHistory key={'history:'+id} request={request} id={id} lang={lang} revision={revision} />
       </article> : <>
         <div className="tender-filters"><label>{t('Поиск','Іздеу')}<input value={filters.search} onChange={e => change('search',e.target.value)} placeholder={t('Название, заказчик, ключевые слова','Атауы, тапсырыс беруші, кілт сөздер')} /></label>
