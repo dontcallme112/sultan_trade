@@ -1,3 +1,4 @@
+import TenderReadiness from './TenderReadiness';
 import TenderListReport from './TenderListReport';
 import TenderHistory from './TenderHistory';
 import TenderReport from './TenderReport';
@@ -31,11 +32,14 @@ export default function Tenders() {
   const [runs, setRuns] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [savedRevision,setSavedRevision]=useState(0);
   const [filters, setFilters] = useState({ search: '', availability: '', sort: 'deadline', page: 1 });
   const request = useCallback(async (path = '', options = {}) => {
     const token = await getToken();
-    return (await apiClient.request({ url: `/api/tenders${path}`, ...options,
+    const data=(await apiClient.request({ url: `/api/tenders${path}`, ...options,
       headers: token ? { Authorization: `Bearer ${token}` } : {} })).data;
+    if(options.method && options.method.toUpperCase()!=='GET')setSavedRevision(n=>n+1);
+    return data;
   }, [getToken]);
   // getToken belongs to the existing auth context and is recreated on auth changes.
   useEffect(() => {
@@ -71,7 +75,7 @@ export default function Tenders() {
     {data && <>
       <div className="tender-stats">{[[t('Всего','Барлығы'),data.summary.total],[t('Новые','Жаңа'),data.summary.new],[t('Соответствие ≥80','Сәйкестік ≥80'),data.summary.high],[t('Избранные','Таңдаулылар'),data.summary.favorites],[t('Срок ≤7 дней','Мерзім ≤7 күн'),data.summary.upcoming]].map(([label,n]) => <div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div>
       {data.summary.unknown > 0 && <p className="tender-banner">{t('Приём заявок не подтверждён у','Өтінім қабылдауы расталмаған')}: {data.summary.unknown}. {t('Проверьте статус и срок подачи в первоисточнике.','Бастапқы дереккөздегі күй мен мерзімді тексеріңіз.')}</p>}
-      {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><Availability lot={detail} lang={lang} /><TenderReport key={'report:'+id} request={request} id={id} lang={lang} /><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
+      {id ? detail && <article className="tender-detail"><Link to="/tenders">← {t('Все тендеры','Барлық тендерлер')}</Link><h2>{detail.title}</h2><Availability lot={detail} lang={lang} /><TenderReadiness request={request} id={id} revision={`${revision}:${savedRevision}`} /><TenderReport key={'report:'+id} request={request} id={id} lang={lang} /><p>{detail.description}</p><dl><dt>{t('Заказчик','Тапсырыс беруші')}</dt><dd>{detail.customer}</dd><dt>{t('Регион','Өңір')}</dt><dd>{detail.region}</dd><dt>{t('Сумма','Сома')}</dt><dd>{money(detail.amount)}</dd><dt>{t('Срок подачи','Өтінім мерзімі')}</dt><dd>{date(detail.deadline)} (UTC+5)</dd><dt>{t('Способ','Тәсіл')}</dt><dd>{detail.method}</dd></dl>
         <p>{t('Базовое соответствие','Негізгі сәйкестік')}: <strong>{detail.rating.score}/100</strong> · {t('Полнота оценки','Бағалау толықтығы')}: {detail.rating.coverage*100}%</p><p>{detail.rating.formula}</p><p>{t('Неизвестно','Белгісіз')}: {detail.rating.unknown.join(', ')}</p>
         <TenderDocuments key={'documents:'+id} request={request} id={id} lang={lang} onTransferred={inputs=>setSupplierSeed({id,inputs})} />
         <TenderExtendedRating key={'rating:'+id} request={request} id={id} />
