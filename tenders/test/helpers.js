@@ -7,8 +7,8 @@ import { createTendersRouter } from '../router.js';
 
 export const NOW = Date.parse('2026-09-30T00:00:00Z');
 
-export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', store = createMemoryStore(), env = {}, searchCatalog = null, now = () => NOW, ai, onec } = {}) {
-  const service = createTenderService({ store, adapters: createAdapters({ env, now }), now });
+export function makeApp({ allowed = ['boss@example.com'], secret = 'S3CRET', store = createMemoryStore(), env = {}, searchCatalog = null, now = () => NOW, ai, onec, teamNotesEnabled } = {}) {
+  const service = createTenderService({ store, teamNotesEnabled, adapters: createAdapters({ env, now }), now });
   const app = express();
   const jsonSmall = express.json({ limit: '200kb' });
   app.use((req, res, next) => ((req.path === '/api/tenders/import' || req.path === '/api/tenders/import/preview' || req.path === '/api/tenders/onec/metadata/preview' || /^\/api\/tenders\/[^/]+\/documents\/extract$/.test(req.path)) ? next() : jsonSmall(req, res, next)));

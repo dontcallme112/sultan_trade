@@ -16,7 +16,7 @@ export const LOT_STATUS_LABELS = {
 const SIG_FIELDS = ['number', 'title', 'description', 'customer_name', 'customer_bin', 'region_code', 'region_name', 'method', 'status_raw', 'total_price', 'quantity', 'published_at', 'deadline_at', 'url'];
 export const lotSig = l => createHash('sha1').update(SIG_FIELDS.map(f => (l[f] == null ? '' : String(l[f]))).join('\u0001') + '\u0002' + (l.directions || []).join(',')).digest('hex').slice(0, 16);
 
-export function createTenderService({ store, adapters, now = () => Date.now(), maxRows = 5000 }) {
+export function createTenderService({ store, adapters, now = () => Date.now(), maxRows = 5000, teamNotesEnabled = store.kind==='memory'||process.env.TENDERS_TEAM_NOTES_ENABLED==='true' }) {
   const documentWorkspace=createDocumentWorkspace({store,now});
   let scoringCache = null;
   const getScoring = async () => scoringCache || (scoringCache = mergeScoring(await store.getSetting('scoring')));
@@ -69,7 +69,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
       published_at: l.published_at, deadline_at: l.deadline_at, url: l.url, directions: l.directions || [],
       extra: l.extra || {}, score: currentScore.score, score_confidence: currentScore.confidence, score_detail: currentScore,
       is_open: availability.state === 'open', availability, is_new: !!l.first_seen_at && t - new Date(l.first_seen_at).getTime() < 3 * 86400000,
-      favorite: favs.has(l.id), work_status: st?.status || 'new', note: st?.note ?? null,
+      team_notes_enabled:teamNotesEnabled, favorite: favs.has(l.id), work_status: st?.status || 'new', note: st?.note ?? null,
       first_seen: l.first_seen_at,
     };
   };
@@ -163,6 +163,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
 
   async function setTeamNote(user,id,{note,expectedNote}={}){
     if(!user)throw Object.assign(new Error('Нужен вход сотрудника'),{status:401});
+    if(!teamNotesEnabled)throw Object.assign(new Error('Сохранение общих заметок пока не включено'),{status:409});
     if(typeof note!=='string'||note.length>2000||(expectedNote!==null&&typeof expectedNote!=='string')||(typeof expectedNote==='string'&&expectedNote.length>2000))throw Object.assign(new Error('Нужны заметка до 2000 символов и её исходная версия'),{status:400});
     if(!(await store.getLot(id)))throw Object.assign(new Error('Лот не найден'),{status:404});
     await store.setNote(id,note.trim()?note:null,user,expectedNote);
@@ -170,7 +171,7 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
   }
   async function board(user,query){
     const result=await list(user,query,{exportAll:true});
-    return {total:result.total,items:result.items.map(({id,title,number,customer,workflow,work_status,note,availability,deadline})=>({id,title,number,customer,workflow,work_status,note,availability,deadline}))};
+    return {notesEnabled:teamNotesEnabled,total:result.total,items:result.items.map(({id,title,number,customer,workflow,work_status,note,availability,deadline})=>({id,title,number,customer,workflow,work_status,note,availability,deadline}))};
   }
 
   async function setWorkState(user, id, { status, note }) {
@@ -279,5 +280,5 @@ export function createTenderService({ store, adapters, now = () => Date.now(), m
     return buildTenderReport({lot,workspace,documentWorkspace:document,generatedAt:new Date(now()).toISOString()});
   }
 
-  return { board, setTeamNote, listReport, history, report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
+  return { teamNotesStatus:()=>({enabled:teamNotesEnabled,mode:teamNotesEnabled?'available':'view_only'}), board, setTeamNote, listReport, history, report, transferDocumentRequirements, documentWorkspace, sync, list, get, dashboard, sources, syncRuns, previewImport, getWorkspace, saveWorkspace, setWorkState, setFavorite, getScoringConfig, saveScoring, rescore };
 }

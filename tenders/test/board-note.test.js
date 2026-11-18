@@ -35,3 +35,9 @@ test('real PostgreSQL atomic note function preserves concurrent fields, rejects 
  const count=(await db.query('select count(*)::int as n from public.tender_history')).rows[0].n;await update('Я'.repeat(2000),'Я'.repeat(2000));assert.equal((await db.query('select count(*)::int as n from public.tender_history')).rows[0].n,count);
  await db.exec('reset role;set role authenticated');await assert.rejects(update('Я'.repeat(2000),'Unauthorized'),/permission denied/);await db.exec('reset role');assert.equal((await db.query("select prosecdef from pg_proc where oid='public.tender_update_team_note(uuid,text,text,uuid)'::regprocedure")).rows[0].prosecdef,false);
 });
+test('view-only rollout blocks note writes before any store RPC and leaves board/status workflow available',async t=>{
+ const m=makeApp({teamNotesEnabled:false}),s=await listen(m.app);t.after(s.close);await m.store.upsertLots([{source:'test',external_id:'rollout',title:'Rollout'}]);const id=(await m.store.listLots())[0].id,token='token:u1:boss@example.com';
+ m.store.setNote=async()=>{throw Error('must not call storage');};assert.equal((await s.call('GET','/api/tenders/team-notes/status',{token})).json.mode,'view_only');assert.equal((await s.call('GET','/api/tenders/board',{token})).json.items.length,1);
+ assert.equal((await s.call('PUT',`/api/tenders/${id}/note`,{token,body:{note:'blocked',expectedNote:null}})).status,409);assert.equal((await s.call('PATCH',`/api/tenders/${id}`,{token,body:{workflow:'preparing'}})).status,200);
+ assert.equal((await m.service.get('u1',id)).team_notes_enabled,false);
+});
