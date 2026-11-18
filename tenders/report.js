@@ -1,6 +1,6 @@
 import {calculateFinance} from './finance.js';
 import {calculateExtendedRating} from './suppliers.js';
-import {isClosed} from './scoring.js';
+import {procurementAvailability} from './scoring.js';
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
 export function buildTenderReport({lot,workspace,documentWorkspace,generatedAt=new Date().toISOString()}){
  const warnings=['Отчёт содержит только сохранённые данные аккаунта на момент выгрузки. Несохранённые правки не включены.','Веб-цены и наличие не подтверждают коммерческое предложение или резерв товара.','Рейтинг и совпадение параметров не являются заключением о полном соответствии.'];
@@ -12,8 +12,9 @@ export function buildTenderReport({lot,workspace,documentWorkspace,generatedAt=n
  if(workspace.extendedRating?.inputs){try{rating=calculateExtendedRating(workspace.extendedRating.inputs);}catch{warnings.push('Расширенный рейтинг не прошёл проверку; оценка неизвестна.');}}
  if(!doc)warnings.push('Личная проверка ТЗ не сохранена. Требования не проверены.');
  if(lot.amount==null)warnings.push('Бюджет закупки неизвестен.');
- const closed=isClosed({status_raw:lot.status_raw,deadline_at:lot.deadline},Date.parse(generatedAt));
- const state=closed?'Закрыта / срок подачи истёк':lot.status_raw||'Статус неизвестен';
+ const availability=procurementAvailability({status_raw:lot.status_raw,deadline_at:lot.deadline},Date.parse(generatedAt)),closed=availability.state==='closed';
+ if(availability.state==='unknown')warnings.push('Приём заявок не подтверждён: проверьте статус и срок подачи в первоисточнике.');
+ const state=closed?'Закрыта / срок подачи истёк':availability.state==='unknown'?'Приём заявок не подтверждён':lot.status_raw;
  if(closed)warnings.push('Закупка закрыта или срок подачи истёк. Расчёт пригоден только для анализа/теста, не для подачи заявки.');
  const supplierRows=workspace.supplierAnalysis?.results?.rows||[];
  const suppliers=supplierRows.map(r=>({...r,inputs:workspace.supplierAnalysis?.inputs?.offers?.[r.index]||null,currentPriceAgeDays: Number.isFinite(Date.parse(r.observedAt))?Math.floor((Date.parse(generatedAt)-Date.parse(r.observedAt))/86400000):null}));

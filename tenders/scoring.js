@@ -19,12 +19,23 @@ export const DEFAULT_SCORING = {
   minConfidenceToTrust: 60,                      // ниже — в интерфейсе «предварительная оценка»
 };
 
-const CLOSED_RE = /состоял|не состоял|отмен|заверш|итог|заключен|признан/i;
+const CLOSED_RE = /состоял|не состоял|закрыт|ист[её]к|отмен|заверш|итог|заключ[её]н|признан|аяқтал|өткізілді|өткізілмеді|жойыл|қорытынды|болдырылма/i;
+const OPEN_RE = /^(при[её]м|қабылдау)$|при[её]м\s+(заявок|ценовых предложений)|өтінімдерді\s+қабылдау/i;
+const NOT_OPEN_RE = /не\s+нач|не\s+откры|не\s+принима|не\s+вед[её]т|будет|начн|планир|проект|предвар|приостанов|ожида|обсужд|талқыла|басталма|тоқтат/i;
+
+// A future deadline alone does not prove that applications are being accepted.
+export function procurementAvailability(lot, now = Date.now()) {
+  const status = String(lot.status_raw || '').replace(/\s+/g,' ').trim();
+  const deadline = lot.deadline_at ? Date.parse(lot.deadline_at) : NaN;
+  if (CLOSED_RE.test(status)) return { state:'closed', reason:'source_closed' };
+  if (Number.isFinite(deadline) && deadline <= now) return { state:'closed', reason:'deadline_elapsed' };
+  if (!Number.isFinite(deadline)) return { state:'unknown', reason:'deadline_unconfirmed' };
+  if (!OPEN_RE.test(status) || NOT_OPEN_RE.test(status)) return { state:'unknown', reason:'status_unconfirmed' };
+  return { state:'open', reason:'source_open_with_future_deadline' };
+}
 
 export function isClosed(lot, now = Date.now()) {
-  if (lot.status_raw && CLOSED_RE.test(lot.status_raw)) return true;
-  if (lot.deadline_at && new Date(lot.deadline_at).getTime() < now) return true;
-  return false;
+  return procurementAvailability(lot, now).state === 'closed';
 }
 
 export function mergeScoring(overrides) {
@@ -65,6 +76,7 @@ function fPrice(lot, cfg) {
 function fDeadline(lot, cfg, now) {
   if (!lot.deadline_at) return null;
   const left = new Date(lot.deadline_at).getTime() - now;
+  if (!Number.isFinite(left)) return null;
   if (left <= 0) return { v: 0, why: 'срок подачи истёк' };
   const days = left / 86400000;
   if (days < 1) return { v: 0.2, why: 'меньше суток на подготовку' };
@@ -84,8 +96,9 @@ function fMethod(lot, cfg) {
   return hit ? { v: hit.value, why: `способ: ${lot.method}` } : { v: 0.4, why: `способ «${lot.method}» не в списке предпочтительных` };
 }
 function fStatus(lot, cfg, now) {
-  if (!lot.status_raw && !lot.deadline_at) return null;
-  return isClosed(lot, now) ? { v: 0, why: 'закупка закрыта' } : { v: 1, why: 'приём предложений открыт' };
+  const availability = procurementAvailability(lot, now);
+  if (availability.state === 'unknown') return null;
+  return availability.state === 'closed' ? { v: 0, why: 'закупка закрыта или срок подачи истёк' } : { v: 1, why: 'приём предложений открыт, срок подачи не истёк' };
 }
 
 export function scoreLot(lot, config, now = Date.now()) {
