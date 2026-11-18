@@ -115,6 +115,8 @@ export function createTendersRouter({ whatsapp=null, onec=createOneCOData(), sch
     if(!whatsapp)return res.status(409).json({error:'Подключение WhatsApp отложено'});
     res.json(await whatsapp.approve(req.params.draftId,uid(req)));
   }));
+  r.get('/api/tenders/board', gate, wrap(async (req,res)=>res.json(await service.board(uid(req),req.query))));
+  r.put('/api/tenders/:id/note', gate, express.json({limit:'20kb'}), wrap(async(req,res)=>res.json(await service.setTeamNote(uid(req),req.params.id,req.body))));
   r.get('/api/tenders/portfolio', gate, wrap(async (req,res)=>{const reports=await service.listReport(uid(req),req.query,{allowEmpty:true});res.json(financialPortfolio(reports,{evaluatedAt:reports[0]?.generatedAt}));}));
   r.get('/api/tenders/onec/connection', gate, wrap(async (_req,res)=>res.json(onec.status())));
   r.post('/api/tenders/onec/metadata/preview', gate, express.json({limit:'2mb'}), wrap(async (req,res)=>{

@@ -43,6 +43,13 @@ export function createMemoryStore() {
       record(lot, 'workflow_changed', before, historySnapshot(next, ['status','note']), patch.updated_by);
       states.set(lot, next);
     },
+    async setNote(lot,note,user,expectedNote) {
+      const previous=states.get(lot);
+      if((previous?.note??null)!==expectedNote)throw Object.assign(new Error('Заметка уже изменена. Загрузите актуальную версию.'),{status:409});
+      const next={...(previous||{status:'new',note:null}),note,updated_by:user,lot_id:lot,updated_at:new Date().toISOString()};
+      record(lot,'workflow_changed',historySnapshot(previous||{status:'new',note:null},['status','note']),historySnapshot(next,['status','note']),user);
+      states.set(lot,next);
+    },
     async history(lot) { return { available: true, items: structuredClone(events.filter(e => e.lot_id === lot).reverse().slice(0, 50)) }; },
     async addLog(entry) { const e = { id: ++seq, started_at: new Date().toISOString(), ...entry }; log.push(e); return e.id; },
     async finishLog(id, patch) { Object.assign(log.find(x => x.id === id) || {}, patch, { finished_at: new Date().toISOString() }); },
@@ -57,6 +64,11 @@ export function createSupabaseStore(sb, { dbCall, maxRows = 5000 } = {}) {
   const T = n => sb.from(n);
   return {
     kind: 'supabase',
+    async setNote(lot,note,user,expectedNote) {
+      const {data,error}=await sb.rpc('tender_update_team_note',{p_lot_id:lot,p_expected_note:expectedNote,p_note:note,p_actor:user});
+      if(error?.code==='40001')throw Object.assign(new Error('Заметка уже изменена. Загрузите актуальную версию.'),{status:409});
+      if(error||data!==true)throw Object.assign(new Error('Не удалось подтвердить сохранение заметки. Обновите данные и проверьте результат.'),{status:503});
+    },
     async history(lot) {
       const { data, error } = await T('tender_history').select('id,lot_id,kind,before_data,after_data,actor_id,created_at').eq('lot_id', lot).order('id', { ascending: false }).limit(50);
       if (error && ['PGRST205','42P01'].includes(error.code)) return { available: false, items: [] };
