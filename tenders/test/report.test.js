@@ -47,3 +47,10 @@ test('compact template keeps unknown fields empty and does not infer unit prices
  const row=compactReportRow(buildTenderReport(input));assert.equal(row[4],null);assert.equal(row[6],1392);assert.equal(row[7],null);
  const book=new ExcelJS.Workbook();await book.xlsx.load(await reportWorkbook(empty));assert.equal(book.getWorksheet('Отчёт').getRow(2).getCell(8).value,'—');
 });
+
+test('report warns about partial quantity and cannot infer individual quantities from a grouped lot',()=>{
+ const input=base();input.lot.quantity=12;input.workspace.supplierAnalysis={results:{rows:[{index:0,quantity:1,purchaseQuantity:20,observedAt:'2026-11-17',totalCashKzt:100,checks:[]}]}};
+ assert.ok(buildTenderReport(input).warnings.some(w=>w.includes('меньше количества лота')));
+ input.workspace.supplierAnalysis.results.rows[0].quantity=12;assert.ok(!buildTenderReport(input).warnings.some(w=>w.includes('меньше количества лота')));
+ input.lot.number='123-ОЛ-1';assert.ok(buildTenderReport(input).warnings.some(w=>w.includes('Объём предложения не сопоставлен')));
+});
