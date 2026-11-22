@@ -56,12 +56,17 @@ export function compareSuppliers(input,{now=Date.now()}={}){
   }else unknown.push('customs');
   const params=o.parameters&&typeof o.parameters==='object'&&!Array.isArray(o.parameters)?o.parameters:{};
   const checks=requirements.map(r=>{
-   const actual=params[r.key];let status='unknown';
-   if(actual&&typeof actual.value==='string'&&typeof actual.source==='string'&&actual.source.trim()&&actual.unit===r.unit){
-    if(r.op==='eq')status=actual.value.normalize('NFKC').trim().toLowerCase()===r.value.normalize('NFKC').trim().toLowerCase()?'matches':'fails';
-    else if(actual.value.trim()&&Number.isFinite(Number(actual.value)))status=(r.op==='min'?Number(actual.value)>=Number(r.value):Number(actual.value)<=Number(r.value))?'matches':'fails';
+   const actual=params[r.key];let status='unknown',reason='missing_value';
+   const actualUnit=typeof actual?.unit==='string'?actual.unit.slice(0,30):null;
+   if(actual&&typeof actual.value==='string'&&actual.value.trim()){
+    if(typeof actual.source!=='string'||!actual.source.trim())reason='missing_source';
+    else if(r.unit!==''&&(actualUnit==null||!actualUnit.trim()))reason='missing_unit';
+    else if((typeof actual.unit==='string'?actual.unit:'')!==r.unit)reason='unit_mismatch';
+    else if(r.op==='eq'){status=actual.value.normalize('NFKC').trim().toLowerCase()===r.value.normalize('NFKC').trim().toLowerCase()?'matches':'fails';reason='compared';}
+    else if(Number.isFinite(Number(actual.value))){status=(r.op==='min'?Number(actual.value)>=Number(r.value):Number(actual.value)<=Number(r.value))?'matches':'fails';reason='compared';}
+    else reason='not_numeric';
    }
-   return {...r,actual:actual?.value??null,source:typeof actual?.source==='string'?actual.source.slice(0,2000):null,status};
+   return {...r,actual:actual?.value??null,actualUnit,reason,source:typeof actual?.source==='string'?actual.source.slice(0,2000):null,status};
   });
   const modelMatch=input.model.trim()?canon(input.model)===canon(o.model):null;
   if(modelMatch===false)warnings.push('Точная модель не совпадает; допустимость эквивалента не подтверждена.');

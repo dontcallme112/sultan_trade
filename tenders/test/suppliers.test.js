@@ -63,3 +63,16 @@ test('catalog uses dealer source field through existing mapper; USD and source t
 test('malformed requirement collections reject instead of silently losing constraints',()=>{
  assert.throws(()=>compareSuppliers({model:'',offers:[],requirements:{power:'16'}}),{status:400});
 });
+
+test('supplier units remain distinct and unknown reasons explain missing evidence without converting units',()=>{
+ const o=base(),input={model:'A-10',requirements:[{key:'power',op:'min',value:'15',unit:'W'}],offers:[o]};
+ const check=()=>compareSuppliers(input,{now}).rows[0].checks[0];
+ o.parameters.power={value:'20000',unit:'mW',source:'datasheet'};assert.equal(check().status,'unknown');assert.equal(check().reason,'unit_mismatch');assert.equal(check().actualUnit,'mW');assert.equal(check().unit,'W');
+ delete o.parameters.power.unit;assert.equal(check().reason,'missing_unit');
+ o.parameters.power.unit='W';o.parameters.power.source='';assert.equal(check().reason,'missing_source');
+ o.parameters.power.source='datasheet';o.parameters.power.value='';assert.equal(check().reason,'missing_value');
+ o.parameters.power.value='twenty';assert.equal(check().reason,'not_numeric');
+ o.parameters.power.value='20';assert.equal(check().status,'matches');assert.equal(check().reason,'compared');
+ input.requirements[0].unit='';delete o.parameters.power.unit;assert.equal(check().status,'matches');
+ input.requirements[0].unit='GB';o.parameters.power={value:'8192',unit:'MB',source:'specification'};assert.equal(check().status,'unknown');
+});
